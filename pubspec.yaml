@@ -1,7 +1,7 @@
 name: ssh_terminal_ja
 description: "完全日本語対応のAndroid向けSSHモバイルターミナル。"
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.12.2

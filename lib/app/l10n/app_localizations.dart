@@ -961,7 +961,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.1.0'**
+  /// **'0.1.1'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

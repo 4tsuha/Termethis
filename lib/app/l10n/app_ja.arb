@@ -162,6 +162,6 @@
   "settingsFtpSecurityMessage": "可能な接続先ではFTPESまたはFTPSを選んでください。",
   "settingsAboutSection": "アプリについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.1.0",
+  "settingsVersionValue": "0.1.1",
   "settingsLicenses": "オープンソースライセンス"
 }
