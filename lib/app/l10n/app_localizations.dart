@@ -1,0 +1,800 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart' as intl;
+
+import 'app_localizations_ja.dart';
+
+// ignore_for_file: type=lint
+
+/// Callers can lookup localized strings with an instance of AppLocalizations
+/// returned by `AppLocalizations.of(context)`.
+///
+/// Applications need to include `AppLocalizations.delegate()` in their app's
+/// `localizationDelegates` list, and the locales they support in the app's
+/// `supportedLocales` list. For example:
+///
+/// ```dart
+/// import 'l10n/app_localizations.dart';
+///
+/// return MaterialApp(
+///   localizationsDelegates: AppLocalizations.localizationsDelegates,
+///   supportedLocales: AppLocalizations.supportedLocales,
+///   home: MyApplicationHome(),
+/// );
+/// ```
+///
+/// ## Update pubspec.yaml
+///
+/// Please make sure to update your pubspec.yaml to include the following
+/// packages:
+///
+/// ```yaml
+/// dependencies:
+///   # Internationalization support.
+///   flutter_localizations:
+///     sdk: flutter
+///   intl: any # Use the pinned version from flutter_localizations
+///
+///   # Rest of dependencies
+/// ```
+///
+/// ## iOS Applications
+///
+/// iOS applications define key application metadata, including supported
+/// locales, in an Info.plist file that is built into the application bundle.
+/// To configure the locales supported by your app, you’ll need to edit this
+/// file.
+///
+/// First, open your project’s ios/Runner.xcworkspace Xcode workspace file.
+/// Then, in the Project Navigator, open the Info.plist file under the Runner
+/// project’s Runner folder.
+///
+/// Next, select the Information Property List item, select Add Item from the
+/// Editor menu, then select Localizations from the pop-up menu.
+///
+/// Select and expand the newly-created Localizations item then, for each
+/// locale your application supports, add a new item and select the locale
+/// you wish to add from the pop-up menu in the Value field. This list should
+/// be consistent with the languages listed in the AppLocalizations.supportedLocales
+/// property.
+abstract class AppLocalizations {
+  AppLocalizations(String locale)
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+
+  final String localeName;
+
+  static AppLocalizations of(BuildContext context) {
+    return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
+  }
+
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
+
+  /// A list of this localizations delegate along with the default localizations
+  /// delegates.
+  ///
+  /// Returns a list of localizations delegates containing this delegate along with
+  /// GlobalMaterialLocalizations.delegate, GlobalCupertinoLocalizations.delegate,
+  /// and GlobalWidgetsLocalizations.delegate.
+  ///
+  /// Additional delegates can be added by appending to this list in
+  /// MaterialApp. This list does not have to be used at all if a custom list
+  /// of delegates is preferred or required.
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
+
+  /// A list of this localizations delegate's supported locales.
+  static const List<Locale> supportedLocales = <Locale>[Locale('ja')];
+
+  /// No description provided for @appTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSHターミナル'**
+  String get appTitle;
+
+  /// No description provided for @connectionsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先'**
+  String get connectionsTitle;
+
+  /// No description provided for @addConnection.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先を追加'**
+  String get addConnection;
+
+  /// No description provided for @emptyConnectionsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先がありません'**
+  String get emptyConnectionsTitle;
+
+  /// No description provided for @emptyConnectionsMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'右下の追加ボタンからSSHサーバーを登録してください。'**
+  String get emptyConnectionsMessage;
+
+  /// No description provided for @edit.
+  ///
+  /// In ja, this message translates to:
+  /// **'編集'**
+  String get edit;
+
+  /// No description provided for @delete.
+  ///
+  /// In ja, this message translates to:
+  /// **'削除'**
+  String get delete;
+
+  /// No description provided for @cancel.
+  ///
+  /// In ja, this message translates to:
+  /// **'キャンセル'**
+  String get cancel;
+
+  /// No description provided for @save.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存'**
+  String get save;
+
+  /// No description provided for @connect.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続'**
+  String get connect;
+
+  /// No description provided for @connectionName.
+  ///
+  /// In ja, this message translates to:
+  /// **'表示名'**
+  String get connectionName;
+
+  /// No description provided for @connectionNameHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'自宅サーバー'**
+  String get connectionNameHint;
+
+  /// No description provided for @host.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト名またはIPアドレス'**
+  String get host;
+
+  /// No description provided for @hostHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'192.168.1.10'**
+  String get hostHint;
+
+  /// No description provided for @port.
+  ///
+  /// In ja, this message translates to:
+  /// **'ポート'**
+  String get port;
+
+  /// No description provided for @username.
+  ///
+  /// In ja, this message translates to:
+  /// **'ユーザー名'**
+  String get username;
+
+  /// No description provided for @authentication.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証'**
+  String get authentication;
+
+  /// No description provided for @passwordAuthentication.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスワードまたは対話形式'**
+  String get passwordAuthentication;
+
+  /// No description provided for @requiredField.
+  ///
+  /// In ja, this message translates to:
+  /// **'入力してください。'**
+  String get requiredField;
+
+  /// No description provided for @invalidPort.
+  ///
+  /// In ja, this message translates to:
+  /// **'1から65535までの数値を入力してください。'**
+  String get invalidPort;
+
+  /// No description provided for @deleteConnectionTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先を削除しますか'**
+  String get deleteConnectionTitle;
+
+  /// No description provided for @deleteConnectionMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'{name}を一覧から削除します。'**
+  String deleteConnectionMessage(String name);
+
+  /// No description provided for @passwordDialogTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証情報'**
+  String get passwordDialogTitle;
+
+  /// No description provided for @passwordDialogMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'{target}へ接続するパスワードを入力してください。端末には保存しません。'**
+  String passwordDialogMessage(String target);
+
+  /// No description provided for @password.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスワード'**
+  String get password;
+
+  /// No description provided for @hostKeyDialogTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト鍵の確認'**
+  String get hostKeyDialogTitle;
+
+  /// No description provided for @hostKeyDialogMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'このサーバーは初めて接続する相手です。管理者から案内されたフィンガープリントと一致することを確認してください。'**
+  String get hostKeyDialogMessage;
+
+  /// No description provided for @hostKeyAlgorithm.
+  ///
+  /// In ja, this message translates to:
+  /// **'アルゴリズム'**
+  String get hostKeyAlgorithm;
+
+  /// No description provided for @hostKeyFingerprint.
+  ///
+  /// In ja, this message translates to:
+  /// **'SHA-256フィンガープリント'**
+  String get hostKeyFingerprint;
+
+  /// No description provided for @trustAndConnect.
+  ///
+  /// In ja, this message translates to:
+  /// **'登録して接続'**
+  String get trustAndConnect;
+
+  /// No description provided for @reject.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続しない'**
+  String get reject;
+
+  /// No description provided for @interactiveAuthenticationTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'追加認証'**
+  String get interactiveAuthenticationTitle;
+
+  /// No description provided for @interactiveAuthenticationMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'サーバーから追加の入力が求められています。'**
+  String get interactiveAuthenticationMessage;
+
+  /// No description provided for @submit.
+  ///
+  /// In ja, this message translates to:
+  /// **'送信'**
+  String get submit;
+
+  /// No description provided for @statusIdle.
+  ///
+  /// In ja, this message translates to:
+  /// **'未接続'**
+  String get statusIdle;
+
+  /// No description provided for @statusConnecting.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続中'**
+  String get statusConnecting;
+
+  /// No description provided for @statusVerifyingHost.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト鍵を確認中'**
+  String get statusVerifyingHost;
+
+  /// No description provided for @statusAuthenticating.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証中'**
+  String get statusAuthenticating;
+
+  /// No description provided for @statusOpeningPty.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナルを準備中'**
+  String get statusOpeningPty;
+
+  /// No description provided for @statusConnected.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続済み'**
+  String get statusConnected;
+
+  /// No description provided for @statusClosing.
+  ///
+  /// In ja, this message translates to:
+  /// **'切断中'**
+  String get statusClosing;
+
+  /// No description provided for @statusClosed.
+  ///
+  /// In ja, this message translates to:
+  /// **'切断済み'**
+  String get statusClosed;
+
+  /// No description provided for @statusFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続できませんでした'**
+  String get statusFailed;
+
+  /// No description provided for @statusReconnectPrompt.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続が失われました'**
+  String get statusReconnectPrompt;
+
+  /// No description provided for @disconnect.
+  ///
+  /// In ja, this message translates to:
+  /// **'切断'**
+  String get disconnect;
+
+  /// No description provided for @retry.
+  ///
+  /// In ja, this message translates to:
+  /// **'再試行'**
+  String get retry;
+
+  /// No description provided for @closeSessionTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH接続を切断しますか'**
+  String get closeSessionTitle;
+
+  /// No description provided for @closeSessionMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'実行中のシェルは終了します。'**
+  String get closeSessionMessage;
+
+  /// No description provided for @failureDnsLookup.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト名を解決できませんでした。ホスト名とネットワークを確認してください。'**
+  String get failureDnsLookup;
+
+  /// No description provided for @failureConnectionRefused.
+  ///
+  /// In ja, this message translates to:
+  /// **'サーバーに接続を拒否されました。ホスト名、ポート、SSHサービスを確認してください。'**
+  String get failureConnectionRefused;
+
+  /// No description provided for @failureConnectionTimeout.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続がタイムアウトしました。ネットワークと接続先を確認してください。'**
+  String get failureConnectionTimeout;
+
+  /// No description provided for @failureHostKeyRejected.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト鍵が承認されなかったため接続を中止しました。'**
+  String get failureHostKeyRejected;
+
+  /// No description provided for @failureHostKeyMismatch.
+  ///
+  /// In ja, this message translates to:
+  /// **'登録済みのホスト鍵と一致しません。安全を確認するまで接続できません。'**
+  String get failureHostKeyMismatch;
+
+  /// No description provided for @failureAuthentication.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証に失敗しました。ユーザー名または認証情報を確認してください。'**
+  String get failureAuthentication;
+
+  /// No description provided for @failurePty.
+  ///
+  /// In ja, this message translates to:
+  /// **'サーバーが対話型ターミナルを開始できませんでした。'**
+  String get failurePty;
+
+  /// No description provided for @failureRemoteClosed.
+  ///
+  /// In ja, this message translates to:
+  /// **'サーバーが接続を終了しました。'**
+  String get failureRemoteClosed;
+
+  /// No description provided for @failureNetwork.
+  ///
+  /// In ja, this message translates to:
+  /// **'ネットワーク接続が失われました。'**
+  String get failureNetwork;
+
+  /// No description provided for @failureUnexpected.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH接続で予期しないエラーが発生しました。'**
+  String get failureUnexpected;
+
+  /// No description provided for @profileNotFound.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先が見つかりません。'**
+  String get profileNotFound;
+
+  /// No description provided for @paste.
+  ///
+  /// In ja, this message translates to:
+  /// **'貼り付け'**
+  String get paste;
+
+  /// No description provided for @pasteConfirmationTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'この内容を貼り付けますか'**
+  String get pasteConfirmationTitle;
+
+  /// No description provided for @pasteConfirmationMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'複数行または長い文字列が含まれています。意図しないコマンド実行を防ぐため、内容を確認してください。'**
+  String get pasteConfirmationMessage;
+
+  /// No description provided for @nothingToPaste.
+  ///
+  /// In ja, this message translates to:
+  /// **'貼り付ける文字列がありません。'**
+  String get nothingToPaste;
+
+  /// No description provided for @stageOneNotice.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先とホスト鍵は、現在の起動中だけ保持されます。永続保存は次の実装段階で追加します。'**
+  String get stageOneNotice;
+
+  /// No description provided for @navSsh.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH'**
+  String get navSsh;
+
+  /// No description provided for @navFtp.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP'**
+  String get navFtp;
+
+  /// No description provided for @navSettings.
+  ///
+  /// In ja, this message translates to:
+  /// **'設定'**
+  String get navSettings;
+
+  /// No description provided for @ftpTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPマネージャー'**
+  String get ftpTitle;
+
+  /// No description provided for @ftpAddTab.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP接続'**
+  String get ftpAddTab;
+
+  /// No description provided for @ftpEmptyTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPタブがありません'**
+  String get ftpEmptyTitle;
+
+  /// No description provided for @ftpEmptyMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先を追加すると、サーバー内のフォルダーを階層表示できます。'**
+  String get ftpEmptyMessage;
+
+  /// No description provided for @ftpConnectionTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP接続を追加'**
+  String get ftpConnectionTitle;
+
+  /// No description provided for @ftpTabName.
+  ///
+  /// In ja, this message translates to:
+  /// **'タブ名'**
+  String get ftpTabName;
+
+  /// No description provided for @ftpTabNameHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'Webサーバー'**
+  String get ftpTabNameHint;
+
+  /// No description provided for @ftpSecurity.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続方式'**
+  String get ftpSecurity;
+
+  /// No description provided for @ftpPlain.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP（暗号化なし）'**
+  String get ftpPlain;
+
+  /// No description provided for @ftpExplicitTls.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPES（明示的TLS）'**
+  String get ftpExplicitTls;
+
+  /// No description provided for @ftpImplicitTls.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPS（暗黙的TLS）'**
+  String get ftpImplicitTls;
+
+  /// No description provided for @ftpPlainWarning.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPではパスワードと通信内容が暗号化されません。信頼できるネットワークでのみ使用してください。'**
+  String get ftpPlainWarning;
+
+  /// No description provided for @ftpPasswordNotSaved.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスワードは端末に保存せず、このタブを閉じるまでだけ保持します。'**
+  String get ftpPasswordNotSaved;
+
+  /// No description provided for @ftpConnecting.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続しています…'**
+  String get ftpConnecting;
+
+  /// No description provided for @ftpLoading.
+  ///
+  /// In ja, this message translates to:
+  /// **'一覧を読み込んでいます…'**
+  String get ftpLoading;
+
+  /// No description provided for @ftpConnected.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続済み'**
+  String get ftpConnected;
+
+  /// No description provided for @ftpConnectionFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPサーバーに接続できませんでした。接続情報とネットワークを確認してください。'**
+  String get ftpConnectionFailed;
+
+  /// No description provided for @ftpOperationFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP操作を完了できませんでした。権限と接続状態を確認してください。'**
+  String get ftpOperationFailed;
+
+  /// No description provided for @ftpEmptyDirectory.
+  ///
+  /// In ja, this message translates to:
+  /// **'このフォルダーは空です'**
+  String get ftpEmptyDirectory;
+
+  /// No description provided for @ftpRefresh.
+  ///
+  /// In ja, this message translates to:
+  /// **'再読み込み'**
+  String get ftpRefresh;
+
+  /// No description provided for @ftpNewFolder.
+  ///
+  /// In ja, this message translates to:
+  /// **'新しいフォルダー'**
+  String get ftpNewFolder;
+
+  /// No description provided for @ftpNewFolderTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'フォルダーを作成'**
+  String get ftpNewFolderTitle;
+
+  /// No description provided for @ftpFolderName.
+  ///
+  /// In ja, this message translates to:
+  /// **'フォルダー名'**
+  String get ftpFolderName;
+
+  /// No description provided for @ftpRename.
+  ///
+  /// In ja, this message translates to:
+  /// **'名前を変更'**
+  String get ftpRename;
+
+  /// No description provided for @ftpRenameTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'名前を変更'**
+  String get ftpRenameTitle;
+
+  /// No description provided for @ftpNewName.
+  ///
+  /// In ja, this message translates to:
+  /// **'新しい名前'**
+  String get ftpNewName;
+
+  /// No description provided for @ftpDeleteTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'削除しますか'**
+  String get ftpDeleteTitle;
+
+  /// No description provided for @ftpDeleteMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'{name}をFTPサーバーから削除します。この操作は取り消せません。'**
+  String ftpDeleteMessage(String name);
+
+  /// No description provided for @ftpCloseTab.
+  ///
+  /// In ja, this message translates to:
+  /// **'タブを閉じる'**
+  String get ftpCloseTab;
+
+  /// No description provided for @ftpCloseTabTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTPタブを閉じますか'**
+  String get ftpCloseTabTitle;
+
+  /// No description provided for @ftpCloseTabMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP接続を切断してタブを閉じます。'**
+  String get ftpCloseTabMessage;
+
+  /// No description provided for @ftpRoot.
+  ///
+  /// In ja, this message translates to:
+  /// **'ルート'**
+  String get ftpRoot;
+
+  /// No description provided for @ftpDirectory.
+  ///
+  /// In ja, this message translates to:
+  /// **'フォルダー'**
+  String get ftpDirectory;
+
+  /// No description provided for @ftpFile.
+  ///
+  /// In ja, this message translates to:
+  /// **'ファイル'**
+  String get ftpFile;
+
+  /// No description provided for @ftpUnknownSize.
+  ///
+  /// In ja, this message translates to:
+  /// **'サイズ不明'**
+  String get ftpUnknownSize;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'設定'**
+  String get settingsTitle;
+
+  /// No description provided for @settingsTerminalSection.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナル'**
+  String get settingsTerminalSection;
+
+  /// No description provided for @settingsTerminalFont.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナルフォント'**
+  String get settingsTerminalFont;
+
+  /// No description provided for @settingsTerminalFontValue.
+  ///
+  /// In ja, this message translates to:
+  /// **'Cascadia Mono（日本語: Noto Sans JP）'**
+  String get settingsTerminalFontValue;
+
+  /// No description provided for @settingsFtpSection.
+  ///
+  /// In ja, this message translates to:
+  /// **'FTP'**
+  String get settingsFtpSection;
+
+  /// No description provided for @settingsFtpSecurity.
+  ///
+  /// In ja, this message translates to:
+  /// **'安全な接続を推奨'**
+  String get settingsFtpSecurity;
+
+  /// No description provided for @settingsFtpSecurityMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'可能な接続先ではFTPESまたはFTPSを選んでください。'**
+  String get settingsFtpSecurityMessage;
+
+  /// No description provided for @settingsAboutSection.
+  ///
+  /// In ja, this message translates to:
+  /// **'アプリについて'**
+  String get settingsAboutSection;
+
+  /// No description provided for @settingsVersion.
+  ///
+  /// In ja, this message translates to:
+  /// **'バージョン'**
+  String get settingsVersion;
+
+  /// No description provided for @settingsVersionValue.
+  ///
+  /// In ja, this message translates to:
+  /// **'0.1.0'**
+  String get settingsVersionValue;
+}
+
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
+  const _AppLocalizationsDelegate();
+
+  @override
+  Future<AppLocalizations> load(Locale locale) {
+    return SynchronousFuture<AppLocalizations>(lookupAppLocalizations(locale));
+  }
+
+  @override
+  bool isSupported(Locale locale) =>
+      <String>['ja'].contains(locale.languageCode);
+
+  @override
+  bool shouldReload(_AppLocalizationsDelegate old) => false;
+}
+
+AppLocalizations lookupAppLocalizations(Locale locale) {
+  // Lookup logic when only language code is specified.
+  switch (locale.languageCode) {
+    case 'ja':
+      return AppLocalizationsJa();
+  }
+
+  throw FlutterError(
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
+}

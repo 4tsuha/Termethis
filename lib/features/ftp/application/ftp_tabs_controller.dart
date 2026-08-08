@@ -1,0 +1,257 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../infrastructure/ftp/ftp_connect_gateway.dart';
+import '../domain/ftp_gateway.dart';
+
+final ftpGatewayProvider = Provider<FtpGateway>(
+  (ref) => const FtpConnectGateway(),
+);
+
+final ftpTabsProvider = NotifierProvider<FtpTabsController, List<FtpTabState>>(
+  FtpTabsController.new,
+);
+
+enum FtpTabStatus { connecting, connected, failed }
+
+class FtpTabState {
+  const FtpTabState({
+    required this.id,
+    required this.request,
+    required this.status,
+    required this.path,
+    required this.entries,
+    required this.isBusy,
+    this.connection,
+    this.hasOperationError = false,
+  });
+
+  final String id;
+  final FtpConnectRequest request;
+  final FtpTabStatus status;
+  final String path;
+  final List<FtpEntryInfo> entries;
+  final bool isBusy;
+  final FtpConnection? connection;
+  final bool hasOperationError;
+
+  FtpTabState copyWith({
+    FtpTabStatus? status,
+    String? path,
+    List<FtpEntryInfo>? entries,
+    bool? isBusy,
+    FtpConnection? connection,
+    bool clearConnection = false,
+    bool? hasOperationError,
+  }) {
+    return FtpTabState(
+      id: id,
+      request: request,
+      status: status ?? this.status,
+      path: path ?? this.path,
+      entries: entries ?? this.entries,
+      isBusy: isBusy ?? this.isBusy,
+      connection: clearConnection ? null : connection ?? this.connection,
+      hasOperationError: hasOperationError ?? this.hasOperationError,
+    );
+  }
+}
+
+class FtpTabsController extends Notifier<List<FtpTabState>> {
+  late FtpGateway _gateway;
+  final Set<FtpConnection> _openConnections = {};
+
+  @override
+  List<FtpTabState> build() {
+    _gateway = ref.watch(ftpGatewayProvider);
+    ref.onDispose(() {
+      for (final connection in _openConnections) {
+        unawaited(connection.close());
+      }
+      _openConnections.clear();
+    });
+    return const [];
+  }
+
+  String openTab(FtpConnectRequest request) {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    state = [
+      ...state,
+      FtpTabState(
+        id: id,
+        request: request,
+        status: FtpTabStatus.connecting,
+        path: '/',
+        entries: const [],
+        isBusy: true,
+      ),
+    ];
+    unawaited(_connect(id));
+    return id;
+  }
+
+  Future<void> retry(String id) async {
+    final oldConnection = _find(id)?.connection;
+    if (oldConnection != null) {
+      _openConnections.remove(oldConnection);
+      await oldConnection.close();
+    }
+    _replace(
+      id,
+      (tab) => tab.copyWith(
+        status: FtpTabStatus.connecting,
+        isBusy: true,
+        clearConnection: true,
+        hasOperationError: false,
+      ),
+    );
+    await _connect(id);
+  }
+
+  Future<void> closeTab(String id) async {
+    final tab = _find(id);
+    state = state.where((item) => item.id != id).toList(growable: false);
+    final connection = tab?.connection;
+    if (connection != null) {
+      _openConnections.remove(connection);
+      await connection.close();
+    }
+  }
+
+  Future<void> refresh(String id) => _loadDirectory(id);
+
+  Future<void> enterDirectory(String id, String name) async {
+    await _runOperation(id, (connection) => connection.changeDirectory(name));
+  }
+
+  Future<void> goToDirectory(String id, String path) async {
+    await _runOperation(id, (connection) => connection.changeDirectory(path));
+  }
+
+  Future<void> createDirectory(String id, String name) async {
+    await _runOperation(id, (connection) => connection.createDirectory(name));
+  }
+
+  Future<void> renameEntry(String id, String oldName, String newName) async {
+    await _runOperation(
+      id,
+      (connection) => connection.rename(oldName, newName),
+    );
+  }
+
+  Future<void> deleteEntry(String id, FtpEntryInfo entry) async {
+    await _runOperation(
+      id,
+      (connection) => entry.isDirectory
+          ? connection.deleteEmptyDirectory(entry.name)
+          : connection.deleteFile(entry.name),
+    );
+  }
+
+  void clearOperationError(String id) {
+    _replace(id, (tab) => tab.copyWith(hasOperationError: false));
+  }
+
+  Future<void> _connect(String id) async {
+    final tab = _find(id);
+    if (tab == null) return;
+    try {
+      final connection = await _gateway.connect(tab.request);
+      if (_find(id) == null) {
+        await connection.close();
+        return;
+      }
+      _openConnections.add(connection);
+      _replace(
+        id,
+        (current) => current.copyWith(
+          connection: connection,
+          status: FtpTabStatus.connected,
+          hasOperationError: false,
+        ),
+      );
+      await _loadDirectory(id);
+    } catch (_) {
+      _replace(
+        id,
+        (current) => current.copyWith(
+          status: FtpTabStatus.failed,
+          isBusy: false,
+          clearConnection: true,
+        ),
+      );
+    }
+  }
+
+  Future<void> _runOperation(
+    String id,
+    Future<void> Function(FtpConnection connection) operation,
+  ) async {
+    final connection = _find(id)?.connection;
+    if (connection == null) return;
+    _replace(id, (tab) => tab.copyWith(isBusy: true, hasOperationError: false));
+    try {
+      await operation(connection);
+      await _loadDirectory(id, markBusy: false);
+    } catch (_) {
+      _replace(
+        id,
+        (tab) => tab.copyWith(isBusy: false, hasOperationError: true),
+      );
+    }
+  }
+
+  Future<void> _loadDirectory(String id, {bool markBusy = true}) async {
+    final connection = _find(id)?.connection;
+    if (connection == null) return;
+    if (markBusy) {
+      _replace(
+        id,
+        (tab) => tab.copyWith(isBusy: true, hasOperationError: false),
+      );
+    }
+    try {
+      final path = await connection.currentDirectory();
+      final entries = [...await connection.listDirectory()];
+      entries.sort(_compareEntries);
+      _replace(
+        id,
+        (tab) => tab.copyWith(
+          path: path,
+          entries: entries,
+          status: FtpTabStatus.connected,
+          isBusy: false,
+          hasOperationError: false,
+        ),
+      );
+    } catch (_) {
+      _replace(
+        id,
+        (tab) => tab.copyWith(isBusy: false, hasOperationError: true),
+      );
+    }
+  }
+
+  int _compareEntries(FtpEntryInfo left, FtpEntryInfo right) {
+    if (left.isDirectory != right.isDirectory) {
+      return left.isDirectory ? -1 : 1;
+    }
+    return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+  }
+
+  FtpTabState? _find(String id) {
+    for (final tab in state) {
+      if (tab.id == id) return tab;
+    }
+    return null;
+  }
+
+  void _replace(String id, FtpTabState Function(FtpTabState tab) transform) {
+    if (_find(id) == null) return;
+    state = [
+      for (final tab in state)
+        if (tab.id == id) transform(tab) else tab,
+    ];
+  }
+}
