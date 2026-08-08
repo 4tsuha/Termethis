@@ -25,7 +25,7 @@ void main() {
     );
 
     await controller.connect(
-      password: 'secret',
+      authentication: const SshPasswordAuthentication('secret'),
       onUnknownHostKey: (_) async => true,
       onInteractivePrompt: (_) async => const [],
     );
@@ -58,7 +58,7 @@ void main() {
     );
 
     await controller.connect(
-      password: 'secret',
+      authentication: const SshPasswordAuthentication('secret'),
       onUnknownHostKey: (_) async => true,
       onInteractivePrompt: (_) async => const [],
     );
@@ -68,15 +68,51 @@ void main() {
     expect(controller.status, SshSessionStatus.reconnectPrompt);
     controller.dispose();
   });
+
+  test('秘密鍵認証情報をGatewayへ渡す', () async {
+    final connection = _FakeConnection();
+    final gateway = _FakeGateway(connection);
+    final controller = SshSessionController(
+      gateway,
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'private-key',
+        name: '鍵認証',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+        authenticationType: AuthenticationType.privateKey,
+      ),
+    );
+
+    await controller.connect(
+      authentication: const SshPrivateKeyAuthentication(
+        pem: 'private-key-pem',
+        passphrase: 'passphrase',
+      ),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+
+    final authentication = gateway.lastRequest?.authentication;
+    expect(authentication, isA<SshPrivateKeyAuthentication>());
+    expect(
+      (authentication as SshPrivateKeyAuthentication).passphrase,
+      'passphrase',
+    );
+    controller.dispose();
+  });
 }
 
 class _FakeGateway implements SshGateway {
   _FakeGateway(this.connection);
 
   final _FakeConnection connection;
+  SshConnectRequest? lastRequest;
 
   @override
   Future<SshConnection> connect(SshConnectRequest request) async {
+    lastRequest = request;
     request.onAuthenticationStarted();
     request.onOpeningPty();
     return connection;

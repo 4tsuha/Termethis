@@ -23,10 +23,35 @@ class KnownHost {
   final DateTime acceptedAt;
 }
 
+enum HostKeyTrust { unknown, trusted, mismatch }
+
+HostKeyTrust evaluateHostKeyTrust(
+  List<KnownHost> knownHosts,
+  HostKeyInfo received,
+) {
+  if (knownHosts.isEmpty) {
+    return HostKeyTrust.unknown;
+  }
+  final matches = knownHosts.any(
+    (knownHost) =>
+        knownHost.info.algorithm == received.algorithm &&
+        knownHost.info.fingerprintSha256 == received.fingerprintSha256,
+  );
+  return matches ? HostKeyTrust.trusted : HostKeyTrust.mismatch;
+}
+
 abstract interface class HostKeyRepository {
-  Future<KnownHost?> find(String host, int port);
+  Future<List<KnownHost>> find(String host, int port);
   Future<void> trust(KnownHost host);
   Future<void> remove(String host, int port);
+}
+
+String normalizeSshHost(String host) {
+  var normalized = host.trim().toLowerCase();
+  while (normalized.endsWith('.')) {
+    normalized = normalized.substring(0, normalized.length - 1);
+  }
+  return normalized;
 }
 
 class InteractivePrompt {
@@ -52,10 +77,27 @@ typedef HostKeyApprovalHandler = Future<bool> Function(HostKeyInfo info);
 typedef InteractivePromptHandler =
     Future<List<String>?> Function(InteractiveRequest request);
 
+sealed class SshAuthentication {
+  const SshAuthentication();
+}
+
+class SshPasswordAuthentication extends SshAuthentication {
+  const SshPasswordAuthentication(this.password);
+
+  final String password;
+}
+
+class SshPrivateKeyAuthentication extends SshAuthentication {
+  const SshPrivateKeyAuthentication({required this.pem, this.passphrase});
+
+  final String pem;
+  final String? passphrase;
+}
+
 class SshConnectRequest {
   const SshConnectRequest({
     required this.profile,
-    required this.password,
+    required this.authentication,
     required this.onUnknownHostKey,
     required this.onInteractivePrompt,
     required this.onAuthenticationStarted,
@@ -65,7 +107,7 @@ class SshConnectRequest {
   });
 
   final ConnectionProfile profile;
-  final String password;
+  final SshAuthentication authentication;
   final HostKeyApprovalHandler onUnknownHostKey;
   final InteractivePromptHandler onInteractivePrompt;
   final void Function() onAuthenticationStarted;

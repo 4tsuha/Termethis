@@ -124,6 +124,12 @@ abstract class AppLocalizations {
   /// **'右下の追加ボタンからSSHサーバーを登録してください。'**
   String get emptyConnectionsMessage;
 
+  /// No description provided for @loadConnectionsFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先を読み込めませんでした。'**
+  String get loadConnectionsFailed;
+
   /// No description provided for @edit.
   ///
   /// In ja, this message translates to:
@@ -202,6 +208,72 @@ abstract class AppLocalizations {
   /// **'パスワードまたは対話形式'**
   String get passwordAuthentication;
 
+  /// No description provided for @privateKeyAuthentication.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵'**
+  String get privateKeyAuthentication;
+
+  /// No description provided for @selectPrivateKey.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を選択'**
+  String get selectPrivateKey;
+
+  /// No description provided for @replacePrivateKey.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を置き換える'**
+  String get replacePrivateKey;
+
+  /// No description provided for @privateKeyNotSelected.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を選択してください。'**
+  String get privateKeyNotSelected;
+
+  /// No description provided for @privateKeySelected.
+  ///
+  /// In ja, this message translates to:
+  /// **'選択済み: {name}'**
+  String privateKeySelected(String name);
+
+  /// No description provided for @keyPassphrase.
+  ///
+  /// In ja, this message translates to:
+  /// **'鍵のパスフレーズ'**
+  String get keyPassphrase;
+
+  /// No description provided for @saveKeyPassphrase.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスフレーズを暗号化して保存'**
+  String get saveKeyPassphrase;
+
+  /// No description provided for @keyPassphraseTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵のパスフレーズ'**
+  String get keyPassphraseTitle;
+
+  /// No description provided for @keyPassphraseMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'{name}を復号するパスフレーズを入力してください。'**
+  String keyPassphraseMessage(String name);
+
+  /// No description provided for @privateKeyInvalid.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を読み込めません。形式とパスフレーズを確認してください。'**
+  String get privateKeyInvalid;
+
+  /// No description provided for @privateKeyTooLarge.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵ファイルが大きすぎます。'**
+  String get privateKeyTooLarge;
+
   /// No description provided for @requiredField.
   ///
   /// In ja, this message translates to:
@@ -213,6 +285,78 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'1から65535までの数値を入力してください。'**
   String get invalidPort;
+
+  /// No description provided for @wakeOnLanTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'Wake on LAN'**
+  String get wakeOnLanTitle;
+
+  /// No description provided for @wakeOnLanDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH接続前にMagic Packetで端末を起動します。'**
+  String get wakeOnLanDescription;
+
+  /// No description provided for @wakeOnLanMacAddress.
+  ///
+  /// In ja, this message translates to:
+  /// **'MACアドレス'**
+  String get wakeOnLanMacAddress;
+
+  /// No description provided for @wakeOnLanMacHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'00:11:22:33:44:55'**
+  String get wakeOnLanMacHint;
+
+  /// No description provided for @wakeOnLanBroadcastAddress.
+  ///
+  /// In ja, this message translates to:
+  /// **'ブロードキャストアドレス'**
+  String get wakeOnLanBroadcastAddress;
+
+  /// No description provided for @wakeOnLanBroadcastHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'192.168.1.255'**
+  String get wakeOnLanBroadcastHint;
+
+  /// No description provided for @wakeOnLanPort.
+  ///
+  /// In ja, this message translates to:
+  /// **'UDPポート'**
+  String get wakeOnLanPort;
+
+  /// No description provided for @invalidMacAddress.
+  ///
+  /// In ja, this message translates to:
+  /// **'6バイトのMACアドレスを入力してください。'**
+  String get invalidMacAddress;
+
+  /// No description provided for @invalidIpv4Address.
+  ///
+  /// In ja, this message translates to:
+  /// **'有効なIPv4ブロードキャストアドレスを入力してください。'**
+  String get invalidIpv4Address;
+
+  /// No description provided for @wakeOnLanSend.
+  ///
+  /// In ja, this message translates to:
+  /// **'Wake on LANを送信'**
+  String get wakeOnLanSend;
+
+  /// No description provided for @wakeOnLanSent.
+  ///
+  /// In ja, this message translates to:
+  /// **'{name}へMagic Packetを送信しました。'**
+  String wakeOnLanSent(String name);
+
+  /// No description provided for @wakeOnLanFailed.
+  ///
+  /// In ja, this message translates to:
+  /// **'Magic Packetを送信できませんでした。ネットワーク設定を確認してください。'**
+  String get wakeOnLanFailed;
 
   /// No description provided for @deleteConnectionTitle.
   ///
@@ -418,6 +562,18 @@ abstract class AppLocalizations {
   /// **'認証に失敗しました。ユーザー名または認証情報を確認してください。'**
   String get failureAuthentication;
 
+  /// No description provided for @failurePrivateKey.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を使用できません。鍵とパスフレーズを確認してください。'**
+  String get failurePrivateKey;
+
+  /// No description provided for @failureKeyPassphraseRequired.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵のパスフレーズが必要です。'**
+  String get failureKeyPassphraseRequired;
+
   /// No description provided for @failurePty.
   ///
   /// In ja, this message translates to:
@@ -475,7 +631,7 @@ abstract class AppLocalizations {
   /// No description provided for @stageOneNotice.
   ///
   /// In ja, this message translates to:
-  /// **'接続先とホスト鍵は、現在の起動中だけ保持されます。永続保存は次の実装段階で追加します。'**
+  /// **'接続先とホスト鍵はこの端末に保存されます。秘密鍵は暗号化し、パスワードは保存しません。'**
   String get stageOneNotice;
 
   /// No description provided for @navSsh.
@@ -727,8 +883,50 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTerminalFontValue.
   ///
   /// In ja, this message translates to:
-  /// **'Cascadia Mono（日本語: Noto Sans JP）'**
+  /// **'Cascadia Mono'**
   String get settingsTerminalFontValue;
+
+  /// No description provided for @settingsJapaneseFont.
+  ///
+  /// In ja, this message translates to:
+  /// **'日本語フォント'**
+  String get settingsJapaneseFont;
+
+  /// No description provided for @settingsJapaneseFontMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'アプリUIとターミナルの日本語字形に使用します。'**
+  String get settingsJapaneseFontMessage;
+
+  /// No description provided for @settingsSelectFont.
+  ///
+  /// In ja, this message translates to:
+  /// **'日本語フォントを選択'**
+  String get settingsSelectFont;
+
+  /// No description provided for @fontNotoSansJp.
+  ///
+  /// In ja, this message translates to:
+  /// **'Noto Sans JP'**
+  String get fontNotoSansJp;
+
+  /// No description provided for @fontKoruri.
+  ///
+  /// In ja, this message translates to:
+  /// **'Koruri'**
+  String get fontKoruri;
+
+  /// No description provided for @fontMejiro.
+  ///
+  /// In ja, this message translates to:
+  /// **'Mejiro'**
+  String get fontMejiro;
+
+  /// No description provided for @fontPreview.
+  ///
+  /// In ja, this message translates to:
+  /// **'日本語 ABC 123 の表示見本'**
+  String get fontPreview;
 
   /// No description provided for @settingsFtpSection.
   ///
@@ -765,6 +963,12 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'0.1.0'**
   String get settingsVersionValue;
+
+  /// No description provided for @settingsLicenses.
+  ///
+  /// In ja, this message translates to:
+  /// **'オープンソースライセンス'**
+  String get settingsLicenses;
 }
 
 class _AppLocalizationsDelegate

@@ -1,69 +1,102 @@
-# Android向けSSH・FTPモバイルクライアント設計
+# Android向けSSH／FTPモバイルクライアント設計
 
 最終更新：2026年8月8日
 
-状態：実装中
+状態：0.1.0の実装を基準に、実用的なSSH接続を0.2系で構築するための設計
 
-## 1. 対象と設計判断
+## 1. 対象と設計原則
 
 このアプリは、Android端末からSSHサーバーへ接続して日本語を含む対話型シェルを操作し、FTPサーバー内のファイルを管理するFlutterアプリである。
 
-初期リリースはAndroid専用とするが、ドメイン層とSSH層にはAndroid APIを持ち込まず、将来のiOS対応を妨げない。
+初期対応OSはAndroidとするが、Domain層とApplication層にはAndroid APIを持ち込まない。
 
-**完全日本語対応**は、画面文言が日本語であることだけを指さない。
+最低対応版はAPI 26とする。
 
-日本語IMEによる入力、UTF-8出力、全角文字のセル幅、結合文字、絵文字、日本語フォント、選択と貼り付け、エラー説明までを対象にする。
+SSHライブラリ、永続ストレージ、AndroidライフサイクルはPortを介して接続し、Flutterの画面とセッション制御から交換できるようにする。
 
-初期リリースで扱う端末文字コードはUTF-8とする。
+設計では次の原則を優先する。
 
-Shift_JISとEUC-JPは対象外だが、文字コード変換をSSHセッションから分離し、後から追加できる構造にする。
+- **接続の正しさ**：接続段階、失敗理由、キャンセル、資源解放を状態機械で管理する
+- **既知ホストの継続確認**：未知の鍵を確認し、登録済みの鍵が変わった接続を遮断する
+- **秘密情報の局所化**：パスワードと秘密鍵を必要な時間だけメモリへ置き、ログと通常の永続ストレージへ渡さない
+- **モバイル回線への耐性**：バックグラウンド移行、ネットワーク切り替え、遅延、瞬断を正常系として扱う
+- **日本語端末の一貫性**：IME、UTF-8、文字幅、フォント、貼り付けを一つの入出力経路として検証する
+- **観測可能性**：端末本文と入力内容を記録せず、接続段階と安全な診断値だけで障害を切り分ける
 
-Androidの最低対応版はAPI 26とする。
+「接続できる」はTCP接続だけを指さない。
 
-`compileSdk`と`targetSdk`は、実装時点のFlutter安定版とGoogle Play要件に合わせて固定する。
+ホスト鍵検証、認証、PTY開始、双方向通信、切断検出、終了処理まで完了して初めて接続済みとする。
 
-## 2. 初期リリースの範囲
+## 2. 実装状況と0.2系の範囲
 
-初期リリースには次の機能を含める。
+### 2.1 0.1.0で動作している経路
 
-- 接続先の登録、編集、複製、削除
-- ホスト名、ポート、ユーザー名によるSSH接続
-- パスワード認証
-- OpenSSH形式の秘密鍵認証と鍵のパスフレーズ入力
-- Keyboard-interactive認証
-- 初回接続時のホスト鍵確認と、登録済みホスト鍵の照合
-- 複数の接続タブ
-- 対話型PTYと`xterm-256color`
-- 日本語IME入力とUTF-8出力
-- `Ctrl`、`Alt`、`Esc`、`Tab`、矢印キーを備えた補助キーバー
-- 文字列の選択、コピー、明示的な貼り付け
-- 画面回転とウィンドウ寸法変更のPTYへの反映
-- 配色、文字サイズ、スクロールバック行数の設定
-- 切断理由の日本語表示と、利用者が選択する再接続
-- SSH、FTP、設定を切り替える常設ボトムナビゲーション
-- FTP、FTPES、FTPSによるファイル一覧の取得
-- 接続単位のFTPタブ、パンくず、階層式フォルダー移動
-- FTP上のフォルダー作成、名前変更、ファイルと空フォルダーの削除
+現行コードには、実サーバーへ接続できる最小の縦の経路がある。
 
-次の機能は後続リリースへ分離する。
+| 項目 | 現在の実装 |
+|---|---|
+| TCP接続 | 15秒の接続タイムアウト |
+| SSHハンドシェイク | 15秒のタイムアウト |
+| 認証 | パスワード、複数回のkeyboard-interactive、OpenSSH秘密鍵 |
+| ホスト鍵 | SHA-256フィンガープリントの確認と照合 |
+| 接続先の保存 | DriftとSQLiteによる永続Repository |
+| known_hostsの保存 | 正規化したホスト名とポート、複数承認鍵の永続Repository |
+| Credential Vault | AES-256-GCM暗号化blobとAndroid Keystore配下の暗号鍵 |
+| 秘密鍵インポート | Androidのネイティブファイル選択、形式とパスフレーズの検証 |
+| Wake on LAN | 接続先ごとのMAC、IPv4ブロードキャスト先、UDPポート保存とMagic Packet送信 |
+| PTY | `xterm-256color`、PTYとShell要求のパイプライン化 |
+| 入出力 | 増分UTF-8デコード、日本語IME確定文字列の送信 |
+| 端末制御 | `Ctrl`、`Alt`、補助キー、画面寸法変更 |
+| 切断 | リモート切断とStreamエラーから再接続案内へ遷移 |
+| 資源解放 | Session、Client、Socket、Stream購読を閉じる冪等処理 |
+
+接続先とknown_hostsの永続化は0.2系の段階1として実装済みである。
+
+Repositoryの再起動試験では接続先と複数のホスト鍵が復元され、登録済みのどの鍵にも一致しない鍵を不一致と判定する。
+
+秘密鍵と任意保存された鍵パスフレーズはCredential Vaultへ保存し、SQLiteには参照IDと表示用ファイル名だけを置く。
+
+パスワードは接続ごとに入力し、永続化しない。
+
+### 2.2 0.2系で実装する機能
+
+0.2系では次の機能を実装対象とする。
+
+- 認証方式と認証順序の明示
+- 接続試行単位のキャンセルと段階別タイムアウト
+- IPv4とIPv6を考慮した接続
+- アプリ管理のkeepaliveと無応答判定
+- ネットワーク復帰を待つ再接続
+- 指数バックオフ付き自動再接続の任意設定
+- サーバーバナー、切断理由、暗号ネゴシエーション結果の安全な診断表示
+- 複数セッションとタブの独立した寿命管理
+- OpenSSHテストサーバーを使った統合試験
+
+自動再接続は既定で無効とする。
+
+有効にした場合も端末入力を再送せず、新しいSSH接続と新しいPTYを開始する。
+
+切断前のプロセス状態は復元できないため、継続が必要な利用者にはサーバー側の`tmux`または`screen`を案内する。
+
+### 2.3 後続リリースへ分離する機能
+
+次の機能は0.2系へ含めない。
 
 - SFTPファイル管理
-- FTPのアップロード、ダウンロード、転送キュー
 - ローカル、リモート、Dynamicポートフォワーディング
 - ProxyJumpと踏み台接続
-- SSH Agent連携
+- SSH AgentとFIDO2鍵の連携
+- SSH証明書
 - Mosh
-- スニペット同期とクラウド同期
-- バックグラウンドでの常時接続
+- クラウド同期
 - Shift_JISとEUC-JP
+- バックグラウンドで無期限に接続を維持する機能
 
-シェルの再接続は、切断前のプロセス状態を復元しない。
+これらは`SshGateway`へ機能を足すのではなく、転送、踏み台、ファイル転送ごとのPortとして追加する。
 
-状態の継続が必要な利用者には、サーバー側の`tmux`または`screen`を案内する。
+## 3. 画面と利用者の操作
 
-## 3. 画面構成
-
-### 3.0 トップレベルナビゲーション
+### 3.1 トップレベルナビゲーション
 
 トップレベルは`SSH`、`FTP`、`設定`の三画面をボトムナビゲーションで切り替える。
 
@@ -71,107 +104,113 @@ Androidの最低対応版はAPI 26とする。
 
 SSHターミナルや接続先編集のような集中操作はルートNavigatorへ表示し、ボトムナビゲーションを隠す。
 
-### 3.1 接続先一覧
-
-起動直後に接続先一覧を表示する。
+### 3.2 接続先一覧
 
 各項目には表示名、`user@host:port`、認証方式、直近の接続結果を表示する。
 
-検索、並べ替え、新規登録、長押しによる編集と複製を提供する。
+メニューからWake on LAN、編集、複製、known_hostsの確認、削除を行えるようにする。
 
-### 3.2 接続先編集
+接続履歴には成否、失敗段階、時刻だけを保存し、端末本文と認証情報を含めない。
 
-編集画面は、基本情報、認証、端末、詳細設定の四つに分ける。
+### 3.3 接続先編集
 
-入力値は保存前に検証し、ホスト名の空欄、1から65535以外のポート、存在しない認証情報を拒否する。
+編集画面は基本情報、認証、端末、接続維持、詳細設定の五つに分ける。
 
-パスワードと秘密鍵はこの画面に再表示しない。
+基本情報では表示名、ホスト、ポート、ユーザー名を編集する。
 
-保存済みであることと、置き換えまたは削除ができることだけを示す。
+認証ではパスワード、秘密鍵、keyboard-interactiveのいずれを使うかと試行順序を設定する。
 
-### 3.3 ホスト鍵確認
+端末ではTERM、文字サイズ、スクロールバック行数、任意のロケール環境変数を設定する。
 
-初めて見るホスト鍵は、接続処理を停止した状態で確認画面へ渡す。
+接続維持ではkeepalive間隔、無応答回数、自動再接続を設定する。
 
-画面にはホスト名、ポート、鍵アルゴリズム、SHA-256フィンガープリントを表示する。
+詳細設定では接続、ハンドシェイク、認証、PTYのタイムアウトを変更できるが、安全な既定値と範囲制限を設ける。
 
-利用者が承認した場合だけ、登録して接続を続行する。
+### 3.4 Wake on LAN
 
-登録済みの鍵と異なる場合は通常の確認画面を再利用せず、危険性を説明して接続を遮断する。
+接続先編集でMACアドレス、IPv4ブロードキャストアドレス、UDPポートを設定する。
 
-鍵の置き換えは、接続先編集画面から明示的に行う。
+接続先メニューから送信すると、`FF`を6バイト、その後に対象MACアドレスを16回並べた102バイトのMagic PacketをUDPブロードキャストする。
 
-### 3.4 FTPマネージャー
+Magic Packetには認証機能がないため、ローカルネットワークまたは信頼できるVPN内でのみ利用し、インターネットへ直接公開しない。
 
-FTP画面上部には接続単位のタブを横スクロールで表示し、タブごとに接続、現在パス、一覧、処理状態を保持する。
+ルーターやAndroid端末のネットワーク設定によってブロードキャストが遮断される場合は、接続先ごとにDirected Broadcastアドレスを明示する。
 
-現在パスはパンくずとして表示し、ルートまたは任意の上位階層へ直接戻れるようにする。
+パスワードと秘密鍵本文は再表示しない。
 
-一覧はフォルダーを先に、その後にファイルを名前順で表示する。
+保存済みかどうかと、置き換えまたは削除ができることだけを示す。
 
-フォルダーのタップで下位階層へ移動し、項目メニューから名前変更と削除を行う。
+### 3.4 ホスト鍵確認
 
-平文FTPを選んだ場合は、認証情報と通信内容が暗号化されないことを接続前と接続中の両方で明示する。
+初めて見るホスト鍵は接続処理を停止した状態で確認画面へ渡す。
 
-FTPパスワードは永続化せず、接続タブの寿命だけメモリ上に保持する。
+画面には入力したホスト名、ポート、鍵アルゴリズム、SHA-256フィンガープリントを表示する。
 
-日本語IMEがホスト、ポート、ユーザー名へ全角ASCIIを入力した場合は、接続直前に半角へ正規化する。
+登録済みの鍵と一致しない場合は通常の初回確認を表示せず、接続を遮断する。
 
-パスワードは利用者の意図した値を変えないため正規化しない。
+鍵の変更は接続先のknown_hosts管理画面で既存鍵を削除してから、次の接続で改めて承認する。
 
-FTPライブラリ固有のClientとEntry型はInfrastructure層に閉じ込め、Presentation層とApplication層は`FtpGateway`と`FtpConnection`だけへ依存する。
+### 3.5 ターミナル
 
-### 3.4 ターミナル
+ターミナル画面は上部の接続タブ、中央の端末表示、下部の補助キーバーで構成する。
 
-ターミナル画面は、上部の接続タブ、中央の端末表示、下部の補助キーバーで構成する。
+接続段階は「認証情報を準備中」「接続中」「ホスト鍵を確認中」「認証中」「端末を開始中」「接続済み」「再接続待ち」「切断済み」で表示する。
 
-接続状態は「接続中」「ホスト鍵を確認中」「認証中」「接続済み」「再接続待ち」「切断済み」で表示する。
+接続中のキャンセル、接続済みの切断、失敗後の再試行を同じ位置から操作できるようにする。
 
-ソフトウェアキーボードの表示中も、最終行とカーソルが隠れないレイアウトにする。
+再接続待ちでは次の試行までの秒数、試行回数、待機理由を表示する。
 
-戻る操作は即時切断に割り当てない。
+戻る操作は即時切断に割り当てず、接続中のタブを閉じる場合だけ確認する。
 
-接続中は、タブを閉じる確認ダイアログを表示する。
+### 3.6 FTPマネージャー
 
-### 3.5 設定
+FTP画面は接続単位のタブ、パンくず、階層式一覧を持つ。
 
-設定画面には、テーマ、フォントサイズ、スクロールバック行数、貼り付け確認の文字数、画面消灯中の扱い、診断ログの出力を置く。
+FTPライブラリ固有の型はInfrastructure層に閉じ込め、SSHのセッション寿命と共有しない。
 
-診断ログは初期状態で無効とし、有効化してもパスワード、秘密鍵、入力文字列、端末本文を記録しない。
+平文FTPでは認証情報と通信内容が暗号化されないことを接続前と接続中に表示する。
+
+### 3.7 設定
+
+設定画面にはテーマ、日本語フォント、フォントサイズ、スクロールバック行数、貼り付け確認、診断ログを置く。
+
+診断ログは既定で無効とし、有効化しても入力文字列、端末本文、パスワード、秘密鍵を記録しない。
 
 ## 4. 論理アーキテクチャ
 
-依存方向は画面からインフラストラクチャへ一方向にする。
+依存方向はPresentation層からApplication層、Domain層へ向ける。
 
-ドメイン層はFlutter、SQLite、Android、SSHライブラリに依存しない。
+Infrastructure層はDomain層で定義したPortを実装する。
 
 ```mermaid
 flowchart LR
-    UI["Presentation<br/>画面と端末View"] --> APP["Application<br/>ユースケースとセッション制御"]
+    UI["Presentation<br/>画面と端末View"] --> APP["Application<br/>接続調停とセッション制御"]
     APP --> DOMAIN["Domain<br/>接続先、認証、状態、失敗"]
-    APP --> PORTS["Ports<br/>RepositoryとGatewayの抽象"]
-    INFRA["Infrastructure<br/>SSH、DB、Keystore、端末Codec"] --> PORTS
-    UI --> TERM["Terminal Runtime<br/>xtermの表示モデル"]
-    APP --> TERM
+    APP --> PORTS["Ports<br/>Gateway、Repository、Vault"]
+    INFRA["Infrastructure<br/>SSH、DB、Keystore、Network"] --> PORTS
+    APP --> TERM["Terminal Runtime<br/>xterm表示モデル"]
+    UI --> TERM
 ```
 
 ### 4.1 Presentation層
 
-Presentation層はFlutter Widget、画面遷移、入力検証結果の表示、日本語リソースを担当する。
+Presentation層はFlutter Widget、画面遷移、入力検証結果、日本語リソースを担当する。
 
-状態管理にはRiverpodを使用する。
+SSHの受信バイト列や端末セルをRiverpodの状態へ流さない。
 
-ただし、SSHの受信バイト列や端末画面の各セルをRiverpodへ流さない。
-
-高頻度の端末更新を通常のWidget再構築から外し、端末ランタイムへ直接書き込むためである。
+高頻度の出力は端末ランタイムへ直接書き込み、接続状態と診断情報だけを画面状態として公開する。
 
 ### 4.2 Application層
 
-Application層は、接続、ホスト鍵承認、認証情報取得、PTY開始、切断、再接続の順序を制御する。
+Application層は接続試行と接続済みセッションを別の寿命として扱う。
 
-画面ごとのControllerとは別に、アプリ単位の`SessionRegistry`を置く。
+`SshConnectionCoordinator`は認証情報取得、接続、ホスト鍵判断、認証、PTY開始の順序を制御する。
 
-これにより、画面回転やタブ移動でSSH接続が作り直されることを防ぐ。
+`SshSessionController`は接続後の入出力、寸法変更、keepalive状態、切断を管理する。
+
+`SessionRegistry`は複数のControllerを`SessionId`で所有し、画面回転やタブ移動で接続が作り直されないようにする。
+
+接続先IDをRegistryのキーには使わず、同じ接続先から複数の独立したタブを開けるようにする。
 
 主要なユースケースは次のとおりである。
 
@@ -179,94 +218,231 @@ Application層は、接続、ホスト鍵承認、認証情報取得、PTY開始
 - `SaveConnectionProfile`
 - `DeleteConnectionProfile`
 - `ConnectSession`
+- `CancelConnectionAttempt`
 - `ApproveHostKey`
-- `RejectHostKey`
 - `DisconnectSession`
-- `ResizeTerminal`
+- `ReconnectSession`
 - `ImportPrivateKey`
 - `ReplaceCredential`
+- `ExportSafeDiagnostics`
 
 ### 4.3 Domain層
 
-Domain層には、接続先、認証方式、ホスト鍵、端末設定、セッション状態、失敗理由を置く。
+Domain層には接続先、認証方式、ホスト鍵、タイムアウト、再接続ポリシー、セッション状態、失敗理由を置く。
 
-例外文字列を画面へ直接渡さず、`SshFailureCode`と安全な補足情報へ変換する。
+ライブラリ例外は`SshFailure`へ変換し、画面へ例外文字列を直接渡さない。
+
+`SshFailure`は少なくとも次の情報を持つ。
+
+- 安定した`SshFailureCode`
+- 失敗した`SshConnectionStage`
+- 再試行可能かどうか
+- 利用者へ表示できる安全な補足値
+- 診断用の相関ID
 
 主な失敗コードは次のとおりである。
 
 - `dnsLookupFailed`
 - `connectionRefused`
 - `connectionTimedOut`
-- `hostKeyUnknown`
+- `handshakeTimedOut`
+- `hostKeyRejected`
 - `hostKeyMismatch`
 - `authenticationFailed`
+- `authenticationTimedOut`
 - `privateKeyInvalid`
 - `keyPassphraseRequired`
+- `unsupportedAlgorithm`
 - `ptyRejected`
 - `remoteClosed`
 - `networkLost`
-- `unsupportedAlgorithm`
+- `keepAliveTimedOut`
+- `cancelled`
 
 ### 4.4 Infrastructure層
 
-Infrastructure層は、`dartssh2`、SQLite、Android Keystore、ファイル選択、端末文字コードを抽象へ接続する。
+Infrastructure層は`dartssh2`、SQLite、Android Keystore、Storage Access Framework、ネットワーク監視、端末CodecをPortへ接続する。
 
-外部ライブラリ固有の型はこの層から外へ出さない。
+`dartssh2`の`SSHClient`、`SSHSession`、`SSHKeyPair`をInfrastructure層から外へ出さない。
 
-`dartssh2`を交換またはforkする場合も、Application層と画面を変更しない境界にする。
+同梱forkへ加えた変更は`third_party/dartssh2/LOCAL_PATCHES.md`へ理由、参照仕様、試験を記録する。
 
-## 5. SSHセッションの設計
+## 5. SSH接続の実行モデル
 
-### 5.1 状態機械
+### 5.1 接続状態機械
 
 一つのタブは一つの`SshSessionController`を所有する。
 
-Controllerは次の状態遷移だけを許可する。
+同じControllerでは同時に一つの接続試行だけを許可する。
 
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> connecting: 接続開始
-    connecting --> verifyingHost: ホスト鍵受信
-    verifyingHost --> authenticating: 承認済み
-    verifyingHost --> closed: 拒否
-    authenticating --> openingPty: 認証成功
-    openingPty --> connected: PTY開始
-    connecting --> failed: 通信失敗
-    authenticating --> failed: 認証失敗
-    openingPty --> failed: PTY失敗
-    connected --> reconnectPrompt: 予期しない切断
-    reconnectPrompt --> connecting: 再接続を選択
-    reconnectPrompt --> closed: 閉じる
+    idle --> loadingCredential: 接続開始
+    loadingCredential --> openingTransport: 認証情報準備完了
+    openingTransport --> verifyingHost: サーバー鍵受信
+    verifyingHost --> authenticating: 鍵を承認
+    verifyingHost --> failed: 拒否または不一致
+    authenticating --> openingSession: 認証成功
+    openingSession --> connected: PTYとShell開始
+    loadingCredential --> failed: 認証情報エラー
+    openingTransport --> failed: DNSまたは通信エラー
+    authenticating --> failed: 認証エラー
+    openingSession --> failed: PTYエラー
+    connected --> reconnectWaiting: 予期しない切断
+    reconnectWaiting --> openingTransport: 待機完了
+    reconnectWaiting --> closed: 再接続を中止
     connected --> closing: 切断操作
-    closing --> closed
-    failed --> connecting: 再試行
+    failed --> loadingCredential: 再試行
     failed --> closed: 閉じる
+    closing --> closed
 ```
 
-接続処理にはTCP接続、SSHハンドシェイク、認証の個別タイムアウトを設ける。
+状態遷移には単調増加する`attemptId`を付ける。
 
-キャンセル時は、Socket、SSHClient、Shell Channel、購読中のStreamを逆順で閉じる。
+古い試行から届いた完了通知は、現在の`attemptId`と一致しない場合に破棄する。
 
-複数回の切断操作とライフサイクル通知を受けても安全な、冪等な終了処理にする。
+これにより、キャンセル直後にTCP接続が完了して古いセッションが画面へ接続される競合を防ぐ。
 
-### 5.2 PTY
+### 5.2 キャンセルと資源所有権
+
+接続試行は`ConnectionAttempt`がSocket、SSHClient、認証コールバック、Timerを所有する。
+
+キャンセル時は新しいコールバックを拒否してから、Timer、Shell Channel、SSHClient、Socketの順に閉じる。
+
+`Socket.connect`のFuture自体を中断できない実装では、UIと接続試行を先にキャンセル済みへ遷移させ、遅れて返ったSocketを採用せず直ちに閉じる。
+
+終了処理は複数回呼び出せるようにし、最初の呼び出しだけが実際の解放を行う。
+
+UIのキャンセル、画面破棄、アプリ終了、タイムアウトは同じ`cancel()`へ集約する。
+
+秘密情報を取得した後にキャンセルした場合は、ControllerとRepositoryの参照を直ちに外す。
+
+Dartの不変Stringを確実に消去することはできないため、秘密値を長寿命の状態、通知、例外へ保存しないことを防御線とする。
+
+### 5.3 接続段階とタイムアウト
+
+タイムアウトは接続全体の一個だけではなく、利用者が原因を判断できる段階ごとに設ける。
+
+| 段階 | 既定値 | 設定可能範囲 | タイムアウト時の扱い |
+|---|---:|---:|---|
+| DNSとTCP | 15秒 | 5秒から60秒 | 再試行可能 |
+| SSHハンドシェイク | 15秒 | 5秒から60秒 | 再試行可能 |
+| 認証 | 30秒 | 10秒から120秒 | 原則として手動再試行 |
+| PTYとShell開始 | 10秒 | 5秒から30秒 | 手動再試行 |
+| 正常切断待ち | 2秒 | 固定 | 超過後にSocketを閉じる |
+
+ホスト鍵確認ダイアログを表示している時間はハンドシェイクの利用者待ち時間として別に計測する。
+
+keyboard-interactiveは各質問の表示時に利用者待ちへ入り、回答送信後に認証タイムアウトを再開する。
+
+### 5.4 DNS、IPv4、IPv6
+
+入力されたホスト名をknown_hostsの識別子として保持し、解決後のIPアドレスへ置き換えない。
+
+DNS名は末尾のドットを除き、ASCIIの大文字を小文字へ正規化する。
+
+国際化ドメイン名は表示値と接続用ASCII表現を分けて保存する。
+
+接続層はIPv6とIPv4の候補を取得し、先行候補が応答しない場合に短い遅延で次の候補を試す。
+
+複数候補のうち最初に成立したSocketだけを採用し、残りは必ず閉じる。
+
+端末がIPv6を利用できないこと自体はエラーとして記録せず、全候補が失敗した場合にだけ接続失敗とする。
+
+### 5.5 ホスト鍵検証
+
+known_hostsは入力された正規化ホスト名とポートの組で検索する。
+
+同じIPアドレスを指す別のホスト名は別の接続先として扱う。
+
+受信したホスト鍵はアルゴリズムとSHA-256フィンガープリントを比較する。
+
+フィンガープリントの比較には処理時間が入力値で変わらない比較関数を使用する。
+
+ホスト名とポートに承認済み鍵が一つでもあり、受信した鍵がどれにも一致しない場合は`hostKeyMismatch`として遮断する。
+
+鍵の変更を初回接続と同じ確認画面で承認できるようにはしない。
+
+未知の鍵を承認する画面には、別経路でフィンガープリントを確認する必要があることを日本語で表示する。
+
+### 5.6 認証方式
+
+認証方式は`AuthenticationPlan`として接続先へ保存する。
+
+計画には公開鍵、password、keyboard-interactiveの順序と、各方式を許可するかどうかを記録する。
+
+サーバーが提示した方式だけを試し、選択されていない方式へ暗黙にフォールバックしない。
+
+秘密鍵認証ではOpenSSH形式のRSA、ECDSA、Ed25519鍵をアプリ内で解析し、公開鍵認証に必要な`SSHKeyPair`へ変換する。
+
+暗号化秘密鍵のパスフレーズは毎回入力を既定とし、利用者が選択した場合だけCredential Vaultへ保存する。
+
+keyboard-interactiveは複数ラウンドと複数質問を扱い、`echo=false`の回答を画面、ログ、診断へ残さない。
+
+パスワード変更要求は0.2系では処理せず、対応していない要求として安全に終了する。
+
+### 5.7 暗号アルゴリズム方針
+
+アルゴリズム選択は`dartssh2`の既定値を無条件に画面へ露出せず、アプリ側の`SshAlgorithmPolicy`で管理する。
+
+既定ポリシーは現在のライブラリが提供するSHA-2系、Curve25519系、Ed25519系を優先する。
+
+既知の弱い暗号、MAC、鍵交換を互換性のために自動で有効化しない。
+
+古いサーバー向け互換モードを追加する場合は接続先単位の明示設定とし、接続中も警告を表示する。
+
+ネゴシエーション結果はアルゴリズム名だけを診断へ記録し、鍵素材とパケット内容を記録しない。
+
+### 5.8 PTYとShell
 
 接続後は`xterm-256color`としてPTYを要求する。
 
-列数と行数は、端末Widgetが計算した値を使用する。
+列数と行数には端末Widgetが計算した値を使用する。
 
-画面回転やキーボード開閉で寸法が変わった場合は、短い間隔でまとめてSSHのwindow-change要求を送る。
+PTYとShell要求は同梱forkのパイプライン機能で一往復にまとめ、両方の応答を確認してから接続済みへ遷移する。
 
-サーバーへ`LANG=ja_JP.UTF-8`を常に送信しない。
+画面回転とキーボード開閉による連続した寸法変更は100ミリ秒程度にまとめ、最後の値だけを送る。
 
-接続先設定で明示された場合だけ送信し、サーバーが環境変数要求を拒否しても接続自体は継続する。
+`LANG=ja_JP.UTF-8`は常に送らない。
 
-### 5.3 入出力パイプライン
+接続先で明示された場合だけ環境変数要求を送り、拒否されてもPTY接続は継続する。
 
-SSHは文字列ではなくバイト列を運ぶため、受信チャンクの境界を文字境界として扱わない。
+### 5.9 keepaliveと切断判定
 
-UTF-8デコーダーはセッション中保持し、複数チャンクに分割された日本語文字を一文字として復元する。
+0.2系ではライブラリ既定のTimer任せにせず、Application層から状態を観測できる`KeepAlivePolicy`を導入する。
+
+既定は15秒間隔、連続3回の無応答で不健全と判定する。
+
+送信中のpingを重複させず、応答またはタイムアウト後に次の計測を始める。
+
+通常のSSH入出力を受信した場合も最終受信時刻を更新する。
+
+ネットワーク監視結果は再接続開始の判断に使うが、接続の生存判定には使わない。
+
+Wi-Fi表示が接続中でもSSH Socketが失われている場合があるため、Socket、SSH transport、keepalive応答を接続状態の根拠とする。
+
+### 5.10 再接続
+
+手動再接続は常に提供し、自動再接続は接続先単位の任意設定とする。
+
+自動再接続はネットワーク利用可能状態を待ち、1秒、2秒、4秒、8秒、最大30秒の指数バックオフへ20パーセント以内のジッターを加える。
+
+認証失敗、ホスト鍵不一致、秘密鍵解析失敗は自動再接続しない。
+
+DNS失敗、TCPタイムアウト、ネットワーク喪失、keepaliveタイムアウトは再試行可能とする。
+
+利用者が入力または切断を操作した時点で待機Timerを停止できるようにする。
+
+再接続では新しいPTYを開始し、切断前の未送信入力と画面状態をリモートへ再送しない。
+
+## 6. 端末の入出力と日本語
+
+### 6.1 バイト列の処理
+
+SSHの受信チャンク境界を文字境界として扱わない。
+
+UTF-8デコーダーはセッション中保持し、複数チャンクに分割された日本語文字を復元する。
 
 ```mermaid
 flowchart LR
@@ -278,55 +454,29 @@ flowchart LR
     ENCODER --> STDIN[SSH Shell stdin]
 ```
 
-不正なUTF-8はセッションを終了させず、置換文字を表示して診断カウンターだけを増やす。
-
-受信ごとにWidgetを再構築せず、1フレーム内の小さなチャンクをまとめて端末へ渡す。
+不正なUTF-8はセッションを終了させず、置換文字を表示して診断カウンターを増やす。
 
 送信側ではUnicode正規化を行わない。
 
 ファイル名、コマンド、結合文字の意味をアプリが変えないためである。
 
-## 6. 日本語対応
-
-### 6.1 アプリの日本語化
-
-画面文言はFlutter標準のARBによって管理し、Dartコードへ日本語文字列を直書きしない。
-
-既定ロケールを日本語とし、初期リリースでは`ja`を正式対応ロケールとする。
-
-OS部品、日付、時刻、アクセシビリティラベルも日本語化する。
-
-SSHライブラリの例外文はそのまま表示せず、失敗コードから利用者向けの説明と対処へ変換する。
-
-技術情報が必要な場合は、展開可能な「詳細」に例外種別、接続段階、時刻を表示する。
-
-詳細にも認証情報と端末本文を含めない。
-
 ### 6.2 日本語IME
 
-端末WidgetはIMEの変換途中と確定済み文字列を区別し、確定前の文字列をSSHへ送らない。
+端末Widgetは変換途中と確定済み文字列を区別し、確定前の文字列をSSHへ送らない。
 
 変換候補の選択中に`Enter`を押した場合は、候補確定とリモートへの改行送信を混同しない。
 
-`xterm`はCJKの幅広文字とIMEをサポートしているため、初期実装の端末エンジンに採用する。
-
-ただし、採用判断は実機試験の代わりにはならない。
-
-Gboardの日本語入力、12キー入力、QWERTY入力、物理キーボードで受け入れ試験を行う。
+Gboardの12キー、QWERTY、物理キーボードを実機試験の対象とする。
 
 ### 6.3 文字幅とフォント
 
 端末は半角を1セル、一般的な日本語の全角文字を2セルとして描画する。
 
-結合文字、Variation Selector、絵文字、東アジア曖昧幅文字は、リモート側の`wcwidth`実装との差が出やすいため専用テストを置く。
+結合文字、Variation Selector、絵文字、東アジア曖昧幅文字はリモート側の`wcwidth`との差を試験する。
 
-既定フォントには、日本語字形を内包する等幅フォントをアプリへ同梱する。
+英数字と罫線にはCascadia Monoを使用する。
 
-候補はNoto Sans Mono CJK JPとし、ライセンス、APKサイズ、低解像度での可読性を実装開始時に確認して固定する。
-
-OSのフォントフォールバックだけには依存しない。
-
-フォールバックによって字形ごとの送り幅が変わると、カーソル位置と表示がずれるためである。
+日本語字形にはNoto Sans JP、Koruri、Mejiroを同梱し、設定したフォントをアプリUIとターミナルのフォールバックへ反映する。
 
 フォントサイズ変更後はセル寸法を再計算し、PTYへ新しい列数と行数を送る。
 
@@ -336,101 +486,108 @@ OSのフォントフォールバックだけには依存しない。
 
 一定文字数を超える貼り付けと改行を含む貼り付けは、内容の先頭を安全にプレビューして確認を求める。
 
-Bracketed Paste Modeが有効な場合は、端末エンジンが生成する制御シーケンスを維持する。
+Bracketed Paste Modeが有効な場合は端末エンジンが生成する制御シーケンスを維持する。
 
-パスワード入力欄からクリップボードへ自動コピーしない。
+## 7. 永続データと秘密情報
 
-## 7. データと秘密情報
-
-### 7.1 SQLiteへ保存するデータ
+### 7.1 保存先の分離
 
 非機密データはDriftを介してSQLiteへ保存する。
 
-初期スキーマは次のテーブルで構成する。
+UIだけで使う小さな設定は`shared_preferences`へ保存してよいが、接続先、known_hosts、接続履歴はスキーマとマイグレーションを持つSQLiteへ置く。
 
 | テーブル | 主な列 | 用途 |
 |---|---|---|
-| `connection_profiles` | `id`, `name`, `host`, `port`, `username`, `auth_type`, `credential_ref`, `terminal_options`, `created_at`, `updated_at` | 接続先 |
-| `known_hosts` | `host`, `port`, `algorithm`, `fingerprint_sha256`, `accepted_at` | ホスト鍵照合 |
+| `connection_profiles` | `id`, `name`, `host_display`, `host_ascii`, `port`, `username`, `auth_plan`, `wake_on_lan_mac`, `wake_on_lan_broadcast`, `wake_on_lan_port`, `terminal_options`, `keepalive_policy`, `reconnect_policy`, `created_at`, `updated_at` | 接続先 |
+| `known_host_keys` | `host_ascii`, `port`, `algorithm`, `fingerprint_sha256`, `accepted_at` | 承認済みホスト鍵 |
+| `credential_links` | `profile_id`, `kind`, `vault_reference`, `updated_at` | Keystore内の秘密値への参照 |
+| `connection_history` | `profile_id`, `started_at`, `duration_ms`, `stage`, `result_code`, `network_type` | 本文を含まない履歴 |
 | `app_settings` | `key`, `json_value` | 非機密設定 |
-| `connection_history` | `profile_id`, `connected_at`, `result_code` | 本文を含まない接続履歴 |
 
-一時的なセッション、端末本文、入力履歴はデータベースへ保存しない。
+端末本文、入力履歴、keyboard-interactiveの質問と回答は保存しない。
 
-### 7.2 Keystore配下へ保存するデータ
+ホスト鍵承認と接続先保存は別のトランザクションとし、接続先を削除してもknown_hostsを自動削除しない。
 
-パスワード、秘密鍵、秘密鍵のパスフレーズは`flutter_secure_storage`のAndroid実装を通して暗号化する。
+同じホストを別の接続先が利用している可能性があるためである。
 
-SQLiteにはランダムな`credential_ref`だけを保存する。
+### 7.2 Credential Vault
 
-パスワードと秘密鍵のパスフレーズは「毎回入力」を既定とし、利用者が選択した場合だけ保存する。
+パスワード、秘密鍵、鍵パスフレーズは`CredentialVault`を通して暗号化して保存する。
 
-Android Keystoreの鍵は取り出さず、暗号処理にのみ使用する。
+SQLiteには推測できない`vault_reference`だけを置く。
 
-端末のバックアップから暗号文だけが復元されて復号不能になる状態を避けるため、初期リリースではAndroid Auto Backupを無効にする。
+パスワードと鍵パスフレーズはAndroid Keystoreを利用するsecure storageへ保存する。
 
-接続先の移行機能はAuto Backupに依存させず、秘密情報を含めない明示的なエクスポートとして後から設計する。
+容量が大きい秘密鍵はAES-GCMで暗号化したblobとしてアプリ専用領域へ保存し、暗号鍵はAndroid Keystoreから取り出せない形で管理する。
+
+暗号化blobにはバージョン、nonce、認証タグを持たせ、復号失敗を秘密鍵解析失敗と区別する。
 
 秘密鍵のインポートにはAndroid Storage Access Frameworkを使用する。
 
-選択した内容はメモリ上で解析して安全なストレージへ書き込み、アプリ専用領域へ平文ファイルとして複製しない。
+選択したファイルはメモリ上で解析し、アプリ専用領域へ平文の秘密鍵ファイルとして複製しない。
 
-秘密値は必要な認証処理の直前に読み出し、ログ、例外、Riverpodの永続状態へ入れない。
+認証情報は接続直前に読み出し、接続試行の終了時に参照を破棄する。
 
-## 8. ホスト鍵と認証の安全性
+Android Auto BackupにはDBとCredential Vaultを含めない。
+
+端末移行は秘密情報を除いた接続先エクスポートとして別に設計する。
+
+## 8. セキュリティと診断
 
 未知のホスト鍵を自動承認する設定は設けない。
 
-ホスト鍵はホスト名とポートの組で登録する。
+ホスト鍵検証を無効にするデバッグ用経路もアプリから利用しない。
 
-同じIPアドレスを指す別のホスト名は別の接続先として扱う。
+認証失敗時は「ユーザー名または認証情報が一致しない」と表示し、認証方式ごとの存在確認に利用できる差を返さない。
 
-登録済みフィンガープリントとの不一致は、中間者攻撃またはサーバー再構築の可能性があるため接続を遮断する。
-
-認証失敗時は「ユーザー名または認証情報が一致しない」と表示し、パスワードの存在確認に利用できる差分を返さない。
-
-デバッグビルドを含め、次の値をログへ書かない。
+ログには次の値を書かない。
 
 - パスワード
-- 秘密鍵とパスフレーズ
-- Keyboard-interactiveの回答
+- 秘密鍵と鍵パスフレーズ
+- keyboard-interactiveの回答
 - リモートへ送った入力
 - リモートから受け取った端末本文
 - クリップボード内容
+- SSHパケットの生データ
 
-## 9. Androidライフサイクル
+診断イベントには相関ID、接続先ID、接続段階、開始からの経過時間、失敗コード、再試行回数、ネットワーク種別を記録できる。
 
-初期リリースはフォアグラウンド利用を保証範囲とする。
+ホスト名とユーザー名は診断エクスポート時に既定で伏せ字へ変換する。
 
-アプリがバックグラウンドへ移っても直ちに切断しないが、Androidによるプロセス停止やネットワーク切断を防げるとは表示しない。
+診断ログはサイズ上限と保存日数を持つリングバッファにし、利用者が明示した場合だけ共有する。
 
-復帰時にSocketとShell Channelを検査し、切れていれば再接続の選択肢を表示する。
+## 9. Androidライフサイクルとネットワーク
 
-画面回転ではActivity再生成の有無にかかわらず`SessionRegistry`を維持する。
+画面回転とタブ切り替えでは`SessionRegistry`を維持する。
 
-画面消灯中も接続を保証する機能を追加する場合は、利用者が明示的に開始するForeground Serviceと常駐通知を別機能として設計する。
+アプリがバックグラウンドへ移っても直ちに切断しないが、通常のActivityだけで接続維持を保証しない。
 
-## 10. パッケージ構成
+復帰時はネットワーク表示ではなくSSH transportとkeepalive状態を検査する。
 
-初期採用候補は次のとおりである。
+プロセスが再生成された場合は接続先とタブ見出しだけを復元し、SSHセッションは切断済みとして表示する。
 
-バージョンはプロジェクト作成時に互換性を確認し、`pubspec.lock`で固定する。
+画面消灯中も接続を維持する機能は、利用者が開始するForeground Service、常駐通知、停止操作を備えた別モードとして設計する。
 
-| 役割 | パッケージ | 採用理由 |
-|---|---|---|
-| SSH、PTY、SFTP拡張余地 | `dartssh2` | Dart実装で、Android、認証、PTY、ホスト鍵検証を扱える |
-| FTP、FTPES、FTPS | `ftpconnect` | 接続、階層移動、一覧取得、基本ファイル操作をDart APIで扱える |
-| 端末エミュレーター | `xterm` | Flutter向けで、CJK幅広文字とIMEを扱える |
-| 状態管理とDI | `flutter_riverpod` | セッション単位の依存と非同期状態を画面から分離できる |
-| 非機密データ | `drift`, `drift_flutter` | 型付きスキーマ、マイグレーション、テスト用インメモリDBを使える |
-| 秘密情報 | `flutter_secure_storage` | Android Keystoreを利用した暗号化と生体認証拡張を持つ |
-| ローカライズ | `flutter_localizations`, `intl` | Flutter標準のARB生成経路を使える |
-| 画面遷移 | `go_router` | 確認画面とタブ画面の経路を宣言できる |
-| ファイル選択 | Android SAF対応パッケージ | 秘密鍵を広いストレージ権限なしで選択できる |
+Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力制御による切断を異常として扱わない。
 
-`dartssh2`と`xterm`のAPIはInfrastructure層のAdapterに閉じ込める。
+ネットワーク変更通知は接続試行を早めるためのヒントとして使い、インターネット到達性の保証とはみなさない。
 
-パッケージの更新停止や端末互換性の不具合が見つかった場合に、アプリ全体を巻き込まず差し替えるためである。
+## 10. 主要パッケージ
+
+バージョンは`pubspec.lock`で固定し、更新時はSSH統合試験を通す。
+
+| 役割 | パッケージまたは実装 | 状態 | 方針 |
+|---|---|---|---|
+| SSHとPTY | 同梱`dartssh2` fork | 実装済み | 外部型をAdapterに閉じ込め、ローカル修正を文書化する |
+| 端末エミュレーター | 同梱`xterm` | 実装済み | CJK幅とIMEの回帰試験を維持する |
+| 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |
+| 非機密データ | `drift`, `drift_flutter` | 段階1を実装済み | 接続先とknown_hostsを型付きで保存し、後続段階で履歴を追加する |
+| 秘密情報 | `flutter_secure_storage`, `cryptography` | 段階2を実装済み | Keystore配下の鍵とAES-256-GCMを使い、秘密値をDBから分離する |
+| 小規模設定 | `shared_preferences` | 実装済み | フォントなど非機密のUI設定だけに使う |
+| ファイル選択 | Android SAF MethodChannel | 段階2を実装済み | `ACTION_OPEN_DOCUMENT`で秘密鍵を広いストレージ権限なしに読み込む |
+| ネットワーク監視 | Android Connectivity APIを包むAdapter | 0.2系で追加 | 再試行の待機判断だけに使う |
+
+パッケージを追加する前に、最低API 26、Flutter安定版、Androidビルドとの互換性を確認する。
 
 ## 11. ディレクトリ構成
 
@@ -439,7 +596,6 @@ lib/
   app/
     app.dart
     router.dart
-    theme/
     l10n/
   features/
     connections/
@@ -460,15 +616,22 @@ lib/
       domain/
   infrastructure/
     ssh/
-    ftp/
-    terminal/
+      dart_ssh_gateway.dart
+      ssh_algorithm_policy.dart
     database/
+      app_database.dart
+      connection_profile_repository.dart
+      known_host_repository.dart
     secure_storage/
-    file_picker/
+      android_credential_vault.dart
+    network/
+      android_network_monitor.dart
+    terminal/
+      utf8_terminal_codec.dart
+    ftp/
   shared/
     errors/
     logging/
-    utils/
 test/
   unit/
   widget/
@@ -478,170 +641,226 @@ tool/
   ssh_test_server/
 ```
 
-機能ごとのPresentation、Application、Domainを近くに置き、共有される外部接続だけを`infrastructure`へ集める。
+機能固有の規則は`features`へ置き、外部システムとの接続だけを`infrastructure`へ集める。
 
-## 12. 公開インターフェース
+## 12. Domain Port
 
-Application層が依存する抽象は、次の責務に分ける。
+Application層は次の抽象へ依存する。
 
 ```dart
 abstract interface class SshGateway {
-  Future<SshConnection> connect(ConnectRequest request);
+  Future<SshConnection> connect(
+    SshConnectRequest request,
+    ConnectionCancellation cancellation,
+  );
+}
+
+abstract interface class ConnectionProfileRepository {
+  Stream<List<ConnectionProfile>> watchAll();
+  Future<ConnectionProfile?> find(String id);
+  Future<void> save(ConnectionProfile profile);
+  Future<void> delete(String id);
 }
 
 abstract interface class HostKeyRepository {
-  Future<KnownHost?> find(String host, int port);
-  Future<void> trust(KnownHost host);
-  Future<void> remove(String host, int port);
+  Future<List<KnownHostKey>> find(String normalizedHost, int port);
+  Future<void> trust(KnownHostKey hostKey);
+  Future<void> remove(KnownHostKeyId id);
 }
 
 abstract interface class CredentialVault {
-  Future<String> put(SecretCredential credential);
-  Future<SecretCredential?> read(String reference);
-  Future<void> delete(String reference);
+  Future<CredentialHandle> put(SecretCredential credential);
+  Future<SecretCredential?> read(CredentialHandle handle);
+  Future<void> delete(CredentialHandle handle);
 }
 
-abstract interface class TerminalCodec {
-  Stream<String> decode(Stream<List<int>> source);
-  List<int> encode(String input);
+abstract interface class NetworkMonitor {
+  Stream<NetworkAvailability> get changes;
+  Future<NetworkAvailability> current();
+}
+
+abstract interface class SshConnection {
+  Stream<Uint8List> get stdout;
+  Stream<Uint8List> get stderr;
+  Stream<SshConnectionEvent> get events;
+  Future<void> get done;
+
+  void write(Uint8List data);
+  void resize(TerminalSize size);
+  Future<KeepAliveResult> ping();
+  Future<void> close();
 }
 ```
 
-`SshConnection`は受信Stream、送信Sink、PTY寸法変更、終了通知、切断だけを公開する。
+`SshConnectionEvent`はサーバーバナー、切断理由、keepalive結果などの低頻度イベントだけを運ぶ。
 
-ライブラリ固有のClientやChannelを公開しない。
+端末本文は`stdout`と`stderr`から端末ランタイムへ渡し、イベントログへ複製しない。
 
 ## 13. テスト戦略
 
 ### 13.1 Unit Test
 
-状態機械の全遷移、キャンセル、二重切断、タイムアウトをFake Gatewayで検証する。
+状態機械の全遷移、接続試行の世代交代、各段階のタイムアウト、キャンセル、二重切断をFake Gatewayで検証する。
+
+古い`attemptId`の完了が新しいセッションへ接続されないことを検証する。
+
+再接続バックオフはFake Clockで検証し、実時間の待機をテストへ持ち込まない。
+
+未知のホスト鍵、一致する鍵、変更された鍵、同一ホストの複数承認鍵を検証する。
+
+秘密情報が状態、エラー表示、ログ、診断エクスポートへ入らないことを検証する。
 
 UTF-8の日本語一文字をすべてのバイト位置で分割し、同じ文字列へ復元されることを検証する。
 
-未知のホスト鍵、同一鍵、変更された鍵の三経路を検証する。
-
-秘密情報がエラー表示とログへ入らないことを検証する。
-
 ### 13.2 Widget TestとGolden Test
 
-すべての画面を日本語ロケールで起動し、未翻訳キーが表示されないことを検証する。
+接続中のキャンセル、ホスト鍵確認、複数質問のkeyboard-interactive、再接続待機、手動切断を日本語UIで検証する。
 
 小型画面、横画面、フォント倍率1.0、1.3、2.0でレイアウトを比較する。
 
-ソフトウェアキーボード表示時にカーソル行が見えることをWidget Testと実機試験で確認する。
+ダイアログを閉じた直後に非同期コールバックが完了しても、破棄済みContextを参照しないことを検証する。
 
-### 13.3 Integration Test
+### 13.3 OpenSSH統合試験
 
-CIでは固定設定のOpenSSHテストサーバーをコンテナで起動する。
+CIでは固定したOpenSSHサーバーをコンテナで起動する。
 
-パスワード、秘密鍵、暗号化秘密鍵、Keyboard-interactive、認証失敗を検証する。
+次の設定を別々のテストケースとして用意する。
 
-`echo`だけでなく、`vim`、`tmux`、色、カーソル移動、画面消去、PTY寸法変更を検証する。
+- パスワード認証
+- Ed25519とRSA SHA-2の秘密鍵認証
+- 暗号化秘密鍵
+- 複数ラウンドのkeyboard-interactive
+- 認証失敗と認証タイムアウト
+- 初回ホスト鍵承認とホスト鍵置換
+- PTY拒否とShell拒否
+- サーバーからの正常切断と異常切断
+- keepalive応答停止
+- 大量のstdoutとstderr
 
-日本語の受け入れ文字列には、ひらがな、カタカナ、漢字、半角カナ、濁点結合文字、絵文字、改行を含める。
+`vim`、`tmux`、色、カーソル移動、画面消去、PTY寸法変更、日本語入出力を検証する。
 
-ホスト鍵を途中で置き換え、不一致時に接続しないことを検証する。
+ネットワーク障害はTCP proxyで遅延、パケット停止、接続切断を再現する。
 
 ### 13.4 Android実機試験
 
-最低API、現行API、Samsung系端末の三系統を対象にする。
+最低API、現行API、Samsung系端末、SO-41Aを対象にする。
 
-Gboardの12キーとQWERTY、物理Bluetoothキーボード、画面回転、分割画面、ネットワーク切り替えを確認する。
+SO-41AではWi-Fi切断と復帰、画面消灯、バックグラウンド復帰、30分の対話操作、大量出力を確認する。
 
-Wi-Fiからモバイル回線へ移った場合は切断または再接続案内を正しく表示し、セッションが維持されたと誤認させない。
+Gboardの12キーとQWERTY、物理Bluetoothキーボード、画面回転、分割画面を確認する。
+
+Wi-Fiからモバイル回線へ移った場合は、維持、切断、再接続のいずれになったかを実際のSSH状態に合わせて表示する。
 
 ## 14. 性能と資源管理
 
-SSHの鍵交換と大量出力でUIスレッドを長時間占有しない。
+SSHの鍵解析、鍵交換、大量出力でUI isolateを長時間占有しない。
 
-`dartssh2`が対応する鍵交換のIsolate処理を利用し、端末への書き込みもフレーム単位でまとめる。
+秘密鍵解析とライブラリが対応する暗号計算はIsolateで実行する。
 
-スクロールバックは既定10,000行とし、上限を設定する。
+受信した小さなチャンクは1フレーム内でまとめ、チャンクごとのWidget再構築を行わない。
 
-タブを閉じたときはSSH接続、Stream購読、端末バッファ、Timerを確実に解放する。
+スクロールバックは既定10,000行とし、設定可能な上限を設ける。
 
-メモリ不足時にバックグラウンドのセッションを暗黙に保存したと表示せず、プロセス再生成後は切断済みとして復元する。
+タブを閉じたときはSocket、SSHClient、Shell Channel、Stream購読、Timer、端末バッファを解放する。
 
-### 14.1 Android可変リフレッシュレート
+### 14.1 接続時間
 
-Androidネイティブ層は、現在の解像度で端末が公開する表示モードから最高リフレッシュレートを選び、`WindowManager.LayoutParams.preferredRefreshRate`でOSへ通知する。
+接続時間はDNSとTCP、ハンドシェイク、ホスト鍵待ち、認証、PTY開始に分けて計測する。
 
-値は強制ではなく希望値として扱われるため、可変リフレッシュレート、電池状態、温度、分割画面などを考慮した最終選択はAndroidへ委ねる。
+profileビルドでホスト鍵登録済みの同一LAN接続を計測し、中央値と95パーセンタイルを記録する。
 
-Flutterのアニメーションは固定フレーム数ではなくVSyncと経過時間を基準に動作させ、60Hz、120Hz、144Hzで同じ所要時間になるようにする。
+現在実装済みのTCP接続とknown_hosts検索の並列化、PTYとShell要求のパイプライン化は維持する。
 
-Android 15以降ではタッチ操作時のフレームレートブーストも有効にする。
+高速化のためにホスト鍵検証、認証応答確認、エラー処理を省略しない。
 
-SO-41Aの実機が公開する表示モードは60Hzのみだったため、通常の60fps描画と起動は確認するが、可変フレームレート、120fps、144fpsの動作は未テストである。
+### 14.2 Android可変リフレッシュレート
 
-### 14.2 UIと通信の最適化
+Androidネイティブ層は現在の解像度で端末が公開する表示モードから最高リフレッシュレートを選び、希望値としてOSへ通知する。
 
-ファイル一覧は遅延構築し、日付フォーマッターの再生成を避ける。
+FlutterのアニメーションはVSyncと経過時間を基準にし、60Hz、120Hz、144Hzで同じ所要時間になるようにする。
 
-FTP制御接続ではコマンドを同時実行せず、現在パス取得と一覧取得を順に処理して応答の競合を防ぐ。
-
-SSH受信はフレーム単位でまとめて端末ランタイムへ渡し、受信チャンクごとのWidget再構築を行わない。
-
-SSH接続準備のうち依存しないホスト鍵検索とTCP接続だけを並列化し、PTY要求とShell要求は一往復へまとめる。
-
-性能評価はデバッグビルドではなくprofileビルドで行い、120HzではUIスレッドとRasterスレッドの双方が8ms以内に収まることを目標にする。
+SO-41Aが公開する表示モードは60Hzだけだったため、可変リフレッシュレート、120fps、144fpsの動作は未テストである。
 
 ### 14.3 継続的インテグレーション
 
-GitHub ActionsはFlutter 3.44.9とJava 17を使用し、依存解決、フォーマット、静的解析、全テスト、デバッグAPKビルドを実行する。
+現在のGitHub ActionsはFlutter 3.44.9とJava 17を使用し、依存解決、フォーマット、静的解析、全テスト、デバッグAPKビルドを実行する。
 
-生成したAPKは14日間のActions artifactとして保存する。
+デバッグAPKは14日間のActions artifactとして保存する。
 
-## 15. 実装順序
+段階2の開始時にOpenSSHコンテナを使う統合試験Jobを追加する。
 
-### 段階1：縦の接続経路
+統合試験のログと成果物は秘匿処理を通し、認証情報と端末本文が含まれないことを確認してから保存する。
 
-Flutterプロジェクト、ARB、テーマ、接続先一覧を作成する。
+0.2系を配布する前にAndroidのreleaseビルドからdebug signingを除き、CIへ平文の署名鍵を置かない署名手順へ移行する。
 
-一つの接続先から、ホスト鍵確認、パスワード認証、PTY、切断までを実機で通す。
+## 15. 実装計画
 
-### 段階2：秘密情報と永続化
+### 段階1：接続データの永続化（完了）
 
-Drift、Credential Vault、秘密鍵インポート、ホスト鍵データベースを実装する。
+Driftのスキーマ、接続先Repository、永続known_hostsを実装する。
 
-Auto Backup除外とログ秘匿を自動テストする。
+アプリ再起動後も接続先とホスト鍵が保持され、鍵変更時に接続を遮断できた時点で完了とする。
 
-### 段階3：日本語端末
+### 段階2：Credential Vaultと秘密鍵認証（完了）
 
-IME、補助キーバー、等幅日本語フォント、選択、貼り付け、回転、文字幅テストを実装する。
+Android Keystore、秘密鍵インポート、鍵パスフレーズ、`AuthenticationPlan`を実装する。
 
-`vim`と`tmux`を使う日本語実機試験を通す。
+パスワード、Ed25519鍵、RSA SHA-2鍵、暗号化秘密鍵、keyboard-interactiveをOpenSSH統合試験で通す。
 
-### 段階4：複数タブと耐障害性
+### 段階2.5：Wake on LAN（完了）
 
-`SessionRegistry`、複数タブ、ネットワーク喪失、タイムアウト、再接続案内、資源解放を実装する。
+接続先単位のWake on LAN設定、Magic Packet生成、UDP送信、スキーマ移行を実装する。
 
-### 段階5：リリース品質
+Magic Packetの構造、UDP送信、UI操作、アプリ再起動後の設定復元を自動試験する。
 
-アクセシビリティ、性能、クラッシュ時の秘匿、署名付きリリースビルドを検証する。
+### 段階3：接続試行の制御
 
-## 16. 初期リリースの完了条件
+`ConnectionAttempt`、`attemptId`、段階別タイムアウト、キャンセルを実装する。
 
-次の条件をすべて満たした時点で、初期リリースを完了とする。
+全接続段階からキャンセルしてもSocket、Timer、Streamが残らないことを自動試験で確認する。
 
-- 日本語UIに未翻訳の利用者向け文字列がない
-- 日本語IMEの変換途中の文字がリモートへ誤送信されない
-- ひらがな、カタカナ、漢字、半角カナ、結合文字をUTF-8で往復できる
-- `vim`と`tmux`でカーソル位置が主要試験端末上で一致する
+### 段階4：keepaliveと再接続
+
+観測可能なkeepalive、ネットワーク監視、再接続ポリシー、Fake Clock試験を実装する。
+
+回線切り替え後に古いセッションを接続済みと表示せず、再接続時に入力を再送しないことを確認する。
+
+### 段階5：診断と長時間試験
+
+安全な診断イベント、相関ID、履歴、診断エクスポートを実装する。
+
+SO-41Aで30分の対話操作、大量出力、画面消灯、回線切り替えを行い、秘密情報のない診断だけで結果を説明できる状態にする。
+
+### 段階6：後続機能
+
+0.2系の完了後にSFTP、ProxyJump、ポートフォワーディング、Foreground Serviceを個別に設計する。
+
+## 16. 0.2系の完了条件
+
+次の条件をすべて満たした時点で、SSH接続を日常利用へ進められる0.2系とする。
+
+- アプリ再起動後も接続先とknown_hostsを保持する
 - 未知のホスト鍵は承認を求め、変更されたホスト鍵では接続しない
-- パスワード、秘密鍵、パスフレーズを平文ファイル、SQLite、ログへ保存しない
-- 接続、認証、PTYにタイムアウトとキャンセルがある
+- パスワード、秘密鍵、鍵パスフレーズをSQLite、通常ファイル、ログへ平文保存しない
+- パスワード、秘密鍵、暗号化秘密鍵、keyboard-interactiveで認証できる
+- DNSとTCP、ハンドシェイク、認証、PTYに個別のタイムアウトとキャンセルがある
+- IPv4とIPv6の片方が利用できない環境でも、利用可能な候補へ接続できる
+- keepalive無応答を検出し、接続済み表示を解除する
+- 自動再接続は明示設定時だけ動作し、認証失敗とホスト鍵不一致を再試行しない
+- 再接続時に切断前の入力を再送しない
 - 画面回転とタブ切り替えで接続を作り直さない
 - 切断後にSocket、Channel、Stream、Timerが残らない
-- Android実機で30分の対話操作と大量出力を行ってクラッシュしない
+- 日本語IMEの変換途中の文字をリモートへ誤送信しない
+- `vim`と`tmux`で日本語のカーソル位置が主要試験端末上で一致する
+- 診断ログと接続履歴に秘密情報と端末本文が含まれない
+- SO-41Aで30分の対話操作と回線切り替えを行ってクラッシュしない
 
-## 17. 参照資料
+## 17. 参照仕様
 
-- [dartssh2](https://pub.dev/packages/dartssh2)
-- [xterm](https://pub.dev/packages/xterm)
-- [Flutterアプリの国際化](https://docs.flutter.dev/ui/internationalization)
+- [RFC 4251: The Secure Shell Protocol Architecture](https://www.rfc-editor.org/rfc/rfc4251)
+- [RFC 4252: The Secure Shell Authentication Protocol](https://www.rfc-editor.org/rfc/rfc4252)
+- [RFC 4253: The Secure Shell Transport Layer Protocol](https://www.rfc-editor.org/rfc/rfc4253)
+- [RFC 4254: The Secure Shell Connection Protocol](https://www.rfc-editor.org/rfc/rfc4254)
+- [OpenSSH Manual Pages](https://www.openssh.com/manual.html)
 - [Android Keystore system](https://developer.android.com/privacy-and-security/keystore)
-- [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage)
-- [Drift](https://pub.dev/packages/drift)
-- [Riverpod](https://pub.dev/packages/flutter_riverpod)
+- [Flutterアプリの国際化](https://docs.flutter.dev/ui/internationalization)

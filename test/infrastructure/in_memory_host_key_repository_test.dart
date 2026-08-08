@@ -17,7 +17,7 @@ void main() {
 
     await repository.trust(knownHost);
 
-    expect(await repository.find('example.com', 22), same(knownHost));
-    expect(await repository.find('example.com', 2222), isNull);
+    expect(await repository.find('example.com.', 22), [same(knownHost)]);
+    expect(await repository.find('example.com', 2222), isEmpty);
   });
 }

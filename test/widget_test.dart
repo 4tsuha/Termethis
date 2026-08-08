@@ -6,8 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ssh_terminal_ja/app/app.dart';
+import 'package:ssh_terminal_ja/features/connections/application/connection_profiles_controller.dart';
+import 'package:ssh_terminal_ja/features/connections/application/private_key_providers.dart';
+import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
+import 'package:ssh_terminal_ja/features/connections/domain/connection_profile_repository.dart';
+import 'package:ssh_terminal_ja/features/connections/domain/credential_vault.dart';
+import 'package:ssh_terminal_ja/features/connections/domain/private_key_importer.dart';
+import 'package:ssh_terminal_ja/features/settings/application/app_font_controller.dart';
+import 'package:ssh_terminal_ja/features/settings/domain/app_font.dart';
 import 'package:ssh_terminal_ja/features/terminal/application/session_registry.dart';
 import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
+import 'package:ssh_terminal_ja/features/wake_on_lan/application/wake_on_lan_provider.dart';
+import 'package:ssh_terminal_ja/features/wake_on_lan/domain/wake_on_lan.dart';
 import 'package:ssh_terminal_ja/main.dart';
 import 'package:xterm/xterm.dart';
 
@@ -81,6 +91,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    container.read(appFontProvider.notifier).select(AppFont.mejiro);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('接続先を追加'));
     await tester.pumpAndSettle();
     final fields = find.byType(TextFormField);
@@ -98,7 +114,7 @@ void main() {
 
     final terminalView = tester.widget<TerminalView>(find.byType(TerminalView));
     expect(terminalView.textStyle.fontFamily, 'CascadiaMono');
-    expect(terminalView.textStyle.fontFamilyFallback.first, 'NotoSansJP');
+    expect(terminalView.textStyle.fontFamilyFallback.first, 'Mejiro');
     expect(terminalView.textStyle.fontSize, 14);
 
     tester.testTextInput.enterText('日本語');
@@ -107,13 +123,142 @@ void main() {
     expect(gateway.connection.writes, hasLength(1));
     expect(utf8.decode(gateway.connection.writes.single), '日本語');
   });
+
+  testWidgets('秘密鍵を選択してVault参照だけを接続先へ保存する', (tester) async {
+    final gateway = _WidgetTestGateway();
+    const importedKey = ImportedPrivateKey(
+      pem: 'test-private-key',
+      label: 'id_ed25519',
+      isEncrypted: false,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sshGatewayProvider.overrideWithValue(gateway),
+          privateKeyImporterProvider.overrideWithValue(
+            const _PrivateKeyImporter(importedKey),
+          ),
+          privateKeyValidatorProvider.overrideWithValue(
+            const _AcceptingPrivateKeyValidator(),
+          ),
+        ],
+        child: const SshTerminalApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('接続先を追加'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '鍵サーバー');
+    await tester.enterText(fields.at(1), 'key.example.com');
+    await tester.enterText(fields.at(2), '22');
+    await tester.enterText(fields.at(3), 'key-user');
+
+    await tester.tap(find.text('パスワードまたは対話形式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('秘密鍵').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('秘密鍵を選択'));
+    await tester.pumpAndSettle();
+    expect(find.text('選択済み: id_ed25519'), findsOneWidget);
+
+    final saveButton = find.widgetWithText(FilledButton, '保存');
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    final profiles = await container.read(connectionProfilesProvider.future);
+    final profile = profiles.single;
+    expect(profile.authenticationType, AuthenticationType.privateKey);
+    expect(profile.credentialReference, isNotNull);
+    expect(profile.privateKeyLabel, 'id_ed25519');
+    expect(profile.credentialReference, isNot(contains('test-private-key')));
+
+    final credential = await container
+        .read(credentialVaultProvider)
+        .readPrivateKey(CredentialHandle(profile.credentialReference!));
+    expect(credential?.pem, importedKey.pem);
+
+    await tester.tap(find.text('鍵サーバー'));
+    await tester.pumpAndSettle();
+    expect(find.text('接続済み'), findsWidgets);
+    final authentication = gateway.lastRequest?.authentication;
+    expect(authentication, isA<SshPrivateKeyAuthentication>());
+    expect(
+      (authentication as SshPrivateKeyAuthentication).pem,
+      importedKey.pem,
+    );
+  });
+
+  testWidgets('接続先メニューからWake on LANを送信する', (tester) async {
+    final sender = _RecordingWakeOnLanSender();
+    final repository = EphemeralConnectionProfileRepository(
+      initialProfiles: const [
+        ConnectionProfile(
+          id: 'wol-server',
+          name: '自宅サーバー',
+          host: '192.168.1.10',
+          port: 22,
+          username: 'admin',
+          wakeOnLan: WakeOnLanConfiguration(
+            macAddress: '00:11:22:33:44:55',
+            broadcastAddress: '192.168.1.255',
+            port: 9,
+          ),
+        ),
+      ],
+    );
+    addTearDown(repository.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          connectionProfileRepositoryProvider.overrideWithValue(repository),
+          wakeOnLanSenderProvider.overrideWithValue(sender),
+        ],
+        child: const SshTerminalApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wake on LANを送信'));
+    await tester.pumpAndSettle();
+
+    expect(sender.lastConfiguration?.macAddress, '00:11:22:33:44:55');
+    expect(find.text('自宅サーバーへMagic Packetを送信しました。'), findsOneWidget);
+  });
+}
+
+class _PrivateKeyImporter implements PrivateKeyImporter {
+  const _PrivateKeyImporter(this.key);
+
+  final ImportedPrivateKey key;
+
+  @override
+  Future<ImportedPrivateKey?> pick() async => key;
+}
+
+class _AcceptingPrivateKeyValidator implements PrivateKeyValidator {
+  const _AcceptingPrivateKeyValidator();
+
+  @override
+  Future<void> validate(ImportedPrivateKey key, {String? passphrase}) async {}
 }
 
 class _WidgetTestGateway implements SshGateway {
   final connection = _WidgetTestConnection();
+  SshConnectRequest? lastRequest;
 
   @override
   Future<SshConnection> connect(SshConnectRequest request) async {
+    lastRequest = request;
     request.onAuthenticationStarted();
     request.onOpeningPty();
     return connection;
@@ -149,4 +294,13 @@ class _WidgetTestConnection implements SshConnection {
 
   @override
   void write(Uint8List data) => writes.add(data);
+}
+
+class _RecordingWakeOnLanSender implements WakeOnLanSender {
+  WakeOnLanConfiguration? lastConfiguration;
+
+  @override
+  Future<void> send(WakeOnLanConfiguration configuration) async {
+    lastConfiguration = configuration;
+  }
 }

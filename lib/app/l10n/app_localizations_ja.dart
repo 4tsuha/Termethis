@@ -24,6 +24,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get emptyConnectionsMessage => '右下の追加ボタンからSSHサーバーを登録してください。';
 
   @override
+  String get loadConnectionsFailed => '接続先を読み込めませんでした。';
+
+  @override
   String get edit => '編集';
 
   @override
@@ -63,10 +66,85 @@ class AppLocalizationsJa extends AppLocalizations {
   String get passwordAuthentication => 'パスワードまたは対話形式';
 
   @override
+  String get privateKeyAuthentication => '秘密鍵';
+
+  @override
+  String get selectPrivateKey => '秘密鍵を選択';
+
+  @override
+  String get replacePrivateKey => '秘密鍵を置き換える';
+
+  @override
+  String get privateKeyNotSelected => '秘密鍵を選択してください。';
+
+  @override
+  String privateKeySelected(String name) {
+    return '選択済み: $name';
+  }
+
+  @override
+  String get keyPassphrase => '鍵のパスフレーズ';
+
+  @override
+  String get saveKeyPassphrase => 'パスフレーズを暗号化して保存';
+
+  @override
+  String get keyPassphraseTitle => '秘密鍵のパスフレーズ';
+
+  @override
+  String keyPassphraseMessage(String name) {
+    return '$nameを復号するパスフレーズを入力してください。';
+  }
+
+  @override
+  String get privateKeyInvalid => '秘密鍵を読み込めません。形式とパスフレーズを確認してください。';
+
+  @override
+  String get privateKeyTooLarge => '秘密鍵ファイルが大きすぎます。';
+
+  @override
   String get requiredField => '入力してください。';
 
   @override
   String get invalidPort => '1から65535までの数値を入力してください。';
+
+  @override
+  String get wakeOnLanTitle => 'Wake on LAN';
+
+  @override
+  String get wakeOnLanDescription => 'SSH接続前にMagic Packetで端末を起動します。';
+
+  @override
+  String get wakeOnLanMacAddress => 'MACアドレス';
+
+  @override
+  String get wakeOnLanMacHint => '00:11:22:33:44:55';
+
+  @override
+  String get wakeOnLanBroadcastAddress => 'ブロードキャストアドレス';
+
+  @override
+  String get wakeOnLanBroadcastHint => '192.168.1.255';
+
+  @override
+  String get wakeOnLanPort => 'UDPポート';
+
+  @override
+  String get invalidMacAddress => '6バイトのMACアドレスを入力してください。';
+
+  @override
+  String get invalidIpv4Address => '有効なIPv4ブロードキャストアドレスを入力してください。';
+
+  @override
+  String get wakeOnLanSend => 'Wake on LANを送信';
+
+  @override
+  String wakeOnLanSent(String name) {
+    return '$nameへMagic Packetを送信しました。';
+  }
+
+  @override
+  String get wakeOnLanFailed => 'Magic Packetを送信できませんでした。ネットワーク設定を確認してください。';
 
   @override
   String get deleteConnectionTitle => '接続先を削除しますか';
@@ -177,6 +255,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get failureAuthentication => '認証に失敗しました。ユーザー名または認証情報を確認してください。';
 
   @override
+  String get failurePrivateKey => '秘密鍵を使用できません。鍵とパスフレーズを確認してください。';
+
+  @override
+  String get failureKeyPassphraseRequired => '秘密鍵のパスフレーズが必要です。';
+
+  @override
   String get failurePty => 'サーバーが対話型ターミナルを開始できませんでした。';
 
   @override
@@ -205,7 +289,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nothingToPaste => '貼り付ける文字列がありません。';
 
   @override
-  String get stageOneNotice => '接続先とホスト鍵は、現在の起動中だけ保持されます。永続保存は次の実装段階で追加します。';
+  String get stageOneNotice => '接続先とホスト鍵はこの端末に保存されます。秘密鍵は暗号化し、パスワードは保存しません。';
 
   @override
   String get navSsh => 'SSH';
@@ -334,7 +418,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTerminalFont => 'ターミナルフォント';
 
   @override
-  String get settingsTerminalFontValue => 'Cascadia Mono（日本語: Noto Sans JP）';
+  String get settingsTerminalFontValue => 'Cascadia Mono';
+
+  @override
+  String get settingsJapaneseFont => '日本語フォント';
+
+  @override
+  String get settingsJapaneseFontMessage => 'アプリUIとターミナルの日本語字形に使用します。';
+
+  @override
+  String get settingsSelectFont => '日本語フォントを選択';
+
+  @override
+  String get fontNotoSansJp => 'Noto Sans JP';
+
+  @override
+  String get fontKoruri => 'Koruri';
+
+  @override
+  String get fontMejiro => 'Mejiro';
+
+  @override
+  String get fontPreview => '日本語 ABC 123 の表示見本';
 
   @override
   String get settingsFtpSection => 'FTP';
@@ -353,4 +458,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsVersionValue => '0.1.0';
+
+  @override
+  String get settingsLicenses => 'オープンソースライセンス';
 }

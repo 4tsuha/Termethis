@@ -5,6 +5,8 @@ enum SshFailureCode {
   hostKeyRejected,
   hostKeyMismatch,
   authenticationFailed,
+  privateKeyInvalid,
+  keyPassphraseRequired,
   ptyRejected,
   remoteClosed,
   networkLost,

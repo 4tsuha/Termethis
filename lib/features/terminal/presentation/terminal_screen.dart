@@ -7,6 +7,8 @@ import 'package:xterm/xterm.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
+import '../../connections/domain/credential_vault.dart';
+import '../../settings/application/app_font_controller.dart';
 import '../application/session_registry.dart';
 import '../application/ssh_session_controller.dart';
 import '../domain/ssh_failure.dart';
@@ -53,6 +55,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final appFont = ref.watch(appFontProvider);
     final session = _session;
     if (_profile == null || session == null) {
       return Scaffold(
@@ -107,12 +110,12 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                             autofocus: true,
                             keyboardType: TextInputType.text,
                             enableSuggestions: true,
-                            textStyle: const TerminalStyle(
+                            textStyle: TerminalStyle(
                               fontSize: 14,
                               height: 1.15,
                               fontFamily: 'CascadiaMono',
                               fontFamilyFallback: [
-                                'NotoSansJP',
+                                appFont.family,
                                 'Noto Color Emoji',
                                 'monospace',
                               ],
@@ -164,8 +167,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
       return;
     }
 
-    final password = await _askPassword(profile);
-    if (!mounted || password == null) {
+    final authentication = await _resolveAuthentication(profile, session);
+    if (!mounted || authentication == null) {
       if (session.status == SshSessionStatus.idle) {
         await _finishAndPop();
       }
@@ -173,7 +176,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
     }
 
     await session.connect(
-      password: password,
+      authentication: authentication,
       onUnknownHostKey: _approveHostKey,
       onInteractivePrompt: _answerInteractivePrompt,
     );
@@ -183,10 +186,73 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   }
 
   Future<String?> _askPassword(ConnectionProfile profile) async {
+    final l10n = AppLocalizations.of(context);
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _PasswordDialog(target: profile.target),
+      builder: (context) => _SecretDialog(
+        title: l10n.passwordDialogTitle,
+        message: l10n.passwordDialogMessage(profile.target),
+        label: l10n.password,
+      ),
+    );
+  }
+
+  Future<SshAuthentication?> _resolveAuthentication(
+    ConnectionProfile profile,
+    SshSessionController session,
+  ) async {
+    if (profile.authenticationType ==
+        AuthenticationType.passwordOrInteractive) {
+      final password = await _askPassword(profile);
+      return password == null ? null : SshPasswordAuthentication(password);
+    }
+
+    final reference = profile.credentialReference;
+    if (reference == null) {
+      session.reportFailure(const SshFailure(SshFailureCode.privateKeyInvalid));
+      return null;
+    }
+
+    try {
+      final credential = await ref
+          .read(credentialVaultProvider)
+          .readPrivateKey(CredentialHandle(reference));
+      if (credential == null) {
+        session.reportFailure(
+          const SshFailure(SshFailureCode.privateKeyInvalid),
+        );
+        return null;
+      }
+
+      var passphrase = credential.passphrase;
+      if (credential.isEncrypted &&
+          (passphrase == null || passphrase.isEmpty)) {
+        passphrase = await _askKeyPassphrase(credential.label);
+        if (passphrase == null) {
+          return null;
+        }
+      }
+      return SshPrivateKeyAuthentication(
+        pem: credential.pem,
+        passphrase: passphrase,
+      );
+    } on CredentialVaultFailure {
+      session.reportFailure(const SshFailure(SshFailureCode.privateKeyInvalid));
+      return null;
+    }
+  }
+
+  Future<String?> _askKeyPassphrase(String label) {
+    final l10n = AppLocalizations.of(context);
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _SecretDialog(
+        title: l10n.keyPassphraseTitle,
+        message: l10n.keyPassphraseMessage(label),
+        label: l10n.keyPassphrase,
+      ),
     );
   }
 
@@ -363,16 +429,22 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   }
 }
 
-class _PasswordDialog extends StatefulWidget {
-  const _PasswordDialog({required this.target});
+class _SecretDialog extends StatefulWidget {
+  const _SecretDialog({
+    required this.title,
+    required this.message,
+    required this.label,
+  });
 
-  final String target;
+  final String title;
+  final String message;
+  final String label;
 
   @override
-  State<_PasswordDialog> createState() => _PasswordDialogState();
+  State<_SecretDialog> createState() => _SecretDialogState();
 }
 
-class _PasswordDialogState extends State<_PasswordDialog> {
+class _SecretDialogState extends State<_SecretDialog> {
   final _controller = TextEditingController();
 
   @override
@@ -385,12 +457,12 @@ class _PasswordDialogState extends State<_PasswordDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(l10n.passwordDialogTitle),
+      title: Text(widget.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.passwordDialogMessage(widget.target)),
+          Text(widget.message),
           const SizedBox(height: 16),
           TextField(
             controller: _controller,
@@ -399,7 +471,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             enableSuggestions: false,
             autocorrect: false,
             decoration: InputDecoration(
-              labelText: l10n.password,
+              labelText: widget.label,
               border: const OutlineInputBorder(),
             ),
             onSubmitted: (value) => Navigator.pop(context, value),
@@ -670,6 +742,8 @@ String _failureText(AppLocalizations l10n, SshFailure? failure) {
     SshFailureCode.hostKeyRejected => l10n.failureHostKeyRejected,
     SshFailureCode.hostKeyMismatch => l10n.failureHostKeyMismatch,
     SshFailureCode.authenticationFailed => l10n.failureAuthentication,
+    SshFailureCode.privateKeyInvalid => l10n.failurePrivateKey,
+    SshFailureCode.keyPassphraseRequired => l10n.failureKeyPassphraseRequired,
     SshFailureCode.ptyRejected => l10n.failurePty,
     SshFailureCode.remoteClosed => l10n.failureRemoteClosed,
     SshFailureCode.networkLost => l10n.failureNetwork,

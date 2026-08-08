@@ -8,7 +8,11 @@
 
 - 日本語IME、UTF-8、CJK文字幅に対応したSSHターミナル
 - Cascadia MonoとNoto Sans JPによるWindows Terminal寄りの表示
+- Noto Sans JP、Koruri、Mejiroから選べる日本語フォント
+- DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
+- Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
 - SSH接続準備の並列化とPTY・Shell要求のパイプライン化
+- 接続先ごとのWake on LAN設定とMagic Packet送信
 - SSH、FTP、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS接続と複数タブ
 - パンくずによる階層移動、フォルダー優先の一覧表示

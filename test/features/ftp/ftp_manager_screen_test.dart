@@ -23,6 +23,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ターミナルフォント'), findsOneWidget);
     expect(find.textContaining('Cascadia Mono'), findsOneWidget);
+
+    await tester.tap(find.text('日本語フォント'));
+    await tester.pumpAndSettle();
+    expect(find.text('Noto Sans JP'), findsOneWidget);
+    expect(find.text('Koruri'), findsOneWidget);
+    expect(find.text('Mejiro'), findsOneWidget);
+
+    await tester.tap(find.text('Koruri'));
+    await tester.pumpAndSettle();
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme?.textTheme.bodyMedium?.fontFamily, 'Koruri');
+    expect(find.textContaining('Koruri'), findsOneWidget);
+
+    await tester.tap(find.text('日本語フォント'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mejiro'));
+    await tester.pumpAndSettle();
+    final updatedApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(updatedApp.theme?.textTheme.bodyMedium?.fontFamily, 'Mejiro');
   });
 
   testWidgets('FTPタブからフォルダーを階層移動する', (tester) async {

@@ -50,8 +50,13 @@ class SshSessionController extends ChangeNotifier {
 
   bool get isConnected => status == SshSessionStatus.connected;
 
+  void reportFailure(SshFailure value) {
+    failure = value;
+    _setStatus(SshSessionStatus.failed);
+  }
+
   Future<void> connect({
-    required String password,
+    required SshAuthentication authentication,
     required HostKeyApprovalHandler onUnknownHostKey,
     required InteractivePromptHandler onInteractivePrompt,
   }) async {
@@ -76,7 +81,7 @@ class SshSessionController extends ChangeNotifier {
       final connection = await _gateway.connect(
         SshConnectRequest(
           profile: profile,
-          password: password,
+          authentication: authentication,
           onUnknownHostKey: (info) async {
             _setStatus(SshSessionStatus.verifyingHost);
             return onUnknownHostKey(info);

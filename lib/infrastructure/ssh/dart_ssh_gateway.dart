@@ -20,7 +20,8 @@ class DartSshGateway implements SshGateway {
     SshFailure? verificationFailure;
 
     try {
-      final (connectedSocket, knownHost) = await (
+      final identities = _parseIdentities(request.authentication);
+      final (connectedSocket, knownHosts) = await (
         SSHSocket.connect(
           request.profile.host,
           request.profile.port,
@@ -29,6 +30,10 @@ class DartSshGateway implements SshGateway {
         _hostKeys.find(request.profile.host, request.profile.port),
       ).wait;
       socket = connectedSocket;
+      final passwordAuthentication =
+          request.authentication is SshPasswordAuthentication
+          ? request.authentication as SshPasswordAuthentication
+          : null;
 
       client = SSHClient(
         socket,
@@ -42,18 +47,16 @@ class DartSshGateway implements SshGateway {
             algorithm: algorithm,
             fingerprintSha256: utf8.decode(fingerprintBytes),
           );
-          if (knownHost != null) {
-            final matches =
-                knownHost.info.algorithm == received.algorithm &&
-                knownHost.info.fingerprintSha256 == received.fingerprintSha256;
-            if (!matches) {
-              verificationFailure = const SshFailure(
-                SshFailureCode.hostKeyMismatch,
-              );
-              return false;
-            }
+          final trust = evaluateHostKeyTrust(knownHosts, received);
+          if (trust == HostKeyTrust.trusted) {
             request.onAuthenticationStarted();
             return true;
+          }
+          if (trust == HostKeyTrust.mismatch) {
+            verificationFailure = const SshFailure(
+              SshFailureCode.hostKeyMismatch,
+            );
+            return false;
           }
 
           final accepted = await request.onUnknownHostKey(received);
@@ -70,23 +73,28 @@ class DartSshGateway implements SshGateway {
           request.onAuthenticationStarted();
           return true;
         },
-        onPasswordRequest: () => request.password,
-        onUserInfoRequest: (sshRequest) {
-          return request.onInteractivePrompt(
-            InteractiveRequest(
-              name: sshRequest.name,
-              instruction: sshRequest.instruction,
-              prompts: sshRequest.prompts
-                  .map(
-                    (prompt) => InteractivePrompt(
-                      text: prompt.promptText,
-                      echo: prompt.echo,
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-          );
-        },
+        identities: identities,
+        onPasswordRequest: passwordAuthentication != null
+            ? () => passwordAuthentication.password
+            : null,
+        onUserInfoRequest: passwordAuthentication != null
+            ? (sshRequest) {
+                return request.onInteractivePrompt(
+                  InteractiveRequest(
+                    name: sshRequest.name,
+                    instruction: sshRequest.instruction,
+                    prompts: sshRequest.prompts
+                        .map(
+                          (prompt) => InteractivePrompt(
+                            text: prompt.promptText,
+                            echo: prompt.echo,
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                );
+              }
+            : null,
         onAuthenticated: request.onOpeningPty,
       );
 
@@ -107,7 +115,34 @@ class DartSshGateway implements SshGateway {
       if (verificationFailure case final failure?) {
         throw failure;
       }
+      if (error is SshFailure) {
+        rethrow;
+      }
       throw _mapFailure(error);
+    }
+  }
+
+  List<SSHKeyPair>? _parseIdentities(SshAuthentication authentication) {
+    if (authentication is! SshPrivateKeyAuthentication) {
+      return null;
+    }
+    try {
+      final encrypted = SSHKeyPair.isEncryptedPem(authentication.pem);
+      if (encrypted &&
+          (authentication.passphrase == null ||
+              authentication.passphrase!.isEmpty)) {
+        throw const SshFailure(SshFailureCode.keyPassphraseRequired);
+      }
+      return SSHKeyPair.fromPem(
+        authentication.pem,
+        encrypted ? authentication.passphrase : null,
+      );
+    } on SshFailure {
+      rethrow;
+    } on SSHKeyDecryptError catch (error) {
+      throw SshFailure(SshFailureCode.privateKeyInvalid, error);
+    } catch (error) {
+      throw SshFailure(SshFailureCode.privateKeyInvalid, error);
     }
   }
 
