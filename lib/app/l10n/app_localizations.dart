@@ -715,7 +715,7 @@ abstract class AppLocalizations {
   /// No description provided for @connectionTypeRdpDescription.
   ///
   /// In ja, this message translates to:
-  /// **'接続先のRDP応答を確認してから、対応アプリでWindowsのリモートデスクトップを開きます。'**
+  /// **'IronRDPを使用して、Windowsのリモートデスクトップをアプリ内で開きます。'**
   String get connectionTypeRdpDescription;
 
   /// No description provided for @connectionTypeVnc.
@@ -753,6 +753,12 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'認証は接続先アプリで行います。Termethisからパスワードは渡しません。'**
   String get externalAuthenticationNotice;
+
+  /// No description provided for @internalRdpAuthenticationNotice.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。'**
+  String get internalRdpAuthenticationNotice;
 
   /// No description provided for @remoteClientUnavailableTitle.
   ///
@@ -1057,8 +1063,26 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTerminalFontValue.
   ///
   /// In ja, this message translates to:
-  /// **'英数字・罫線にはCascadia Monoを固定で使用します。'**
+  /// **'ターミナルの英数字・記号・罫線に使用します。日本語は画面フォントで補います。'**
   String get settingsTerminalFontValue;
+
+  /// No description provided for @settingsSelectTerminalFont.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナルフォントを選択'**
+  String get settingsSelectTerminalFont;
+
+  /// No description provided for @terminalFontCascadiaMono.
+  ///
+  /// In ja, this message translates to:
+  /// **'Cascadia Mono'**
+  String get terminalFontCascadiaMono;
+
+  /// No description provided for @terminalFontJetBrainsMono.
+  ///
+  /// In ja, this message translates to:
+  /// **'JetBrains Mono'**
+  String get terminalFontJetBrainsMono;
 
   /// No description provided for @settingsTerminalRenderer.
   ///
@@ -1084,34 +1108,46 @@ abstract class AppLocalizations {
   /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
 
-  /// No description provided for @terminalRendererFlutter.
+  /// No description provided for @terminalRendererConnectBot.
   ///
   /// In ja, this message translates to:
-  /// **'Flutter省メモリ描画'**
-  String get terminalRendererFlutter;
+  /// **'ConnectBot'**
+  String get terminalRendererConnectBot;
 
-  /// No description provided for @terminalRendererFlutterDescription.
+  /// No description provided for @terminalRendererConnectBotDescription.
   ///
   /// In ja, this message translates to:
-  /// **'メモリ使用量を抑える既定値です。複雑なTUIや大量出力では表示更新が遅くなる場合があります。'**
-  String get terminalRendererFlutterDescription;
+  /// **'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。'**
+  String get terminalRendererConnectBotDescription;
+
+  /// No description provided for @terminalRendererTermux.
+  ///
+  /// In ja, this message translates to:
+  /// **'Termux'**
+  String get terminalRendererTermux;
+
+  /// No description provided for @terminalRendererTermuxDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'Termuxのterminal-emulatorでANSI・UTF-8・IME互換性を優先します。Android Canvas描画のため、WebGLよりメモリを抑えられます。履歴は最大50,000行です。'**
+  String get terminalRendererTermuxDescription;
 
   /// No description provided for @settingsJapaneseFont.
   ///
   /// In ja, this message translates to:
-  /// **'日本語フォント'**
+  /// **'画面フォント'**
   String get settingsJapaneseFont;
 
   /// No description provided for @settingsJapaneseFontMessage.
   ///
   /// In ja, this message translates to:
-  /// **'Termethisの画面とターミナルの日本語表示に使います。英数字と罫線にはCascadia Monoを使用します。'**
+  /// **'Termethisの画面とターミナルの日本語表示で優先します。字形がない場合は端末のフォールバックフォントで補います。'**
   String get settingsJapaneseFontMessage;
 
   /// No description provided for @settingsSelectFont.
   ///
   /// In ja, this message translates to:
-  /// **'日本語フォントを選択'**
+  /// **'画面フォントを選択'**
   String get settingsSelectFont;
 
   /// No description provided for @settingsRefreshRate.
@@ -1171,7 +1207,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsScrollbackLinesValue.
   ///
   /// In ja, this message translates to:
-  /// **'新しく開くSSHセッションで{lines}行を保持します。行数を増やすとメモリ使用量も増えます。'**
+  /// **'新しく開くSSHセッションで{lines}行を保持します。25,000行以上はWebGL描画を推奨し、行数に応じてメモリ使用量も増えます。'**
   String settingsScrollbackLinesValue(int lines);
 
   /// No description provided for @settingsBackgroundSession.
@@ -1203,6 +1239,30 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'Mejiro'**
   String get fontMejiro;
+
+  /// No description provided for @fontRoboto.
+  ///
+  /// In ja, this message translates to:
+  /// **'Roboto'**
+  String get fontRoboto;
+
+  /// No description provided for @fontMoralerspace.
+  ///
+  /// In ja, this message translates to:
+  /// **'Moralerspace'**
+  String get fontMoralerspace;
+
+  /// No description provided for @fontSourceCodePro.
+  ///
+  /// In ja, this message translates to:
+  /// **'Source Code Pro'**
+  String get fontSourceCodePro;
+
+  /// No description provided for @fontJetBrainsMono.
+  ///
+  /// In ja, this message translates to:
+  /// **'JetBrains Mono'**
+  String get fontJetBrainsMono;
 
   /// No description provided for @fontPreview.
   ///
@@ -1243,7 +1303,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.3.0'**
+  /// **'0.4.0'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

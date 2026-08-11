@@ -235,7 +235,11 @@ class _ConnectionEditorScreenState
                     child: ListTile(
                       leading: const Icon(Icons.verified_user_outlined),
                       title: Text(l10n.authentication),
-                      subtitle: Text(l10n.externalAuthenticationNotice),
+                      subtitle: Text(
+                        _connectionType == ConnectionType.rdp
+                            ? l10n.internalRdpAuthenticationNotice
+                            : l10n.externalAuthenticationNotice,
+                      ),
                     ),
                   ),
                 ],

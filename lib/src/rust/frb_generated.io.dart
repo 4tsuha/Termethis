@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/core.dart';
+import 'api/rdp.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -37,6 +38,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustHostKey dco_decode_box_autoadd_rust_host_key(dynamic raw);
 
   @protected
+  RustRdpConnectRequest dco_decode_box_autoadd_rust_rdp_connect_request(
+    dynamic raw,
+  );
+
+  @protected
   RustSftpConnectRequest dco_decode_box_autoadd_rust_sftp_connect_request(
     dynamic raw,
   );
@@ -45,6 +51,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSshConnectRequest dco_decode_box_autoadd_rust_ssh_connect_request(
     dynamic raw,
   );
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -88,6 +97,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustInteractivePrompt dco_decode_rust_interactive_prompt(dynamic raw);
+
+  @protected
+  RustRdpConnectRequest dco_decode_rust_rdp_connect_request(dynamic raw);
+
+  @protected
+  RustRdpConnectResult dco_decode_rust_rdp_connect_result(dynamic raw);
+
+  @protected
+  RustRdpFrame dco_decode_rust_rdp_frame(dynamic raw);
+
+  @protected
+  RustRdpStatus dco_decode_rust_rdp_status(dynamic raw);
 
   @protected
   RustSftpConnectRequest dco_decode_rust_sftp_connect_request(dynamic raw);
@@ -142,6 +163,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustRdpConnectRequest sse_decode_box_autoadd_rust_rdp_connect_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustSftpConnectRequest sse_decode_box_autoadd_rust_sftp_connect_request(
     SseDeserializer deserializer,
   );
@@ -150,6 +176,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSshConnectRequest sse_decode_box_autoadd_rust_ssh_connect_request(
     SseDeserializer deserializer,
   );
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -203,6 +232,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustRdpConnectRequest sse_decode_rust_rdp_connect_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustRdpConnectResult sse_decode_rust_rdp_connect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustRdpFrame sse_decode_rust_rdp_frame(SseDeserializer deserializer);
+
+  @protected
+  RustRdpStatus sse_decode_rust_rdp_status(SseDeserializer deserializer);
+
+  @protected
   RustSftpConnectRequest sse_decode_rust_sftp_connect_request(
     SseDeserializer deserializer,
   );
@@ -243,9 +288,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -276,6 +318,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rust_rdp_connect_request(
+    RustRdpConnectRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_rust_sftp_connect_request(
     RustSftpConnectRequest self,
     SseSerializer serializer,
@@ -286,6 +334,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RustSshConnectRequest self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
@@ -351,6 +402,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_rust_rdp_connect_request(
+    RustRdpConnectRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_rdp_connect_result(
+    RustRdpConnectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_rdp_frame(RustRdpFrame self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rust_rdp_status(RustRdpStatus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_rust_sftp_connect_request(
     RustSftpConnectRequest self,
     SseSerializer serializer,
@@ -394,9 +463,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

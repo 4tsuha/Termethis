@@ -20,6 +20,7 @@ import '../domain/ssh_tab.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
 import '../../../infrastructure/display/android_terminal_window_controller.dart';
+import 'widgets/native_terminal_view.dart';
 import 'widgets/xterm_web_terminal.dart';
 
 class TerminalScreen extends ConsumerStatefulWidget {
@@ -38,8 +39,8 @@ class TerminalScreen extends ConsumerStatefulWidget {
 
 class _TerminalScreenState extends ConsumerState<TerminalScreen>
     with WidgetsBindingObserver {
-  final _terminalFocusNode = FocusNode();
-  final _webTerminalKey = GlobalKey<XtermWebTerminalState>();
+  var _webTerminalKey = GlobalKey<XtermWebTerminalState>();
+  var _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
   final _windowController = const AndroidTerminalWindowController();
   ConnectionProfile? _profile;
   SshSessionController? _session;
@@ -48,6 +49,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   late String _activeTabId;
   String _webRenderer = '起動中';
   bool _webTerminalFailed = false;
+  bool _nativeTerminalFailed = false;
   bool _switchingTab = false;
 
   @override
@@ -62,10 +64,6 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         when profile.connectionType == ConnectionType.ssh) {
       _sessionRegistry = ref.read(sessionRegistryProvider);
       _session = _sessionRegistry!.open(_activeTabId, profile);
-      if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
-          TerminalRendererMode.flutter) {
-        _session!.enableFlutterTerminalMirror();
-      }
       _session!.setViewportVisible(true);
       _session!.addTerminalActivityListener(_pulseHighFrameRate);
       WidgetsBinding.instance.addPostFrameCallback((_) => _initializeTab());
@@ -81,10 +79,10 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+    unawaited(_nativeTerminalKey.currentState?.setActive(false));
     _performancePulseTimer?.cancel();
     _session?.removeTerminalActivityListener(_pulseHighFrameRate);
     _session?.setViewportVisible(false);
-    _terminalFocusNode.dispose();
     unawaited(_windowController.restore());
     super.dispose();
   }
@@ -95,10 +93,12 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     _session?.setViewportVisible(visible);
     if (visible) {
       _webTerminalKey.currentState?.resume();
+      unawaited(_nativeTerminalKey.currentState?.setActive(true));
     } else {
       unawaited(
         _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
       );
+      unawaited(_nativeTerminalKey.currentState?.setActive(false));
     }
   }
 
@@ -125,20 +125,27 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     final l10n = AppLocalizations.of(context);
     final appFont = ref.watch(appFontProvider);
     final performance = ref.watch(terminalPerformanceSettingsProvider);
-    ref.listen(terminalPerformanceSettingsProvider, (_, next) {
-      if (next.rendererMode == TerminalRendererMode.flutter) {
-        _session?.enableFlutterTerminalMirror();
+    ref.listen(terminalPerformanceSettingsProvider, (previous, next) {
+      if (previous?.rendererMode != next.rendererMode && mounted) {
+        setState(() {
+          _webTerminalFailed = false;
+          _nativeTerminalFailed = false;
+          _webTerminalKey = GlobalKey<XtermWebTerminalState>();
+          _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
+        });
       }
       unawaited(_applyTerminalWindowSettings(next));
     });
-    final useWebRenderer =
-        performance.rendererMode == TerminalRendererMode.webgl &&
-        !_webTerminalFailed;
+    final useWebRenderer = _usesWebRenderer(performance.rendererMode);
     final rendererLabel = useWebRenderer
         ? _webRenderer == 'webgl'
               ? 'WebGL'
               : _webRenderer
-        : 'Flutter省メモリ';
+        : switch (performance.rendererMode) {
+            TerminalRendererMode.connectBot => 'ConnectBot',
+            TerminalRendererMode.termux => 'Termux',
+            TerminalRendererMode.webgl => _webRenderer,
+          };
     final tabs = ref.watch(sshTabsProvider).value ?? const <SshTab>[];
     final session = _session;
     if (_profile == null || session == null) {
@@ -247,6 +254,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                                         session: session,
                                         scrollbackLines:
                                             performance.scrollbackLines,
+                                        terminalFontFamily:
+                                            performance.terminalFont.family,
                                         japaneseFontFamily: appFont.family,
                                         fontSize: fontSize,
                                         mouseInput: performance.mouseInput,
@@ -262,29 +271,34 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                                             );
                                           }
                                         },
-                                        onFatalError:
-                                            _fallbackToFlutterTerminal,
+                                        onFatalError: _fallbackToNativeTerminal,
                                       )
-                                    : TerminalView(
-                                        session.terminal,
-                                        focusNode: _terminalFocusNode,
-                                        autofocus: true,
-                                        keyboardType: TextInputType.text,
-                                        enableSuggestions: true,
-                                        textStyle: TerminalStyle(
-                                          fontSize: fontSize,
-                                          height: 1.15,
-                                          fontFamily: 'CascadiaMono',
-                                          fontFamilyFallback: [
-                                            appFont.family,
-                                            'Noto Color Emoji',
-                                            'monospace',
-                                          ],
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 6,
-                                        ),
+                                    : NativeTerminalView(
+                                        key: _nativeTerminalKey,
+                                        session: session,
+                                        rendererMode: performance.rendererMode,
+                                        scrollbackLines:
+                                            performance.scrollbackLines,
+                                        terminalFontFamily:
+                                            performance.terminalFont.family,
+                                        japaneseFontFamily: appFont.family,
+                                        fontSize: fontSize,
+                                        mouseInput: performance.mouseInput,
+                                        longPressRightClick:
+                                            performance.longPressRightClick,
+                                        tapToMovePromptCursor:
+                                            performance.tapToMovePromptCursor,
+                                        resizeForKeyboard:
+                                            performance.resizeForKeyboard,
+                                        onRendererReady: (renderer) {
+                                          if (mounted &&
+                                              renderer != _webRenderer) {
+                                            setState(
+                                              () => _webRenderer = renderer,
+                                            );
+                                          }
+                                        },
+                                        onFatalError: _fallbackToWebTerminal,
                                       ),
                               ),
                             ),
@@ -312,7 +326,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                     session: session,
                     pasteLabel: l10n.paste,
                     onPaste: _paste,
-                    onKeySent: _focusTerminal,
+                    onKey: _sendSpecialKey,
                   ),
                 ],
               ),
@@ -333,6 +347,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     _switchingTab = true;
     try {
       await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+      await _nativeTerminalKey.currentState?.setActive(false);
       if (!mounted) return;
       _session?.removeTerminalActivityListener(_pulseHighFrameRate);
       _session?.setViewportVisible(false);
@@ -342,6 +357,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _activeTabId != tab.id) return;
         _webTerminalKey.currentState?.resume();
+        unawaited(_nativeTerminalKey.currentState?.setActive(true));
         _focusTerminal();
       });
     } finally {
@@ -351,16 +367,16 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
 
   void _activateTab(SshTab tab, ConnectionProfile profile) {
     final session = _sessionRegistry!.open(tab.id, profile);
-    if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
-        TerminalRendererMode.flutter) {
-      session.enableFlutterTerminalMirror();
-    }
     session.setViewportVisible(true);
     session.addTerminalActivityListener(_pulseHighFrameRate);
     setState(() {
       _activeTabId = tab.id;
       _profile = profile;
       _session = session;
+      _webTerminalKey = GlobalKey<XtermWebTerminalState>();
+      _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
+      _webTerminalFailed = false;
+      _nativeTerminalFailed = false;
     });
   }
 
@@ -445,8 +461,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   Future<void> _copyLastOutput() async {
     final performance = ref.read(terminalPerformanceSettingsProvider);
     String? output;
-    if (performance.rendererMode == TerminalRendererMode.webgl &&
-        !_webTerminalFailed) {
+    if (_usesWebRenderer(performance.rendererMode)) {
       output = await _webTerminalKey.currentState?.copyLastCommandOutput();
     }
     if (!mounted) return;
@@ -497,21 +512,32 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     );
   }
 
-  void _fallbackToFlutterTerminal(String _) {
+  void _fallbackToNativeTerminal(String _) {
     if (!mounted || _webTerminalFailed) return;
-    _session?.enableFlutterTerminalMirror();
     setState(() => _webTerminalFailed = true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('WebGL端末を利用できないため互換描画へ切り替えました。')),
+      const SnackBar(content: Text('WebGL端末を利用できないためConnectBot描画へ切り替えました。')),
     );
   }
 
+  void _fallbackToWebTerminal(String _) {
+    if (!mounted || _nativeTerminalFailed) return;
+    setState(() => _nativeTerminalFailed = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('選択したネイティブ端末を利用できないためWebGL描画へ切り替えました。')),
+    );
+  }
+
+  bool _usesWebRenderer(TerminalRendererMode renderer) =>
+      _nativeTerminalFailed ||
+      renderer == TerminalRendererMode.webgl && !_webTerminalFailed;
+
   void _pulseHighFrameRate() {
     final mode = ref.read(terminalPerformanceSettingsProvider).refreshRateMode;
-    if (mode != RefreshRateMode.balanced || _performancePulseTimer != null) {
+    if (mode == RefreshRateMode.maximum || _performancePulseTimer != null) {
       return;
     }
-    _performancePulseTimer = Timer(const Duration(milliseconds: 100), () {
+    _performancePulseTimer = Timer(const Duration(milliseconds: 80), () {
       _performancePulseTimer = null;
     });
     unawaited(ref.read(displayPerformanceControllerProvider).pulseHigh());
@@ -735,21 +761,57 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     }
 
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
-    if (renderer == TerminalRendererMode.webgl && !_webTerminalFailed) {
+    if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.paste(text);
     } else {
-      session.paste(text);
+      await _nativeTerminalKey.currentState?.paste(text);
     }
     _focusTerminal();
   }
 
   void _focusTerminal() {
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
-    if (renderer == TerminalRendererMode.webgl && !_webTerminalFailed) {
+    if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.focus();
     } else {
-      _terminalFocusNode.requestFocus();
+      unawaited(_nativeTerminalKey.currentState?.focus());
     }
+  }
+
+  Future<void> _sendSpecialKey(TerminalKey key, int repeat) async {
+    final session = _session;
+    if (session == null || !session.isConnected) return;
+    final modifiers = session.consumeArmedModifiers();
+    final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
+
+    var handled = false;
+    for (var index = 0; index < repeat; index++) {
+      if (_usesWebRenderer(renderer)) {
+        handled =
+            _webTerminalKey.currentState?.sendKey(
+              key,
+              control: modifiers.control,
+              alt: modifiers.alt,
+            ) ??
+            false;
+      } else {
+        handled =
+            await _nativeTerminalKey.currentState?.sendKey(
+              key,
+              control: modifiers.control,
+              alt: modifiers.alt,
+            ) ??
+            false;
+      }
+      if (!handled) {
+        session.sendKeyWithModifiers(
+          key,
+          control: modifiers.control,
+          alt: modifiers.alt,
+        );
+      }
+    }
+    _focusTerminal();
   }
 
   Future<void> _requestClose() async {
@@ -1252,13 +1314,13 @@ class _SpecialKeyBar extends StatelessWidget {
     required this.session,
     required this.pasteLabel,
     required this.onPaste,
-    required this.onKeySent,
+    required this.onKey,
   });
 
   final SshSessionController session;
   final String pasteLabel;
   final VoidCallback onPaste;
-  final VoidCallback onKeySent;
+  final void Function(TerminalKey key, int repeat) onKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1284,6 +1346,7 @@ class _SpecialKeyBar extends StatelessWidget {
             const SizedBox(width: 4),
             _keyButton('Esc', TerminalKey.escape),
             _keyButton('Tab', TerminalKey.tab),
+            _keyButton('↵', TerminalKey.enter),
             _keyButton('↑', TerminalKey.arrowUp),
             _keyButton('↓', TerminalKey.arrowDown),
             _keyButton('←', TerminalKey.arrowLeft),
@@ -1301,14 +1364,12 @@ class _SpecialKeyBar extends StatelessWidget {
   }
 
   Widget _keyButton(String label, TerminalKey key) {
-    return Padding(
+    final button = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: OutlinedButton(
-        onPressed: session.isConnected
-            ? () {
-                session.sendKey(key);
-                onKeySent();
-              }
+        onPressed: session.isConnected ? () => onKey(key, 1) : null,
+        onLongPress: session.isConnected && key == TerminalKey.tab
+            ? () => onKey(key, 2)
             : null,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(48, 36),
@@ -1317,6 +1378,8 @@ class _SpecialKeyBar extends StatelessWidget {
         child: Text(label),
       ),
     );
+    if (key != TerminalKey.tab) return button;
+    return Tooltip(message: 'タップで補完、長押しで候補一覧', child: button);
   }
 }
 

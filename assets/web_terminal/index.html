@@ -12,8 +12,50 @@
         font-display: block;
       }
       @font-face {
+        font-family: NotoSansJP;
+        src: url('../fonts/NotoSansJP-VF.ttf') format('truetype');
+        font-display: block;
+      }
+      @font-face {
+        font-family: Koruri;
+        src: url('../fonts/Koruri-Regular.ttf') format('truetype');
+        font-display: block;
+      }
+      @font-face {
         font-family: Mejiro;
         src: url('../fonts/Mejiro-Regular.ttf') format('truetype');
+        font-display: block;
+      }
+      @font-face {
+        font-family: Roboto;
+        src: url('../fonts/Roboto-VF.ttf') format('truetype');
+        font-display: block;
+        font-style: normal;
+        font-weight: 100 900;
+        font-stretch: 75% 100%;
+      }
+      @font-face {
+        font-family: Moralerspace;
+        src: url('../fonts/Moralerspace-Regular.ttf') format('truetype');
+        font-display: block;
+      }
+      @font-face {
+        font-family: SourceCodePro;
+        src: url('../fonts/SourceCodePro-VF.ttf') format('truetype');
+        font-display: block;
+        font-style: normal;
+        font-weight: 200 900;
+      }
+      @font-face {
+        font-family: JetBrainsMono;
+        src: url('../fonts/JetBrainsMono-VF.ttf') format('truetype');
+        font-display: block;
+        font-style: normal;
+        font-weight: 100 800;
+      }
+      @font-face {
+        font-family: NerdSymbolsMono;
+        src: url('../fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
         font-display: block;
       }
       html, body, #terminal {
@@ -27,6 +69,11 @@
         height: 100%;
         padding: 6px 4px;
         box-sizing: border-box;
+        font-kerning: none;
+        font-synthesis: none;
+        font-variant-ligatures: none;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
       }
       #terminal .xterm-viewport::-webkit-scrollbar {
         width: 5px;

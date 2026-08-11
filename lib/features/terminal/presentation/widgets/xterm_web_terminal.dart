@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:xterm/xterm.dart';
 
 import '../../application/ssh_session_controller.dart';
 
@@ -11,6 +13,7 @@ class XtermWebTerminal extends StatefulWidget {
   const XtermWebTerminal({
     required this.session,
     required this.scrollbackLines,
+    required this.terminalFontFamily,
     required this.japaneseFontFamily,
     required this.fontSize,
     required this.mouseInput,
@@ -23,6 +26,7 @@ class XtermWebTerminal extends StatefulWidget {
 
   final SshSessionController session;
   final int scrollbackLines;
+  final String terminalFontFamily;
   final String japaneseFontFamily;
   final double fontSize;
   final bool mouseInput;
@@ -36,10 +40,12 @@ class XtermWebTerminal extends StatefulWidget {
 }
 
 class XtermWebTerminalState extends State<XtermWebTerminal> {
-  static const _maximumPendingCharacters = 256 * 1024;
-  static const _pauseOutputAtCharacters = 192 * 1024;
-  static const _resumeOutputAtCharacters = 64 * 1024;
-  static const _maximumWriteCharacters = 32 * 1024;
+  static const _maximumPendingBytes = 2 * 1024 * 1024;
+  static const _pauseOutputAtBytes = 1024 * 1024;
+  static const _resumeOutputAtBytes = 256 * 1024;
+  static const _maximumWriteBytes = 128 * 1024;
+  static const _maximumPersistedScrollbackLines = 10000;
+  static const _checkpointIdleDelay = Duration(seconds: 2);
   static const _readyTimeout = Duration(seconds: 12);
   static const _snapshotTimeout = Duration(seconds: 3);
   static const _writeAckTimeout = Duration(seconds: 10);
@@ -50,10 +56,11 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   final Map<int, Completer<_SnapshotResult>> _snapshotRequests = {};
   final Map<int, Completer<void>> _writeAckRequests = {};
   Timer? _readyTimer;
+  Timer? _checkpointTimer;
   Future<void>? _drainFuture;
   Future<void>? _suspendFuture;
   Future<bool>? _checkpointFuture;
-  var _pendingOutputCharacters = 0;
+  var _pendingOutputBytes = 0;
   var _lastQueuedSequence = 0;
   var _lastSentSequence = 0;
   var _snapshotRequestId = 0;
@@ -110,7 +117,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       _outputBackpressured = false;
       _listenerAttached = false;
       _pendingOutput.clear();
-      _pendingOutputCharacters = 0;
+      _pendingOutputBytes = 0;
       _lastQueuedSequence = 0;
       _lastSentSequence = 0;
       if (_active) {
@@ -122,6 +129,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     }
     if (_ready &&
         (oldWidget.scrollbackLines != widget.scrollbackLines ||
+            oldWidget.terminalFontFamily != widget.terminalFontFamily ||
             oldWidget.japaneseFontFamily != widget.japaneseFontFamily ||
             oldWidget.fontSize != widget.fontSize ||
             oldWidget.mouseInput != widget.mouseInput ||
@@ -135,6 +143,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   void dispose() {
     _disposed = true;
     _readyTimer?.cancel();
+    _checkpointTimer?.cancel();
     _detachSessionListener();
     for (final completer in _snapshotRequests.values) {
       if (!completer.isCompleted) {
@@ -149,7 +158,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     }
     _writeAckRequests.clear();
     _pendingOutput.clear();
-    _pendingOutputCharacters = 0;
+    _pendingOutputBytes = 0;
     _setOutputBackpressure(false);
     _pendingScripts.clear();
     unawaited(
@@ -178,6 +187,25 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     if (!_ready || !_active || text.isEmpty) return;
     final encoded = base64Encode(utf8.encode(text));
     _enqueueScript("window.termethisTerminal.pasteBase64('$encoded');");
+  }
+
+  bool sendKey(TerminalKey key, {required bool control, required bool alt}) {
+    if (!_ready || !_active || _disposed) return false;
+    final name = switch (key) {
+      TerminalKey.escape => 'escape',
+      TerminalKey.tab => 'tab',
+      TerminalKey.enter => 'enter',
+      TerminalKey.arrowUp => 'arrowUp',
+      TerminalKey.arrowDown => 'arrowDown',
+      TerminalKey.arrowLeft => 'arrowLeft',
+      TerminalKey.arrowRight => 'arrowRight',
+      _ => null,
+    };
+    if (name == null) return false;
+    _enqueueScript(
+      "window.termethisTerminal.sendKey('$name', $control, $alt);",
+    );
+    return true;
   }
 
   Future<String?> copyLastCommandOutput() async {
@@ -209,6 +237,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   }
 
   Future<void> _performSuspend() async {
+    _checkpointTimer?.cancel();
     _detachSessionListener();
     await _waitForDrain();
 
@@ -288,7 +317,15 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       return;
     }
 
+    _checkpointTimer?.cancel();
+    _checkpointTimer = Timer(_checkpointIdleDelay, _startCheckpoint);
+  }
+
+  void _startCheckpoint() {
+    _checkpointTimer = null;
+    if (_disposed || !_ready || !_active || _checkpointFuture != null) return;
     final session = widget.session;
+    if (!session.webTerminalCheckpointNeeded) return;
     final operation = _checkpointAfterDrain(session);
     _checkpointFuture = operation;
     unawaited(
@@ -336,21 +373,21 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     _scheduleCheckpoint();
   }
 
-  void _queueOutput(String data, int throughSequence, {bool reset = false}) {
+  void _queueOutput(Uint8List data, int throughSequence, {bool reset = false}) {
     _lastQueuedSequence = throughSequence;
     if (reset) {
       _pendingOutput.clear();
-      _pendingOutputCharacters = 0;
+      _pendingOutputBytes = 0;
     }
     _appendOutputChunks(data, throughSequence, reset: reset);
-    if (_pendingOutputCharacters >= _pauseOutputAtCharacters) {
+    if (_pendingOutputBytes >= _pauseOutputAtBytes) {
       _setOutputBackpressure(true);
     }
 
-    if (_pendingOutputCharacters > _maximumPendingCharacters) {
+    if (_pendingOutputBytes > _maximumPendingBytes) {
       final replay = widget.session.webTerminalReplay;
       _pendingOutput.clear();
-      _pendingOutputCharacters = 0;
+      _pendingOutputBytes = 0;
       _appendOutputChunks(replay.data, replay.throughSequence, reset: true);
       _lastQueuedSequence = replay.throughSequence;
     }
@@ -358,14 +395,14 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   }
 
   void _appendOutputChunks(
-    String data,
+    Uint8List data,
     int throughSequence, {
     required bool reset,
   }) {
     if (data.isEmpty) {
       if (reset) {
         _pendingOutput.addLast(
-          _QueuedOutputChunk('', throughSequence, reset: true),
+          _QueuedOutputChunk(Uint8List(0), throughSequence, reset: true),
         );
       }
       return;
@@ -374,15 +411,10 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     var offset = 0;
     var first = true;
     while (offset < data.length) {
-      var end = offset + _maximumWriteCharacters;
+      var end = offset + _maximumWriteBytes;
       if (end > data.length) end = data.length;
-      if (end < data.length &&
-          _isLowSurrogate(data.codeUnitAt(end)) &&
-          _isHighSurrogate(data.codeUnitAt(end - 1))) {
-        end--;
-      }
       final isLast = end == data.length;
-      final chunk = data.substring(offset, end);
+      final chunk = Uint8List.sublistView(data, offset, end);
       _pendingOutput.addLast(
         _QueuedOutputChunk(
           chunk,
@@ -390,7 +422,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
           reset: reset && first,
         ),
       );
-      _pendingOutputCharacters += chunk.length;
+      _pendingOutputBytes += chunk.length;
       first = false;
       offset = end;
     }
@@ -421,6 +453,9 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       case 'input':
         final data = decoded['data'];
         if (_active && data is String) widget.session.sendInput(data);
+      case 'directInput':
+        final data = decoded['data'];
+        if (_active && data is String) widget.session.sendInputDirect(data);
       case 'resize':
         final columns = decoded['cols'];
         final rows = decoded['rows'];
@@ -469,7 +504,9 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     final options = jsonEncode({
       'scrollback': widget.scrollbackLines,
       'fontFamily':
-          'CascadiaMono, ${widget.japaneseFontFamily}, Mejiro, Koruri, monospace',
+          '${widget.terminalFontFamily}, ${widget.japaneseFontFamily}, '
+          'NotoSansJP, Mejiro, Koruri, NerdSymbolsMono, '
+          '"Noto Color Emoji", monospace',
       'fontSize': widget.fontSize,
       'mouseInput': widget.mouseInput,
       'longPressRightClick': widget.longPressRightClick,
@@ -484,7 +521,8 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     _snapshotRequests[id] = completer;
     _enqueueScript(
       'window.termethisTerminal.requestSnapshot('
-      '$id, $_lastSentSequence, ${widget.scrollbackLines});',
+      '$id, $_lastSentSequence, '
+      '${widget.scrollbackLines.clamp(0, _maximumPersistedScrollbackLines)});',
     );
     await _waitForDrain();
     return completer.future.timeout(
@@ -522,15 +560,15 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         script = _pendingScripts.removeFirst();
       } else if (_ready && _active && _pendingOutput.isNotEmpty) {
         final output = _pendingOutput.removeFirst();
-        _pendingOutputCharacters -= output.data.length;
-        if (_pendingOutputCharacters <= _resumeOutputAtCharacters) {
+        _pendingOutputBytes -= output.data.length;
+        if (_pendingOutputBytes <= _resumeOutputAtBytes) {
           _setOutputBackpressure(false);
         }
         outputSequence = output.throughSequence;
         final requestId = ++_writeRequestId;
         final acknowledgement = Completer<void>();
         _writeAckRequests[requestId] = acknowledgement;
-        final encoded = base64Encode(utf8.encode(output.data));
+        final encoded = base64Encode(output.data);
         script =
             "window.termethisTerminal.writeBase64("
             "'$encoded', ${output.reset}, $requestId);";
@@ -589,10 +627,6 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     _outputBackpressured = paused;
     widget.session.setOutputBackpressure(paused);
   }
-
-  static bool _isHighSurrogate(int value) => value >= 0xD800 && value <= 0xDBFF;
-
-  static bool _isLowSurrogate(int value) => value >= 0xDC00 && value <= 0xDFFF;
 }
 
 class _QueuedOutputChunk {
@@ -602,7 +636,7 @@ class _QueuedOutputChunk {
     required this.reset,
   });
 
-  final String data;
+  final Uint8List data;
   final int throughSequence;
   final bool reset;
 }

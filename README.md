@@ -8,12 +8,14 @@
 
 ## 主な機能
 
-- 省メモリなFlutter描画を既定にし、TUI向けxterm.js WebGLへ切り替えられるSSHターミナル
-- releaseビルドのFlutter描画で接続中150MiB以下を目標とするメモリ設計
+- xterm.js WebGLを既定にした、vim・neovim・tmux・htop・ncurses向けSSHターミナル
+- libvtermを使うAndroidネイティブ省メモリ描画へ切り替え可能
+- releaseビルドのネイティブ描画で接続中150MiB以下を目標とするメモリ設計
 - 日本語IME、UTF-8、CJK文字幅に対応した入出力
-- 非表示タブのWebViewを解放し、ANSIスナップショットと受信差分から画面を復元
-- Cascadia MonoとNoto Sans JPによるWindows Terminal寄りの表示
-- Noto Sans JP、Koruri、Mejiroから選べる日本語フォント
+- 非表示タブの描画ビューを解放し、ANSIスナップショットと受信差分から画面を復元
+- Cascadia Mono／JetBrains Mono、CJK、絵文字、Nerd Fonts Symbolsによる等幅表示
+- Noto Sans JP、Koruri、Mejiro、Roboto、Moralerspace、Source Code Pro、JetBrains Monoから選べる画面フォント
+- Cascadia MonoとJetBrains Monoから選べるターミナルフォント
 - DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
 - 同じ接続先も並行利用できるSSH複数タブ・複数セッション
 - アプリ再起動後に切断状態で復元するSSHセッションタブ
@@ -24,14 +26,14 @@
 - RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
 - RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
 - ホームの接続先としてSSH・RDP・VNCを一元管理
-- Androidの対応アプリへRDP URIまたはVNC URIを渡すリモートデスクトップ連携
+- IronRDPとネイティブVulkan Surfaceによるアプリ内RDP、対応アプリへVNC URIを渡すリモートデスクトップ連携
 - 接続先ごとのWake on LAN設定とMagic Packet送信
 - ホーム、FTP、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
 - パンくずによる階層移動、フォルダー優先の一覧表示
 - フォルダー作成、名前変更、ファイルと空フォルダーの削除
 - 適応・バランス・最大から選べるAndroidネイティブのリフレッシュレート制御
-- 2,000・5,000・10,000行から選べるスクロールバック
+- 2,000〜100,000行から選べるスクロールバック
 - 600dp以上でNavigationRailへ切り替わるレスポンシブUI
 - 明示設定時だけ接続中に動くバックグラウンドSSH通知
 
@@ -39,14 +41,17 @@
 
 SSHセッションの保存対象はタブID、接続先ID、表示名だけです。SSH通信、端末の表示内容、パスワード、秘密鍵は保存せず、アプリのプロセス再生成後は切断状態から利用者が再接続します。
 
-RDPとVNCはAndroidにインストールされた対応クライアントを起動します。Termethisは接続先とユーザー名だけを渡し、リモートデスクトップのパスワードは保存・転送しません。
+RDPはIronRDPでアプリ内接続し、デコード画面を中間フレームへ複製したりDartへ渡したりせず、AndroidのネイティブVulkan Surfaceへ提示します。接続時に入力したパスワードは保存しません。VNCはAndroidの対応クライアントを起動し、接続先とユーザー名だけを渡します。
 
 ## 開発
 
 Flutter 3.44.9とDart 3.12.2を使用します。
 SSH・SFTPコアにはRust 1.96.0を使用し、`flutter_rust_bridge`でFlutterへ接続します。
+ネイティブ端末はConnectBot termlib＋libvtermと、Termux terminal-emulator＋terminal-viewを選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`へ固定しています。
+AndroidビルドにはSDK版CMake 3.31.6とNDK 29.0.14206865が必要です。CIではSDK Managerから導入します。
 
 ```powershell
+git submodule update --init --recursive
 flutter pub get
 cargo check --manifest-path rust/Cargo.toml
 flutter analyze
@@ -77,7 +82,7 @@ Termethisの接続先は`termethis-test@127.0.0.1:22222`にします。終了時
 
 ヘッドレスAVDでWebGLを検証する場合は`-gpu host`を使用してください。環境別の既知事項は[TESTING.md](TESTING.md)にまとめています。
 
-WebGLの初期化やWebView通信に失敗した場合は、そのセッション画面だけFlutter互換描画へ自動的に切り替わります。設定値は変更しないため、次に端末画面を開いたときはWebGLを再試行します。
+WebGLの初期化やWebView通信に失敗した場合は、そのセッション画面だけネイティブ描画へ切り替わります。ネイティブ端末を初期化できない場合はWebGLへ切り替えます。設定値は変更しないため、次に端末画面を開いたときは選択した描画方式を再試行します。
 
 設計と安全性は[ARCHITECTURE.md](ARCHITECTURE.md)、評価環境と実測結果は[TESTING.md](TESTING.md)を参照してください。
 

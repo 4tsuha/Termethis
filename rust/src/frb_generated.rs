@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1795328358;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -878831189;
 
 // Section: executor
 
@@ -110,6 +110,326 @@ fn wire__crate__api__core__private_key_is_encrypted_impl(
                         Result::<_, ()>::Ok(crate::api::core::private_key_is_encrypted(api_pem))?;
                     Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_close_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_close",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_close(api_session_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_connect_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_connect",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_request =
+                <crate::api::rdp::RustRdpConnectRequest>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_connect(api_request).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_mouse_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_mouse",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            let api_x = <u16>::sse_decode(&mut deserializer);
+            let api_y = <u16>::sse_decode(&mut deserializer);
+            let api_button = <i32>::sse_decode(&mut deserializer);
+            let api_pressed = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_mouse(
+                            api_session_id,
+                            api_x,
+                            api_y,
+                            api_button,
+                            api_pressed,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_read_frame_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_read_frame",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            let api_after_sequence = <i64>::sse_decode(&mut deserializer);
+            let api_wait_millis = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_read_frame(
+                            api_session_id,
+                            api_after_sequence,
+                            api_wait_millis,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_read_status_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_read_status",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_read_status(api_session_id).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_resize_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_resize",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            let api_width = <u16>::sse_decode(&mut deserializer);
+            let api_height = <u16>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::rdp::rdp_resize(api_session_id, api_width, api_height)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_send_scancode_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_send_scancode",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            let api_scancode = <u16>::sse_decode(&mut deserializer);
+            let api_pressed = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::rdp::rdp_send_scancode(
+                            api_session_id,
+                            api_scancode,
+                            api_pressed,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__rdp__rdp_send_text_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rdp_send_text",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <i64>::sse_decode(&mut deserializer);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::rdp::rdp_send_text(api_session_id, api_text).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -764,6 +1084,13 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -902,6 +1229,82 @@ impl SseDecode for crate::api::core::RustInteractivePrompt {
         return crate::api::core::RustInteractivePrompt {
             text: var_text,
             echo: var_echo,
+        };
+    }
+}
+
+impl SseDecode for crate::api::rdp::RustRdpConnectRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_host = <String>::sse_decode(deserializer);
+        let mut var_port = <u16>::sse_decode(deserializer);
+        let mut var_username = <String>::sse_decode(deserializer);
+        let mut var_password = <String>::sse_decode(deserializer);
+        let mut var_domain = <String>::sse_decode(deserializer);
+        let mut var_width = <u16>::sse_decode(deserializer);
+        let mut var_height = <u16>::sse_decode(deserializer);
+        return crate::api::rdp::RustRdpConnectRequest {
+            host: var_host,
+            port: var_port,
+            username: var_username,
+            password: var_password,
+            domain: var_domain,
+            width: var_width,
+            height: var_height,
+        };
+    }
+}
+
+impl SseDecode for crate::api::rdp::RustRdpConnectResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sessionId = <i64>::sse_decode(deserializer);
+        let mut var_renderer = <String>::sse_decode(deserializer);
+        return crate::api::rdp::RustRdpConnectResult {
+            session_id: var_sessionId,
+            renderer: var_renderer,
+        };
+    }
+}
+
+impl SseDecode for crate::api::rdp::RustRdpFrame {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sequence = <i64>::sse_decode(deserializer);
+        let mut var_width = <u16>::sse_decode(deserializer);
+        let mut var_height = <u16>::sse_decode(deserializer);
+        let mut var_rgba = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_state = <String>::sse_decode(deserializer);
+        let mut var_errorMessage = <Option<String>>::sse_decode(deserializer);
+        return crate::api::rdp::RustRdpFrame {
+            sequence: var_sequence,
+            width: var_width,
+            height: var_height,
+            rgba: var_rgba,
+            state: var_state,
+            error_message: var_errorMessage,
+        };
+    }
+}
+
+impl SseDecode for crate::api::rdp::RustRdpStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_sequence = <i64>::sse_decode(deserializer);
+        let mut var_width = <u16>::sse_decode(deserializer);
+        let mut var_height = <u16>::sse_decode(deserializer);
+        let mut var_state = <String>::sse_decode(deserializer);
+        let mut var_errorMessage = <Option<String>>::sse_decode(deserializer);
+        let mut var_renderer = <String>::sse_decode(deserializer);
+        let mut var_rendererError = <Option<String>>::sse_decode(deserializer);
+        return crate::api::rdp::RustRdpStatus {
+            sequence: var_sequence,
+            width: var_width,
+            height: var_height,
+            state: var_state,
+            error_message: var_errorMessage,
+            renderer: var_renderer,
+            renderer_error: var_rendererError,
         };
     }
 }
@@ -1053,13 +1456,6 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
-impl SseDecode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
-    }
-}
-
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -1073,32 +1469,42 @@ fn pde_ffi_dispatcher_primary_impl(
         2 => {
             wire__crate__api__core__private_key_is_encrypted_impl(port, ptr, rust_vec_len, data_len)
         }
-        3 => wire__crate__api__core__sftp_change_directory_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__core__sftp_close_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__core__sftp_connect_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__core__sftp_create_directory_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__sftp_current_directory_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__sftp_delete_empty_directory_impl(
+        3 => wire__crate__api__rdp__rdp_close_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__rdp__rdp_connect_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__rdp__rdp_mouse_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__rdp__rdp_read_frame_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__rdp__rdp_read_status_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__rdp__rdp_resize_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__rdp__rdp_send_scancode_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__rdp__rdp_send_text_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__sftp_change_directory_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__sftp_close_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__sftp_connect_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__sftp_create_directory_impl(port, ptr, rust_vec_len, data_len),
+        15 => {
+            wire__crate__api__core__sftp_current_directory_impl(port, ptr, rust_vec_len, data_len)
+        }
+        16 => wire__crate__api__core__sftp_delete_empty_directory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__core__sftp_delete_file_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__sftp_list_directory_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__sftp_rename_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__ssh_close_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__ssh_connect_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__ssh_continue_authentication_impl(
+        17 => wire__crate__api__core__sftp_delete_file_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__sftp_list_directory_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__sftp_rename_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__ssh_close_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__ssh_connect_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__ssh_continue_authentication_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__core__ssh_read_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__ssh_resize_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__ssh_write_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__validate_private_key_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__ssh_read_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__ssh_resize_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__ssh_write_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__validate_private_key_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1175,6 +1581,101 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::core::RustInteractivePrompt>
     for crate::api::core::RustInteractivePrompt
 {
     fn into_into_dart(self) -> crate::api::core::RustInteractivePrompt {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::rdp::RustRdpConnectRequest {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.host.into_into_dart().into_dart(),
+            self.port.into_into_dart().into_dart(),
+            self.username.into_into_dart().into_dart(),
+            self.password.into_into_dart().into_dart(),
+            self.domain.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::rdp::RustRdpConnectRequest
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::rdp::RustRdpConnectRequest>
+    for crate::api::rdp::RustRdpConnectRequest
+{
+    fn into_into_dart(self) -> crate::api::rdp::RustRdpConnectRequest {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::rdp::RustRdpConnectResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.session_id.into_into_dart().into_dart(),
+            self.renderer.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::rdp::RustRdpConnectResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::rdp::RustRdpConnectResult>
+    for crate::api::rdp::RustRdpConnectResult
+{
+    fn into_into_dart(self) -> crate::api::rdp::RustRdpConnectResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::rdp::RustRdpFrame {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sequence.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.rgba.into_into_dart().into_dart(),
+            self.state.into_into_dart().into_dart(),
+            self.error_message.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::rdp::RustRdpFrame {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::rdp::RustRdpFrame>
+    for crate::api::rdp::RustRdpFrame
+{
+    fn into_into_dart(self) -> crate::api::rdp::RustRdpFrame {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::rdp::RustRdpStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.sequence.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.state.into_into_dart().into_dart(),
+            self.error_message.into_into_dart().into_dart(),
+            self.renderer.into_into_dart().into_dart(),
+            self.renderer_error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::rdp::RustRdpStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::rdp::RustRdpStatus>
+    for crate::api::rdp::RustRdpStatus
+{
+    fn into_into_dart(self) -> crate::api::rdp::RustRdpStatus {
         self
     }
 }
@@ -1350,6 +1851,13 @@ impl SseEncode for bool {
     }
 }
 
+impl SseEncode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for i64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1462,6 +1970,52 @@ impl SseEncode for crate::api::core::RustInteractivePrompt {
     }
 }
 
+impl SseEncode for crate::api::rdp::RustRdpConnectRequest {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.host, serializer);
+        <u16>::sse_encode(self.port, serializer);
+        <String>::sse_encode(self.username, serializer);
+        <String>::sse_encode(self.password, serializer);
+        <String>::sse_encode(self.domain, serializer);
+        <u16>::sse_encode(self.width, serializer);
+        <u16>::sse_encode(self.height, serializer);
+    }
+}
+
+impl SseEncode for crate::api::rdp::RustRdpConnectResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.session_id, serializer);
+        <String>::sse_encode(self.renderer, serializer);
+    }
+}
+
+impl SseEncode for crate::api::rdp::RustRdpFrame {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.sequence, serializer);
+        <u16>::sse_encode(self.width, serializer);
+        <u16>::sse_encode(self.height, serializer);
+        <Vec<u8>>::sse_encode(self.rgba, serializer);
+        <String>::sse_encode(self.state, serializer);
+        <Option<String>>::sse_encode(self.error_message, serializer);
+    }
+}
+
+impl SseEncode for crate::api::rdp::RustRdpStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.sequence, serializer);
+        <u16>::sse_encode(self.width, serializer);
+        <u16>::sse_encode(self.height, serializer);
+        <String>::sse_encode(self.state, serializer);
+        <Option<String>>::sse_encode(self.error_message, serializer);
+        <String>::sse_encode(self.renderer, serializer);
+        <Option<String>>::sse_encode(self.renderer_error, serializer);
+    }
+}
+
 impl SseEncode for crate::api::core::RustSftpConnectRequest {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1558,13 +2112,6 @@ impl SseEncode for u8 {
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
-}
-
-impl SseEncode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
-    }
 }
 
 #[cfg(not(target_family = "wasm"))]

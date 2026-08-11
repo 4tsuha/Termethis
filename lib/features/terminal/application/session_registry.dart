@@ -5,8 +5,6 @@ import '../../../infrastructure/ssh/rust_ssh_gateway.dart';
 import '../../../infrastructure/terminal/utf8_terminal_codec.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../settings/application/background_session_coordinator.dart';
-import '../../settings/application/terminal_performance_settings_controller.dart';
-import '../../settings/domain/terminal_performance_settings.dart';
 import '../domain/ssh_gateway.dart';
 import 'ssh_session_controller.dart';
 
@@ -26,11 +24,6 @@ final sessionRegistryProvider = Provider<SessionRegistry>((ref) {
   final registry = SessionRegistry(
     ref.watch(sshGatewayProvider),
     ref.watch(terminalCodecProvider),
-    scrollbackLines: () =>
-        ref.read(terminalPerformanceSettingsProvider).scrollbackLines,
-    compactFlutterBuffer: () =>
-        ref.read(terminalPerformanceSettingsProvider).rendererMode ==
-        TerminalRendererMode.webgl,
     backgroundSessions: ref.watch(backgroundSessionCoordinatorProvider),
   );
   ref.onDispose(registry.dispose);
@@ -38,32 +31,16 @@ final sessionRegistryProvider = Provider<SessionRegistry>((ref) {
 });
 
 class SessionRegistry {
-  SessionRegistry(
-    this._gateway,
-    this._codec, {
-    int Function()? scrollbackLines,
-    bool Function()? compactFlutterBuffer,
-    this._backgroundSessions,
-  }) : _scrollbackLines = scrollbackLines ?? _defaultScrollbackLines,
-       _compactFlutterBuffer =
-           compactFlutterBuffer ?? _defaultCompactFlutterBuffer;
+  SessionRegistry(this._gateway, this._codec, {this._backgroundSessions});
 
   final SshGateway _gateway;
   final TerminalCodec _codec;
-  final int Function() _scrollbackLines;
-  final bool Function() _compactFlutterBuffer;
   final BackgroundSessionCoordinator? _backgroundSessions;
   final Map<String, SshSessionController> _sessions = {};
 
   SshSessionController open(String tabId, ConnectionProfile profile) {
     return _sessions.putIfAbsent(tabId, () {
-      final session = SshSessionController(
-        _gateway,
-        _codec,
-        profile: profile,
-        maxLines: _scrollbackLines(),
-        compactFlutterBuffer: _compactFlutterBuffer(),
-      );
+      final session = SshSessionController(_gateway, _codec, profile: profile);
       session.addListener(_syncBackgroundSessions);
       return session;
     });
@@ -92,8 +69,4 @@ class SessionRegistry {
       _sessions.values.any((session) => session.isConnected),
     );
   }
-
-  static int _defaultScrollbackLines() => 2000;
-
-  static bool _defaultCompactFlutterBuffer() => false;
 }

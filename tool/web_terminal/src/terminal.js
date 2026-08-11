@@ -2,15 +2,22 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
+import { UnicodeGraphemesAddon } from '@xterm/addon-unicode-graphemes';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
 const host = document.getElementById('terminal');
-const decoder = new TextDecoder('utf-8');
+const textDecoder = new TextDecoder('utf-8');
 const encoder = new TextEncoder();
+const WRITE_SLICE_BYTES = 16 * 1024;
+const NORMAL_WRITE_BUDGET_MILLIS = 3.25;
+const INPUT_WRITE_BUDGET_MILLIS = 1.5;
+const INPUT_PRIORITY_WINDOW_MILLIS = 80;
 let active = true;
 let disposed = false;
+let dispatchingSpecialKey = false;
 let writeChain = Promise.resolve();
+let lastInputAt = Number.NEGATIVE_INFINITY;
 let lastCommandOutput = '';
 let commandOutputStart;
 let promptActive = false;
@@ -29,14 +36,21 @@ window.addEventListener('unhandledrejection', (event) => {
 
 const terminal = new Terminal({
   allowProposedApi: true,
+  allowTransparency: false,
   convertEol: false,
+  customGlyphs: true,
   cursorBlink: true,
   cursorStyle: 'block',
   drawBoldTextInBrightColors: true,
-  fontFamily: 'CascadiaMono, Mejiro, Koruri, monospace',
+  fontFamily: 'CascadiaMono, NotoSansJP, Mejiro, Koruri, NerdSymbolsMono, "Noto Color Emoji", monospace',
   fontSize: 14,
+  fontWeight: '400',
+  fontWeightBold: '600',
   letterSpacing: 0,
   lineHeight: 1.15,
+  minimumContrastRatio: 1,
+  logLevel: 'off',
+  rescaleOverlappingGlyphs: true,
   scrollback: 5000,
   smoothScrollDuration: 0,
   theme: {
@@ -54,15 +68,17 @@ terminal.loadAddon(fitAddon);
 terminal.loadAddon(serializeAddon);
 terminal.loadAddon(unicodeAddon);
 terminal.unicode.activeVersion = '11';
+try {
+  terminal.loadAddon(new UnicodeGraphemesAddon());
+} catch (error) {
+  post({ type: 'unicodeFallback', message: String(error) });
+}
 terminal.open(host);
 
 let renderer = 'dom';
 let webglAddon;
 try {
-  // Android WebView screenshots and surface hand-off need the last frame to
-  // remain available after compositing. This also avoids partial glyph atlases
-  // on software-rendered emulators.
-  webglAddon = new WebglAddon(true);
+  webglAddon = new WebglAddon(false);
   webglAddon.onContextLoss(() => {
     webglAddon.dispose();
     renderer = 'dom';
@@ -75,7 +91,10 @@ try {
 }
 
 terminal.onData((data) => {
-  if (active && !disposed) post({ type: 'input', data });
+  if (active && !disposed) {
+    lastInputAt = performance.now();
+    post({ type: dispatchingSpecialKey ? 'directInput' : 'input', data });
+  }
 });
 terminal.onResize(({ cols, rows }) => post({ type: 'resize', cols, rows }));
 terminal.onTitleChange((title) => post({ type: 'title', title }));
@@ -106,13 +125,17 @@ function post(message) {
   }
 }
 
-function decodeBase64(value) {
+function decodeBase64Bytes(value) {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
-  return decoder.decode(bytes);
+  return bytes;
+}
+
+function decodeBase64Text(value) {
+  return textDecoder.decode(decodeBase64Bytes(value));
 }
 
 function encodeBase64(value) {
@@ -127,26 +150,37 @@ function encodeBase64(value) {
 }
 
 function enqueueWrite(value, reset, id) {
-  const data = decodeBase64(value);
   writeChain = writeChain
-    .then(
-      () =>
-        new Promise((resolve) => {
-          const buffer = terminal.buffer.active;
-          const followOutput = reset || buffer.viewportY >= buffer.baseY;
-          if (disposed) {
-            post({ type: 'writeAck', id });
-            resolve();
-            return;
-          }
-          if (reset) terminal.reset();
-          terminal.write(data, () => {
-            if (followOutput) terminal.scrollToBottom();
-            post({ type: 'writeAck', id });
-            resolve();
-          });
-        }),
-    )
+    .then(async () => {
+      const buffer = terminal.buffer.active;
+      const followOutput = reset || buffer.viewportY >= buffer.baseY;
+      if (disposed) {
+        post({ type: 'writeAck', id });
+        return;
+      }
+      if (reset) {
+        terminal.reset();
+      }
+      const data = decodeBase64Bytes(value);
+      let sliceStartedAt = performance.now();
+      for (let offset = 0; offset < data.length; offset += WRITE_SLICE_BYTES) {
+        const slice = data.subarray(offset, offset + WRITE_SLICE_BYTES);
+        await new Promise((resolve) => terminal.write(slice, resolve));
+        const now = performance.now();
+        const writeBudget = now - lastInputAt < INPUT_PRIORITY_WINDOW_MILLIS
+          ? INPUT_WRITE_BUDGET_MILLIS
+          : NORMAL_WRITE_BUDGET_MILLIS;
+        if (
+          offset + WRITE_SLICE_BYTES < data.length &&
+          now - sliceStartedAt >= writeBudget
+        ) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          sliceStartedAt = performance.now();
+        }
+      }
+      if (followOutput) terminal.scrollToBottom();
+      post({ type: 'writeAck', id });
+    })
     .catch((error) => {
       post({ type: 'fatal', message: String(error) });
     });
@@ -157,12 +191,47 @@ function fit() {
   fitAddon.fit();
 }
 
+function specialKeySequence(key, control, alt) {
+  const modifiers = (alt ? 2 : 0) | (control ? 4 : 0);
+  const modifierParameter = modifiers + 1;
+  const arrowFinal = {
+    arrowUp: 'A',
+    arrowDown: 'B',
+    arrowRight: 'C',
+    arrowLeft: 'D',
+  }[key];
+  if (arrowFinal) {
+    if (modifiers !== 0) return `\x1b[1;${modifierParameter}${arrowFinal}`;
+    return terminal.modes.applicationCursorKeysMode
+      ? `\x1bO${arrowFinal}`
+      : `\x1b[${arrowFinal}`;
+  }
+
+  const literal = { escape: '\x1b', tab: '\t', enter: '\r' }[key];
+  if (literal === undefined) return undefined;
+  if (control) {
+    return `\x1b[${literal.charCodeAt(0)};${modifierParameter}u`;
+  }
+  return alt ? `\x1b${literal}` : literal;
+}
+
 window.termethisTerminal = {
   writeBase64(value, reset = false, id = 0) {
     enqueueWrite(value, reset, id);
   },
   pasteBase64(value) {
-    terminal.paste(decodeBase64(value));
+    terminal.paste(decodeBase64Text(value));
+  },
+  sendKey(key, control = false, alt = false) {
+    const sequence = specialKeySequence(key, control, alt);
+    if (active && sequence !== undefined) {
+      dispatchingSpecialKey = true;
+      try {
+        terminal.input(sequence, true);
+      } finally {
+        dispatchingSpecialKey = false;
+      }
+    }
   },
   setOptions(options) {
     if (Number.isInteger(options.scrollback)) {
@@ -170,6 +239,7 @@ window.termethisTerminal = {
     }
     if (typeof options.fontFamily === 'string') {
       terminal.options.fontFamily = options.fontFamily;
+      webglAddon?.clearTextureAtlas();
     }
     if (Number.isFinite(options.fontSize)) {
       terminal.options.fontSize = options.fontSize;

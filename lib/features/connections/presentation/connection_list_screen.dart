@@ -155,6 +155,11 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         return;
       }
 
+      if (profile.connectionType == ConnectionType.rdp) {
+        if (context.mounted) context.push('/rdp/${profile.id}');
+        return;
+      }
+
       await ref.read(remoteDesktopLauncherProvider).launch(profile);
     } on RemoteDesktopLaunchFailure catch (error) {
       if (context.mounted) {
@@ -333,9 +338,11 @@ class _ConnectionProfileCard extends StatelessWidget {
     final connected = status == SshSessionStatus.connected;
     final busy = isLaunching || isWaking;
     final statusColor = _connectionStatusColor(colors, status);
-    final statusLabel = profile.connectionType == ConnectionType.ssh
-        ? _connectionStatusText(l10n, status)
-        : '外部アプリ';
+    final statusLabel = switch (profile.connectionType) {
+      ConnectionType.ssh => _connectionStatusText(l10n, status),
+      ConnectionType.rdp => 'アプリ内蔵',
+      ConnectionType.vnc => '外部アプリ',
+    };
 
     return Card(
       key: ValueKey('connection-card-${profile.id}'),

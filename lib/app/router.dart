@@ -7,6 +7,7 @@ import '../features/connections/presentation/connection_editor_screen.dart';
 import '../features/connections/presentation/connection_list_screen.dart';
 import '../features/connections/domain/connection_profile.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/remote_desktop/presentation/rdp_screen.dart';
 import '../features/terminal/presentation/terminal_screen.dart';
 import 'app_shell.dart';
 
@@ -71,6 +72,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           tabId:
               state.uri.queryParameters['tab'] ?? state.pathParameters['id']!,
         ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/rdp/:id',
+        builder: (context, state) =>
+            RdpScreen(profileId: state.pathParameters['id']!),
       ),
     ],
   );

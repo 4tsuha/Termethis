@@ -11,6 +11,9 @@ class SharedPreferencesTerminalPerformanceSettingsStore
 
   static const _refreshRateModeKey = 'settings.refresh_rate_mode';
   static const _rendererModeKey = 'settings.terminal_renderer_mode';
+  static const _terminalFontKey = 'settings.terminal_font';
+  static const _hardwareAccelerationModeKey =
+      'settings.hardware_acceleration_mode';
   static const _scrollbackLinesKey = 'settings.scrollback_lines';
   static const _keepAliveKey = 'settings.keep_alive_in_background';
   static const _showSearchButtonKey = 'settings.show_search_button';
@@ -28,18 +31,30 @@ class SharedPreferencesTerminalPerformanceSettingsStore
   @override
   Future<TerminalPerformanceSettings?> read() async {
     final savedRenderer = await _preferences.getString(_rendererModeKey);
+    final savedTerminalFont = await _preferences.getString(_terminalFontKey);
     final savedMode = await _preferences.getString(_refreshRateModeKey);
+    final savedHardwareAccelerationMode = await _preferences.getString(
+      _hardwareAccelerationModeKey,
+    );
     final savedLines = await _preferences.getInt(_scrollbackLinesKey);
     final savedKeepAlive = await _preferences.getBool(_keepAliveKey);
     final savedSearchMode = await _preferences.getString(_searchModeKey);
     final mode = RefreshRateMode.values
         .where((value) => value.name == savedMode)
         .firstOrNull;
-    final renderer = TerminalRendererMode.values
-        .where((value) => value.name == savedRenderer)
+    final renderer = savedRenderer == 'flutter' || savedRenderer == 'native'
+        ? TerminalRendererMode.connectBot
+        : TerminalRendererMode.values
+              .where((value) => value.name == savedRenderer)
+              .firstOrNull;
+    final terminalFont = TerminalFont.values
+        .where((value) => value.name == savedTerminalFont)
         .firstOrNull;
     final searchMode = TerminalSearchMode.values
         .where((value) => value.name == savedSearchMode)
+        .firstOrNull;
+    final hardwareAccelerationMode = HardwareAccelerationMode.values
+        .where((value) => value.name == savedHardwareAccelerationMode)
         .firstOrNull;
     final lines =
         TerminalPerformanceSettings.supportedScrollbackLines.contains(
@@ -48,7 +63,10 @@ class SharedPreferencesTerminalPerformanceSettingsStore
         ? savedLines!
         : 2000;
     return TerminalPerformanceSettings(
-      rendererMode: renderer ?? TerminalRendererMode.flutter,
+      rendererMode: renderer ?? TerminalRendererMode.webgl,
+      terminalFont: terminalFont ?? TerminalFont.cascadiaMono,
+      hardwareAccelerationMode:
+          hardwareAccelerationMode ?? HardwareAccelerationMode.automatic,
       refreshRateMode: mode ?? RefreshRateMode.adaptive,
       scrollbackLines: lines,
       keepAliveInBackground: savedKeepAlive ?? false,
@@ -74,6 +92,11 @@ class SharedPreferencesTerminalPerformanceSettingsStore
   Future<void> save(TerminalPerformanceSettings settings) async {
     await Future.wait([
       _preferences.setString(_rendererModeKey, settings.rendererMode.name),
+      _preferences.setString(_terminalFontKey, settings.terminalFont.name),
+      _preferences.setString(
+        _hardwareAccelerationModeKey,
+        settings.hardwareAccelerationMode.name,
+      ),
       _preferences.setString(
         _refreshRateModeKey,
         settings.refreshRateMode.name,

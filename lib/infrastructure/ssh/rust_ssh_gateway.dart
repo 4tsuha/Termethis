@@ -128,6 +128,7 @@ class RustSshConnection implements SshConnection {
   late final StreamController<Uint8List> _stderr;
   final _done = Completer<void>();
   late final Future<void> _pumpFuture;
+  Future<void> _writeChain = Future<void>.value();
   Completer<void>? _consumerResumed;
   bool _stdoutPaused = false;
   bool _stderrPaused = false;
@@ -145,11 +146,12 @@ class RustSshConnection implements SshConnection {
   @override
   void write(Uint8List data) {
     if (_closing || data.isEmpty) return;
-    unawaited(
-      rust
-          .sshWrite(sessionId: _sessionId, data: data)
-          .catchError(_reportAsyncError),
-    );
+    final packet = Uint8List.fromList(data);
+    _writeChain = _writeChain
+        .then((_) {
+          return rust.sshWrite(sessionId: _sessionId, data: packet);
+        })
+        .catchError(_reportAsyncError);
   }
 
   @override
@@ -172,6 +174,7 @@ class RustSshConnection implements SshConnection {
   Future<void> close() async {
     if (_closing) return;
     _closing = true;
+    await _writeChain;
     _setConsumerPaused(stdout: false, stderr: false);
     await rust.sshClose(sessionId: _sessionId);
     await _pumpFuture;
@@ -185,7 +188,7 @@ class RustSshConnection implements SshConnection {
         if (_closing) break;
         final output = await rust.sshRead(
           sessionId: _sessionId,
-          maxBytes: 64 * 1024,
+          maxBytes: 128 * 1024,
           waitMillis: 250,
         );
         if (output.stdout.isNotEmpty) _stdout.add(output.stdout);

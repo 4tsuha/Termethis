@@ -10,8 +10,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.view.Display
+import android.view.SurfaceView
+import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebView
 import io.flutter.embedding.android.FlutterView
 
 class DisplayRefreshRateController {
@@ -103,13 +106,14 @@ class DisplayRefreshRateController {
     private fun applyRequestedRate(high: Boolean) {
         val activity = activity ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
-            val flutterView = findFlutterView(activity.window.decorView) ?: return
-            flutterView.requestedFrameRate = when {
+            val requestedCategory = when {
                 isSystemConstrained(activity) -> View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT
                 high || mode == Mode.MAXIMUM -> View.REQUESTED_FRAME_RATE_CATEGORY_HIGH
                 mode == Mode.BALANCED -> View.REQUESTED_FRAME_RATE_CATEGORY_NORMAL
                 else -> View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT
             }
+            activity.window.decorView.requestedFrameRate = requestedCategory
+            applyRequestedRateToRenderViews(activity.window.decorView, requestedCategory)
             return
         }
 
@@ -174,12 +178,14 @@ class DisplayRefreshRateController {
             ?: 60f
     }
 
-    private fun findFlutterView(view: View): FlutterView? {
-        if (view is FlutterView) return view
-        if (view !is ViewGroup) return null
-        for (index in 0 until view.childCount) {
-            findFlutterView(view.getChildAt(index))?.let { return it }
+    private fun applyRequestedRateToRenderViews(view: View, requestedCategory: Float) {
+        if (view is FlutterView || view is WebView || view is SurfaceView || view is TextureView) {
+            view.requestedFrameRate = requestedCategory
         }
-        return null
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                applyRequestedRateToRenderViews(view.getChildAt(index), requestedCategory)
+            }
+        }
     }
 }

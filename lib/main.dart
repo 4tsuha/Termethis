@@ -18,6 +18,7 @@ import 'features/settings/domain/app_font.dart';
 import 'features/settings/domain/app_font_store.dart';
 import 'features/settings/domain/background_session_service_controller.dart';
 import 'features/settings/domain/display_performance_controller.dart';
+import 'features/settings/domain/hardware_acceleration_controller.dart';
 import 'features/settings/domain/terminal_performance_settings.dart';
 import 'features/settings/domain/terminal_performance_settings_store.dart';
 import 'features/terminal/application/session_registry.dart';
@@ -31,6 +32,7 @@ import 'infrastructure/database/app_database.dart';
 import 'infrastructure/database/drift_connection_profile_repository.dart';
 import 'infrastructure/database/drift_host_key_repository.dart';
 import 'infrastructure/display/android_display_performance_controller.dart';
+import 'infrastructure/display/android_hardware_acceleration_controller.dart';
 import 'infrastructure/remote_desktop/android_remote_desktop_launcher.dart';
 import 'infrastructure/secure_storage/encrypted_file_credential_vault.dart';
 import 'infrastructure/settings/shared_preferences_app_font_store.dart';
@@ -43,7 +45,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  registerBundledFontLicenses();
+  registerBundledLicenses();
   final fontStore = SharedPreferencesAppFontStore();
   final initialFont = await fontStore.read() ?? AppFont.notoSansJp;
   final performanceStore = SharedPreferencesTerminalPerformanceSettingsStore();
@@ -56,6 +58,8 @@ Future<void> main() async {
       initialPerformanceSettings: initialPerformanceSettings,
       performanceSettingsStore: performanceStore,
       displayPerformanceController: const AndroidDisplayPerformanceController(),
+      hardwareAccelerationController:
+          const AndroidHardwareAccelerationController(),
       backgroundSessionServiceController:
           const AndroidBackgroundSessionServiceController(),
       database: AppDatabase.defaults(),
@@ -72,12 +76,14 @@ class MainApp extends StatefulWidget {
     this.initialFont = AppFont.notoSansJp,
     this.fontStore = const EphemeralAppFontStore(),
     this.initialPerformanceSettings = const TerminalPerformanceSettings(
-      rendererMode: TerminalRendererMode.flutter,
+      rendererMode: TerminalRendererMode.webgl,
     ),
     this.performanceSettingsStore =
         const EphemeralTerminalPerformanceSettingsStore(),
     this.displayPerformanceController =
         const NoopDisplayPerformanceController(),
+    this.hardwareAccelerationController =
+        const NoopHardwareAccelerationController(),
     this.backgroundSessionServiceController =
         const NoopBackgroundSessionServiceController(),
     this.database,
@@ -93,6 +99,7 @@ class MainApp extends StatefulWidget {
   final TerminalPerformanceSettings initialPerformanceSettings;
   final TerminalPerformanceSettingsStore performanceSettingsStore;
   final DisplayPerformanceController displayPerformanceController;
+  final HardwareAccelerationController hardwareAccelerationController;
   final BackgroundSessionServiceController backgroundSessionServiceController;
   final AppDatabase? database;
   final CredentialVault? credentialVault;
@@ -141,6 +148,9 @@ class _MainAppState extends State<MainApp> {
         ),
         displayPerformanceControllerProvider.overrideWithValue(
           widget.displayPerformanceController,
+        ),
+        hardwareAccelerationControllerProvider.overrideWithValue(
+          widget.hardwareAccelerationController,
         ),
         backgroundSessionServiceControllerProvider.overrideWithValue(
           widget.backgroundSessionServiceController,

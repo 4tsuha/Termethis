@@ -1,7 +1,7 @@
 name: termethis
 description: "日本語入力に対応したAndroid向けSSH・SFTPモバイルターミナル。"
 publish_to: 'none'
-version: 0.3.0+4
+version: 0.4.0+5
 
 environment:
   sdk: ^3.12.2
@@ -40,9 +40,42 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
+    - assets/fonts/LICENSE-CascadiaCode.txt
     - assets/fonts/LICENSE-NotoSansJP.txt
     - assets/fonts/LICENSE-Koruri.txt
     - assets/fonts/LICENSE-Mejiro.txt
+    - assets/fonts/LICENSE-Roboto.txt
+    - assets/fonts/LICENSE-Moralerspace.txt
+    - assets/fonts/LICENSE-SourceCodePro.txt
+    - assets/fonts/LICENSE-JetBrainsMono.txt
+    - assets/fonts/LICENSE-NerdFontsSymbols.txt
+    - assets/licenses/LICENSE-IronRDP-APACHE.txt
+    - assets/licenses/LICENSE-IronRDP-MIT.txt
+    - assets/licenses/LICENSE-Picky-APACHE.txt
+    - assets/licenses/LICENSE-Picky-MIT.txt
+    - assets/licenses/LICENSE-wgpu-APACHE.txt
+    - assets/licenses/LICENSE-wgpu-MIT.txt
+    - assets/licenses/LICENSE-raw-window-handle-APACHE.txt
+    - assets/licenses/LICENSE-raw-window-handle-MIT.txt
+    - assets/licenses/LICENSE-raw-window-handle-ZLIB.txt
+    - assets/licenses/LICENSE-jni-APACHE.txt
+    - assets/licenses/LICENSE-jni-MIT.txt
+    - assets/licenses/LICENSE-pollster-APACHE.txt
+    - assets/licenses/LICENSE-pollster-MIT.txt
+    - assets/licenses/LICENSE-anyhow-APACHE.txt
+    - assets/licenses/LICENSE-anyhow-MIT.txt
+    - assets/licenses/LICENSE-bytes.txt
+    - assets/licenses/LICENSE-dashmap.txt
+    - assets/licenses/LICENSE-flutter-rust-bridge.txt
+    - assets/licenses/LICENSE-ndk-sys-APACHE.txt
+    - assets/licenses/LICENSE-once-cell-APACHE.txt
+    - assets/licenses/LICENSE-once-cell-MIT.txt
+    - assets/licenses/LICENSE-russh-APACHE.txt
+    - assets/licenses/LICENSE-russh-sftp.txt
+    - assets/licenses/LICENSE-tokio.txt
+    - third_party/xterm/LICENSE
+    - third_party/termlib/LICENSE
+    - third_party/termlib/lib/src/main/cpp/libvterm/LICENSE
     - assets/web_terminal/
   fonts:
     - family: CascadiaMono
@@ -63,3 +96,18 @@ flutter:
           weight: 400
         - asset: assets/fonts/Mejiro-Bold.ttf
           weight: 700
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-VF.ttf
+    - family: Moralerspace
+      fonts:
+        - asset: assets/fonts/Moralerspace-Regular.ttf
+    - family: SourceCodePro
+      fonts:
+        - asset: assets/fonts/SourceCodePro-VF.ttf
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+    - family: NerdSymbolsMono
+      fonts:
+        - asset: assets/fonts/SymbolsNerdFontMono-Regular.ttf

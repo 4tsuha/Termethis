@@ -14,6 +14,7 @@ import android.provider.OpenableColumns
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 
@@ -31,15 +32,51 @@ class MainActivity : FlutterActivity() {
             "jp.yts.termethis/terminal_window"
         private const val REMOTE_DESKTOP_CHANNEL =
             "jp.yts.termethis/remote_desktop"
+        private const val HARDWARE_ACCELERATION_CHANNEL =
+            "jp.yts.termethis/hardware_acceleration"
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 4109
     }
 
     private val refreshRateController = DisplayRefreshRateController()
+    private val vulkanRenderingController by lazy { VulkanRenderingController(this) }
+    private var appliedHardwareAccelerationMode = HardwareAccelerationMode.AUTOMATIC
     private var pendingPrivateKeyResult: MethodChannel.Result? = null
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
 
+    @Suppress("DEPRECATION")
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val arguments = super.getFlutterShellArgs()
+        val mode = vulkanRenderingController.selectedMode()
+        val capabilities = vulkanRenderingController.capabilities()
+        appliedHardwareAccelerationMode = mode
+
+        arguments.remove(VulkanRenderingController.ENABLE_IMPELLER_ARGUMENT)
+        arguments.remove(VulkanRenderingController.DISABLE_IMPELLER_ARGUMENT)
+        if (vulkanRenderingController.shouldEnableVulkan(mode, capabilities)) {
+            arguments.add(VulkanRenderingController.ENABLE_IMPELLER_ARGUMENT)
+            if (mode == HardwareAccelerationMode.VULKAN) {
+                arguments.add(VulkanRenderingController.VULKAN_BACKEND_ARGUMENT)
+            }
+        } else {
+            arguments.add(VulkanRenderingController.DISABLE_IMPELLER_ARGUMENT)
+        }
+        return arguments
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            NATIVE_TERMINAL_VIEW_TYPE,
+            NativeTerminalViewFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            TERMUX_TERMINAL_VIEW_TYPE,
+            TermuxTerminalViewFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            RDP_VULKAN_VIEW_TYPE,
+            RdpVulkanViewFactory(flutterEngine.dartExecutor.binaryMessenger),
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PRIVATE_KEY_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method != "pickPrivateKey") {
@@ -71,6 +108,37 @@ class MainActivity : FlutterActivity() {
                 }
                 "pulseHigh" -> {
                     refreshRateController.pulseHigh(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            HARDWARE_ACCELERATION_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getCapabilities" -> {
+                    val capabilities = vulkanRenderingController.capabilities()
+                    val selectedMode = vulkanRenderingController.selectedMode()
+                    result.success(
+                        mapOf(
+                            "vulkanSupported" to capabilities.supported,
+                            "vulkanVersion" to capabilities.version,
+                            "vulkanHardwareLevel" to capabilities.hardwareLevel,
+                            "androidHardwareAccelerated" to
+                                capabilities.androidHardwareAccelerated,
+                            "appliedMode" to appliedHardwareAccelerationMode.storageValue,
+                            "requiresRestart" to
+                                (selectedMode != appliedHardwareAccelerationMode),
+                        ),
+                    )
+                }
+                "setMode" -> {
+                    val mode = HardwareAccelerationMode.fromStorage(
+                        call.argument<String>("mode"),
+                    )
+                    vulkanRenderingController.setMode(mode)
                     result.success(null)
                 }
                 else -> result.notImplemented()

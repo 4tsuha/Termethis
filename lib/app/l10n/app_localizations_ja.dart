@@ -333,7 +333,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get connectionTypeRdpDescription =>
-      '接続先のRDP応答を確認してから、対応アプリでWindowsのリモートデスクトップを開きます。';
+      'IronRDPを使用して、Windowsのリモートデスクトップをアプリ内で開きます。';
 
   @override
   String get connectionTypeVnc => 'VNC';
@@ -355,6 +355,10 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get externalAuthenticationNotice =>
       '認証は接続先アプリで行います。Termethisからパスワードは渡しません。';
+
+  @override
+  String get internalRdpAuthenticationNotice =>
+      'パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。';
 
   @override
   String get remoteClientUnavailableTitle => '対応アプリが見つかりません';
@@ -517,7 +521,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTerminalFont => 'ターミナルフォント';
 
   @override
-  String get settingsTerminalFontValue => '英数字・罫線にはCascadia Monoを固定で使用します。';
+  String get settingsTerminalFontValue =>
+      'ターミナルの英数字・記号・罫線に使用します。日本語は画面フォントで補います。';
+
+  @override
+  String get settingsSelectTerminalFont => 'ターミナルフォントを選択';
+
+  @override
+  String get terminalFontCascadiaMono => 'Cascadia Mono';
+
+  @override
+  String get terminalFontJetBrainsMono => 'JetBrains Mono';
 
   @override
   String get settingsTerminalRenderer => 'ターミナル描画エンジン';
@@ -533,21 +547,28 @@ class AppLocalizationsJa extends AppLocalizations {
       '複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。';
 
   @override
-  String get terminalRendererFlutter => 'Flutter省メモリ描画';
+  String get terminalRendererConnectBot => 'ConnectBot';
 
   @override
-  String get terminalRendererFlutterDescription =>
-      'メモリ使用量を抑える既定値です。複雑なTUIや大量出力では表示更新が遅くなる場合があります。';
+  String get terminalRendererConnectBotDescription =>
+      'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。';
 
   @override
-  String get settingsJapaneseFont => '日本語フォント';
+  String get terminalRendererTermux => 'Termux';
+
+  @override
+  String get terminalRendererTermuxDescription =>
+      'Termuxのterminal-emulatorでANSI・UTF-8・IME互換性を優先します。Android Canvas描画のため、WebGLよりメモリを抑えられます。履歴は最大50,000行です。';
+
+  @override
+  String get settingsJapaneseFont => '画面フォント';
 
   @override
   String get settingsJapaneseFontMessage =>
-      'Termethisの画面とターミナルの日本語表示に使います。英数字と罫線にはCascadia Monoを使用します。';
+      'Termethisの画面とターミナルの日本語表示で優先します。字形がない場合は端末のフォールバックフォントで補います。';
 
   @override
-  String get settingsSelectFont => '日本語フォントを選択';
+  String get settingsSelectFont => '画面フォントを選択';
 
   @override
   String get settingsRefreshRate => '画面の滑らかさ';
@@ -581,7 +602,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String settingsScrollbackLinesValue(int lines) {
-    return '新しく開くSSHセッションで$lines行を保持します。行数を増やすとメモリ使用量も増えます。';
+    return '新しく開くSSHセッションで$lines行を保持します。25,000行以上はWebGL描画を推奨し、行数に応じてメモリ使用量も増えます。';
   }
 
   @override
@@ -599,6 +620,18 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get fontMejiro => 'Mejiro';
+
+  @override
+  String get fontRoboto => 'Roboto';
+
+  @override
+  String get fontMoralerspace => 'Moralerspace';
+
+  @override
+  String get fontSourceCodePro => 'Source Code Pro';
+
+  @override
+  String get fontJetBrainsMono => 'JetBrains Mono';
 
   @override
   String get fontPreview => '日本語 ABC 123 の表示見本';
@@ -620,7 +653,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.3.0';
+  String get settingsVersionValue => '0.4.0';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

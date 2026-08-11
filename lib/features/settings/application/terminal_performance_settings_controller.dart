@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/display_performance_controller.dart';
+import '../domain/hardware_acceleration_controller.dart';
 import '../domain/terminal_performance_settings.dart';
 import '../domain/terminal_performance_settings_store.dart';
 import 'background_session_coordinator.dart';
@@ -10,7 +11,7 @@ import 'background_session_coordinator.dart';
 final initialTerminalPerformanceSettingsProvider =
     Provider<TerminalPerformanceSettings>(
       (ref) => const TerminalPerformanceSettings(
-        rendererMode: TerminalRendererMode.flutter,
+        rendererMode: TerminalRendererMode.webgl,
       ),
     );
 
@@ -22,6 +23,17 @@ final terminalPerformanceSettingsStoreProvider =
 final displayPerformanceControllerProvider =
     Provider<DisplayPerformanceController>(
       (ref) => const NoopDisplayPerformanceController(),
+    );
+
+final hardwareAccelerationControllerProvider =
+    Provider<HardwareAccelerationController>(
+      (ref) => const NoopHardwareAccelerationController(),
+    );
+
+final hardwareAccelerationCapabilitiesProvider =
+    FutureProvider<HardwareAccelerationCapabilities>(
+      (ref) =>
+          ref.watch(hardwareAccelerationControllerProvider).getCapabilities(),
     );
 
 final terminalPerformanceSettingsProvider =
@@ -43,6 +55,11 @@ class TerminalPerformanceSettingsController
           .read(displayPerformanceControllerProvider)
           .setMode(initial.refreshRateMode),
     );
+    unawaited(
+      ref
+          .read(hardwareAccelerationControllerProvider)
+          .setMode(initial.hardwareAccelerationMode),
+    );
     ref
         .read(backgroundSessionCoordinatorProvider)
         .setEnabled(initial.keepAliveInBackground);
@@ -56,6 +73,19 @@ class TerminalPerformanceSettingsController
 
   void selectRendererMode(TerminalRendererMode mode) {
     _update(state.copyWith(rendererMode: mode));
+  }
+
+  void selectTerminalFont(TerminalFont font) {
+    _update(state.copyWith(terminalFont: font));
+  }
+
+  void selectHardwareAccelerationMode(HardwareAccelerationMode mode) {
+    _update(state.copyWith(hardwareAccelerationMode: mode));
+    unawaited(
+      ref.read(hardwareAccelerationControllerProvider).setMode(mode).then((_) {
+        ref.invalidate(hardwareAccelerationCapabilitiesProvider);
+      }),
+    );
   }
 
   void selectScrollbackLines(int lines) {

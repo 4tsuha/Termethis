@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/core.dart';
+import 'api/rdp.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -66,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1795328358;
+  int get rustContentHash => -878831189;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,6 +82,47 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiCoreInitApp();
 
   Future<bool> crateApiCorePrivateKeyIsEncrypted({required String pem});
+
+  Future<void> crateApiRdpRdpClose({required PlatformInt64 sessionId});
+
+  Future<RustRdpConnectResult> crateApiRdpRdpConnect({
+    required RustRdpConnectRequest request,
+  });
+
+  Future<void> crateApiRdpRdpMouse({
+    required PlatformInt64 sessionId,
+    required int x,
+    required int y,
+    required int button,
+    required bool pressed,
+  });
+
+  Future<RustRdpFrame> crateApiRdpRdpReadFrame({
+    required PlatformInt64 sessionId,
+    required PlatformInt64 afterSequence,
+    required int waitMillis,
+  });
+
+  Future<RustRdpStatus> crateApiRdpRdpReadStatus({
+    required PlatformInt64 sessionId,
+  });
+
+  Future<void> crateApiRdpRdpResize({
+    required PlatformInt64 sessionId,
+    required int width,
+    required int height,
+  });
+
+  Future<void> crateApiRdpRdpSendScancode({
+    required PlatformInt64 sessionId,
+    required int scancode,
+    required bool pressed,
+  });
+
+  Future<void> crateApiRdpRdpSendText({
+    required PlatformInt64 sessionId,
+    required String text,
+  });
 
   Future<void> crateApiCoreSftpChangeDirectory({
     required PlatformInt64 sessionId,
@@ -225,6 +267,278 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiRdpRdpClose({required PlatformInt64 sessionId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpCloseConstMeta,
+        argValues: [sessionId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpCloseConstMeta =>
+      const TaskConstMeta(debugName: "rdp_close", argNames: ["sessionId"]);
+
+  @override
+  Future<RustRdpConnectResult> crateApiRdpRdpConnect({
+    required RustRdpConnectRequest request,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_rust_rdp_connect_request(request, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_rdp_connect_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpConnectConstMeta,
+        argValues: [request],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpConnectConstMeta =>
+      const TaskConstMeta(debugName: "rdp_connect", argNames: ["request"]);
+
+  @override
+  Future<void> crateApiRdpRdpMouse({
+    required PlatformInt64 sessionId,
+    required int x,
+    required int y,
+    required int button,
+    required bool pressed,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_16(x, serializer);
+          sse_encode_u_16(y, serializer);
+          sse_encode_i_32(button, serializer);
+          sse_encode_bool(pressed, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpMouseConstMeta,
+        argValues: [sessionId, x, y, button, pressed],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpMouseConstMeta => const TaskConstMeta(
+    debugName: "rdp_mouse",
+    argNames: ["sessionId", "x", "y", "button", "pressed"],
+  );
+
+  @override
+  Future<RustRdpFrame> crateApiRdpRdpReadFrame({
+    required PlatformInt64 sessionId,
+    required PlatformInt64 afterSequence,
+    required int waitMillis,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_i_64(afterSequence, serializer);
+          sse_encode_u_32(waitMillis, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_rdp_frame,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpReadFrameConstMeta,
+        argValues: [sessionId, afterSequence, waitMillis],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpReadFrameConstMeta => const TaskConstMeta(
+    debugName: "rdp_read_frame",
+    argNames: ["sessionId", "afterSequence", "waitMillis"],
+  );
+
+  @override
+  Future<RustRdpStatus> crateApiRdpRdpReadStatus({
+    required PlatformInt64 sessionId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_rdp_status,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpReadStatusConstMeta,
+        argValues: [sessionId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpReadStatusConstMeta => const TaskConstMeta(
+    debugName: "rdp_read_status",
+    argNames: ["sessionId"],
+  );
+
+  @override
+  Future<void> crateApiRdpRdpResize({
+    required PlatformInt64 sessionId,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_16(width, serializer);
+          sse_encode_u_16(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpResizeConstMeta,
+        argValues: [sessionId, width, height],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpResizeConstMeta => const TaskConstMeta(
+    debugName: "rdp_resize",
+    argNames: ["sessionId", "width", "height"],
+  );
+
+  @override
+  Future<void> crateApiRdpRdpSendScancode({
+    required PlatformInt64 sessionId,
+    required int scancode,
+    required bool pressed,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_16(scancode, serializer);
+          sse_encode_bool(pressed, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpSendScancodeConstMeta,
+        argValues: [sessionId, scancode, pressed],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpSendScancodeConstMeta => const TaskConstMeta(
+    debugName: "rdp_send_scancode",
+    argNames: ["sessionId", "scancode", "pressed"],
+  );
+
+  @override
+  Future<void> crateApiRdpRdpSendText({
+    required PlatformInt64 sessionId,
+    required String text,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_String(text, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiRdpRdpSendTextConstMeta,
+        argValues: [sessionId, text],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRdpRdpSendTextConstMeta => const TaskConstMeta(
+    debugName: "rdp_send_text",
+    argNames: ["sessionId", "text"],
+  );
+
+  @override
   Future<void> crateApiCoreSftpChangeDirectory({
     required PlatformInt64 sessionId,
     required String path,
@@ -238,7 +552,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 11,
             port: port_,
           );
         },
@@ -269,7 +583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 12,
             port: port_,
           );
         },
@@ -299,7 +613,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 13,
             port: port_,
           );
         },
@@ -331,7 +645,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 14,
             port: port_,
           );
         },
@@ -364,7 +678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 15,
             port: port_,
           );
         },
@@ -399,7 +713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 16,
             port: port_,
           );
         },
@@ -434,7 +748,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 17,
             port: port_,
           );
         },
@@ -466,7 +780,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 18,
             port: port_,
           );
         },
@@ -503,7 +817,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 19,
             port: port_,
           );
         },
@@ -533,7 +847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 20,
             port: port_,
           );
         },
@@ -563,7 +877,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 21,
             port: port_,
           );
         },
@@ -595,7 +909,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 22,
             port: port_,
           );
         },
@@ -632,7 +946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 23,
             port: port_,
           );
         },
@@ -672,7 +986,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 24,
             port: port_,
           );
         },
@@ -706,7 +1020,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 25,
             port: port_,
           );
         },
@@ -740,7 +1054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 26,
             port: port_,
           );
         },
@@ -798,6 +1112,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustRdpConnectRequest dco_decode_box_autoadd_rust_rdp_connect_request(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_rust_rdp_connect_request(raw);
+  }
+
+  @protected
   RustSftpConnectRequest dco_decode_box_autoadd_rust_sftp_connect_request(
     dynamic raw,
   ) {
@@ -811,6 +1133,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_rust_ssh_connect_request(raw);
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -913,6 +1241,68 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return RustInteractivePrompt(
       text: dco_decode_String(arr[0]),
       echo: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
+  RustRdpConnectRequest dco_decode_rust_rdp_connect_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return RustRdpConnectRequest(
+      host: dco_decode_String(arr[0]),
+      port: dco_decode_u_16(arr[1]),
+      username: dco_decode_String(arr[2]),
+      password: dco_decode_String(arr[3]),
+      domain: dco_decode_String(arr[4]),
+      width: dco_decode_u_16(arr[5]),
+      height: dco_decode_u_16(arr[6]),
+    );
+  }
+
+  @protected
+  RustRdpConnectResult dco_decode_rust_rdp_connect_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RustRdpConnectResult(
+      sessionId: dco_decode_i_64(arr[0]),
+      renderer: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  RustRdpFrame dco_decode_rust_rdp_frame(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return RustRdpFrame(
+      sequence: dco_decode_i_64(arr[0]),
+      width: dco_decode_u_16(arr[1]),
+      height: dco_decode_u_16(arr[2]),
+      rgba: dco_decode_list_prim_u_8_strict(arr[3]),
+      state: dco_decode_String(arr[4]),
+      errorMessage: dco_decode_opt_String(arr[5]),
+    );
+  }
+
+  @protected
+  RustRdpStatus dco_decode_rust_rdp_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return RustRdpStatus(
+      sequence: dco_decode_i_64(arr[0]),
+      width: dco_decode_u_16(arr[1]),
+      height: dco_decode_u_16(arr[2]),
+      state: dco_decode_String(arr[3]),
+      errorMessage: dco_decode_opt_String(arr[4]),
+      renderer: dco_decode_String(arr[5]),
+      rendererError: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -1079,6 +1469,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustRdpConnectRequest sse_decode_box_autoadd_rust_rdp_connect_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_rust_rdp_connect_request(deserializer));
+  }
+
+  @protected
   RustSftpConnectRequest sse_decode_box_autoadd_rust_sftp_connect_request(
     SseDeserializer deserializer,
   ) {
@@ -1092,6 +1490,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_rust_ssh_connect_request(deserializer));
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -1236,6 +1640,82 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_text = sse_decode_String(deserializer);
     var var_echo = sse_decode_bool(deserializer);
     return RustInteractivePrompt(text: var_text, echo: var_echo);
+  }
+
+  @protected
+  RustRdpConnectRequest sse_decode_rust_rdp_connect_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_host = sse_decode_String(deserializer);
+    var var_port = sse_decode_u_16(deserializer);
+    var var_username = sse_decode_String(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_domain = sse_decode_String(deserializer);
+    var var_width = sse_decode_u_16(deserializer);
+    var var_height = sse_decode_u_16(deserializer);
+    return RustRdpConnectRequest(
+      host: var_host,
+      port: var_port,
+      username: var_username,
+      password: var_password,
+      domain: var_domain,
+      width: var_width,
+      height: var_height,
+    );
+  }
+
+  @protected
+  RustRdpConnectResult sse_decode_rust_rdp_connect_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sessionId = sse_decode_i_64(deserializer);
+    var var_renderer = sse_decode_String(deserializer);
+    return RustRdpConnectResult(
+      sessionId: var_sessionId,
+      renderer: var_renderer,
+    );
+  }
+
+  @protected
+  RustRdpFrame sse_decode_rust_rdp_frame(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sequence = sse_decode_i_64(deserializer);
+    var var_width = sse_decode_u_16(deserializer);
+    var var_height = sse_decode_u_16(deserializer);
+    var var_rgba = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_state = sse_decode_String(deserializer);
+    var var_errorMessage = sse_decode_opt_String(deserializer);
+    return RustRdpFrame(
+      sequence: var_sequence,
+      width: var_width,
+      height: var_height,
+      rgba: var_rgba,
+      state: var_state,
+      errorMessage: var_errorMessage,
+    );
+  }
+
+  @protected
+  RustRdpStatus sse_decode_rust_rdp_status(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sequence = sse_decode_i_64(deserializer);
+    var var_width = sse_decode_u_16(deserializer);
+    var var_height = sse_decode_u_16(deserializer);
+    var var_state = sse_decode_String(deserializer);
+    var var_errorMessage = sse_decode_opt_String(deserializer);
+    var var_renderer = sse_decode_String(deserializer);
+    var var_rendererError = sse_decode_opt_String(deserializer);
+    return RustRdpStatus(
+      sequence: var_sequence,
+      width: var_width,
+      height: var_height,
+      state: var_state,
+      errorMessage: var_errorMessage,
+      renderer: var_renderer,
+      rendererError: var_rendererError,
+    );
   }
 
   @protected
@@ -1388,12 +1868,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -1442,6 +1916,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_rust_rdp_connect_request(
+    RustRdpConnectRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rust_rdp_connect_request(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_rust_sftp_connect_request(
     RustSftpConnectRequest self,
     SseSerializer serializer,
@@ -1457,6 +1940,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_rust_ssh_connect_request(self, serializer);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -1598,6 +2087,57 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_rust_rdp_connect_request(
+    RustRdpConnectRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.host, serializer);
+    sse_encode_u_16(self.port, serializer);
+    sse_encode_String(self.username, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_String(self.domain, serializer);
+    sse_encode_u_16(self.width, serializer);
+    sse_encode_u_16(self.height, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_rdp_connect_result(
+    RustRdpConnectResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.sessionId, serializer);
+    sse_encode_String(self.renderer, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_rdp_frame(RustRdpFrame self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.sequence, serializer);
+    sse_encode_u_16(self.width, serializer);
+    sse_encode_u_16(self.height, serializer);
+    sse_encode_list_prim_u_8_strict(self.rgba, serializer);
+    sse_encode_String(self.state, serializer);
+    sse_encode_opt_String(self.errorMessage, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_rdp_status(
+    RustRdpStatus self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.sequence, serializer);
+    sse_encode_u_16(self.width, serializer);
+    sse_encode_u_16(self.height, serializer);
+    sse_encode_String(self.state, serializer);
+    sse_encode_opt_String(self.errorMessage, serializer);
+    sse_encode_String(self.renderer, serializer);
+    sse_encode_opt_String(self.rendererError, serializer);
+  }
+
+  @protected
   void sse_encode_rust_sftp_connect_request(
     RustSftpConnectRequest self,
     SseSerializer serializer,
@@ -1702,11 +2242,5 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
   }
 }

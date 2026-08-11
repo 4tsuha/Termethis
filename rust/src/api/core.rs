@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
@@ -13,9 +13,11 @@ use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::FileType;
 use tokio::sync::{Mutex, Notify};
 
-const MAX_BUFFER_BYTES: usize = 512 * 1024;
-const MAX_READ_BYTES: usize = 64 * 1024;
-const RETAINED_BUFFER_BYTES: usize = 64 * 1024;
+const MAX_BUFFER_BYTES: usize = 2 * 1024 * 1024;
+const MAX_READ_BYTES: usize = 256 * 1024;
+const RETAINED_BUFFER_BYTES: usize = 128 * 1024;
+const READ_BATCH_BYTES: usize = 64 * 1024;
+const READ_COALESCE_MILLIS: u64 = 2;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::new);
@@ -206,28 +208,47 @@ pub async fn ssh_read(
 ) -> Result<RustSshReadResult> {
     let session = get_ssh_session(session_id)?;
     let limit = (max_bytes as usize).clamp(1, MAX_READ_BYTES);
+    let mut coalesce_deadline = None;
     loop {
         let notified = session.data_ready.notified();
+        let mut has_buffered_data = false;
         {
             let mut output = session.output.lock().await;
             if output.len() > 0 || session.closed.load(Ordering::Acquire) {
-                let stdout = drain_queue(&mut output.stdout, limit);
-                let stderr = drain_queue(&mut output.stderr, limit.saturating_sub(stdout.len()));
-                let error_message = output.error.take();
-                drop(output);
-                session.space_ready.notify_waiters();
-                return Ok(RustSshReadResult {
-                    stdout,
-                    stderr,
-                    closed: session.closed.load(Ordering::Acquire),
-                    error_message,
+                has_buffered_data = output.len() > 0;
+                let batch_ready = output.len() >= limit.min(READ_BATCH_BYTES)
+                    || session.closed.load(Ordering::Acquire)
+                    || coalesce_deadline.is_some_and(|deadline| Instant::now() >= deadline);
+                if batch_ready {
+                    let stdout = drain_queue(&mut output.stdout, limit);
+                    let stderr =
+                        drain_queue(&mut output.stderr, limit.saturating_sub(stdout.len()));
+                    let error_message = output.error.take();
+                    drop(output);
+                    session.space_ready.notify_waiters();
+                    return Ok(RustSshReadResult {
+                        stdout,
+                        stderr,
+                        closed: session.closed.load(Ordering::Acquire),
+                        error_message,
+                    });
+                }
+                coalesce_deadline.get_or_insert_with(|| {
+                    Instant::now() + Duration::from_millis(READ_COALESCE_MILLIS)
                 });
             }
         }
-        if tokio::time::timeout(Duration::from_millis(wait_millis as u64), notified)
-            .await
-            .is_err()
-        {
+        let wait = if has_buffered_data {
+            coalesce_deadline
+                .expect("buffered SSH data has a coalescing deadline")
+                .saturating_duration_since(Instant::now())
+        } else {
+            Duration::from_millis(wait_millis as u64)
+        };
+        if tokio::time::timeout(wait, notified).await.is_err() {
+            if has_buffered_data {
+                continue;
+            }
             session.output.lock().await.release_excess_capacity();
             return Ok(RustSshReadResult {
                 stdout: Vec::new(),
@@ -245,7 +266,7 @@ pub async fn ssh_write(session_id: i64, data: Vec<u8>) -> Result<()> {
         .writer
         .lock()
         .await
-        .data_bytes(data)
+        .data(&data[..])
         .await
         .context("Failed to write SSH channel");
     result
@@ -544,7 +565,6 @@ async fn connect_client(
         channel_buffer_size: 64,
         keepalive_interval: Some(Duration::from_secs(15)),
         keepalive_max: 3,
-        nodelay: true,
         ..Default::default()
     };
     tokio::time::timeout(

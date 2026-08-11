@@ -4,6 +4,7 @@ import 'package:termethis/features/settings/application/background_session_coord
 import 'package:termethis/features/settings/application/terminal_performance_settings_controller.dart';
 import 'package:termethis/features/settings/domain/background_session_service_controller.dart';
 import 'package:termethis/features/settings/domain/display_performance_controller.dart';
+import 'package:termethis/features/settings/domain/hardware_acceleration_controller.dart';
 import 'package:termethis/features/settings/domain/terminal_performance_settings.dart';
 import 'package:termethis/features/settings/domain/terminal_performance_settings_store.dart';
 
@@ -11,10 +12,14 @@ void main() {
   test('表示モードとスクロールバック行数を適用して保存する', () async {
     final display = _RecordingDisplayController();
     final store = _RecordingSettingsStore();
+    final hardwareAcceleration = _RecordingHardwareAccelerationController();
     final container = ProviderContainer(
       overrides: [
         displayPerformanceControllerProvider.overrideWithValue(display),
         terminalPerformanceSettingsStoreProvider.overrideWithValue(store),
+        hardwareAccelerationControllerProvider.overrideWithValue(
+          hardwareAcceleration,
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -22,9 +27,11 @@ void main() {
     final notifier = container.read(
       terminalPerformanceSettingsProvider.notifier,
     );
-    notifier.selectRendererMode(TerminalRendererMode.flutter);
+    notifier.selectRendererMode(TerminalRendererMode.termux);
+    notifier.selectTerminalFont(TerminalFont.jetBrainsMono);
     notifier.selectRefreshRateMode(RefreshRateMode.balanced);
-    notifier.selectScrollbackLines(2000);
+    notifier.selectHardwareAccelerationMode(HardwareAccelerationMode.vulkan);
+    notifier.selectScrollbackLines(100000);
     notifier.selectScrollbackLines(1234);
     notifier.setShowSearchButton(false);
     notifier.setShowCopyOutputButton(false);
@@ -38,9 +45,11 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     final settings = container.read(terminalPerformanceSettingsProvider);
-    expect(settings.rendererMode, TerminalRendererMode.flutter);
+    expect(settings.rendererMode, TerminalRendererMode.termux);
+    expect(settings.terminalFont, TerminalFont.jetBrainsMono);
     expect(settings.refreshRateMode, RefreshRateMode.balanced);
-    expect(settings.scrollbackLines, 2000);
+    expect(settings.hardwareAccelerationMode, HardwareAccelerationMode.vulkan);
+    expect(settings.scrollbackLines, 100000);
     expect(settings.showSearchButton, isFalse);
     expect(settings.showCopyOutputButton, isFalse);
     expect(settings.searchMode, TerminalSearchMode.tmux);
@@ -51,7 +60,11 @@ void main() {
     expect(settings.showSessionTabBar, isFalse);
     expect(settings.resizeForKeyboard, isTrue);
     expect(display.modes, [RefreshRateMode.adaptive, RefreshRateMode.balanced]);
-    expect(store.saved.last.scrollbackLines, 2000);
+    expect(hardwareAcceleration.modes, [
+      HardwareAccelerationMode.automatic,
+      HardwareAccelerationMode.vulkan,
+    ]);
+    expect(store.saved.last.scrollbackLines, 100000);
   });
 
   test('検索モードを端末キーシーケンスへ変換する', () {
@@ -88,6 +101,22 @@ void main() {
 
     expect(service.attempts, 2);
   });
+}
+
+class _RecordingHardwareAccelerationController
+    implements HardwareAccelerationController {
+  final List<HardwareAccelerationMode> modes = [];
+
+  @override
+  Future<HardwareAccelerationCapabilities> getCapabilities() async =>
+      const HardwareAccelerationCapabilities(
+        isVulkanSupported: true,
+        vulkanVersion: '1.1.0',
+        isAndroidHardwareAccelerated: true,
+      );
+
+  @override
+  Future<void> setMode(HardwareAccelerationMode mode) async => modes.add(mode);
 }
 
 class _RecordingDisplayController implements DisplayPerformanceController {

@@ -22,13 +22,36 @@ void main() {
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
     expect(find.text('タブバーに検索ボタンを表示'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('日本語フォント'), 500);
+    await tester.scrollUntilVisible(find.text('ターミナルフォント'), 500);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('日本語フォント'));
+    await tester.tap(find.text('ターミナルフォント'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('JetBrains Mono'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('JetBrains Mono'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('画面フォント'), 240);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('画面フォント'));
     await tester.pumpAndSettle();
     expect(find.text('Noto Sans JP'), findsOneWidget);
     expect(find.text('Koruri'), findsOneWidget);
     expect(find.text('Mejiro'), findsOneWidget);
+    expect(find.text('Roboto'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Moralerspace'),
+      240,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Moralerspace'), findsOneWidget);
+    expect(find.text('Source Code Pro'), findsOneWidget);
+    expect(find.text('JetBrains Mono'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Koruri'),
+      -240,
+      scrollable: find.byType(Scrollable).last,
+    );
 
     await tester.tap(find.text('Koruri'));
     await tester.pumpAndSettle();
@@ -36,12 +59,27 @@ void main() {
     expect(app.theme?.textTheme.bodyMedium?.fontFamily, 'Koruri');
     expect(find.textContaining('Koruri'), findsOneWidget);
 
-    await tester.tap(find.text('日本語フォント'));
+    await tester.tap(find.text('画面フォント'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mejiro'));
     await tester.pumpAndSettle();
     final updatedApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(updatedApp.theme?.textTheme.bodyMedium?.fontFamily, 'Mejiro');
+
+    await tester.tap(find.text('画面フォント'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Roboto'),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -48));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Roboto'));
+    await tester.pumpAndSettle();
+    final robotoApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(robotoApp.theme?.textTheme.bodyMedium?.fontFamily, 'Roboto');
+
   });
 
   testWidgets('FTPタブからフォルダーを階層移動する', (tester) async {

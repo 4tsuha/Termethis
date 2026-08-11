@@ -39,12 +39,27 @@ void main() {
     controller.terminal.textInput('x');
     controller.sendKey(TerminalKey.escape);
     controller.sendKey(TerminalKey.tab);
+    controller.sendKey(TerminalKey.arrowUp);
+    controller.sendKey(TerminalKey.arrowDown);
+    controller.sendKey(TerminalKey.arrowLeft);
+    controller.sendKey(TerminalKey.arrowRight);
+    controller.sendKey(TerminalKey.enter);
+    controller.toggleControl();
+    controller.sendInputDirect('\x1b[A');
+    controller.sendInput('c');
 
     expect(utf8.decode(connection.writes.first), '日本語');
     expect(connection.writes[1], [3]);
     expect(utf8.decode(connection.writes[2]), '\x1bx');
     expect(utf8.decode(connection.writes[3]), '\x1b');
     expect(utf8.decode(connection.writes[4]), '\t');
+    expect(utf8.decode(connection.writes[5]), '\x1b[A');
+    expect(utf8.decode(connection.writes[6]), '\x1b[B');
+    expect(utf8.decode(connection.writes[7]), '\x1b[D');
+    expect(utf8.decode(connection.writes[8]), '\x1b[C');
+    expect(utf8.decode(connection.writes[9]), '\r');
+    expect(utf8.decode(connection.writes[10]), '\x1b[A');
+    expect(connection.writes[11], [3]);
 
     await controller.disconnect();
     expect(controller.status, SshSessionStatus.closed);
@@ -111,7 +126,7 @@ void main() {
     controller.dispose();
   });
 
-  test('SSH受信チャンクを16ms単位でまとめてターミナルへ反映する', () async {
+  test('SSH受信チャンクを8ms単位でまとめて選択中の描画へ通知する', () async {
     final connection = _FakeConnection();
     final controller = SshSessionController(
       _FakeGateway(connection),
@@ -123,7 +138,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      maxLines: 2000,
     );
     var activityCount = 0;
     final renderedChunks = <String>[];
@@ -140,40 +154,24 @@ void main() {
     connection.emitStdout('second');
     await Future<void>.delayed(Duration.zero);
 
-    expect(controller.terminal.maxLines, 2000);
     expect(
       controller.terminal.buffer.getText(),
       isNot(contains('firstsecond')),
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
 
-    expect(controller.terminal.buffer.getText(), contains('firstsecond'));
+    expect(
+      controller.terminal.buffer.getText(),
+      isNot(contains('firstsecond')),
+    );
     expect(renderedChunks, ['firstsecond']);
+    expect(_text(controller.webTerminalReplay.data), contains('firstsecond'));
     expect(activityCount, 1);
     controller.dispose();
   });
 
-  test('WebGL使用時のFlutter互換バッファを200行に抑える', () {
-    final controller = SshSessionController(
-      _FakeGateway(_FakeConnection()),
-      const Utf8TerminalCodec(),
-      profile: const ConnectionProfile(
-        id: 'compact',
-        name: 'WebGL',
-        host: 'localhost',
-        port: 22,
-        username: 'user',
-      ),
-      maxLines: 10000,
-      compactFlutterBuffer: true,
-    );
-
-    expect(controller.terminal.maxLines, 200);
-    controller.dispose();
-  });
-
-  test('WebGL使用時は障害時までFlutter互換端末の解析を遅延する', () async {
+  test('受信データを非表示のFlutter端末へ二重入力しない', () async {
     final connection = _FakeConnection();
     final controller = SshSessionController(
       _FakeGateway(connection),
@@ -185,7 +183,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      compactFlutterBuffer: true,
     );
 
     await controller.connect(
@@ -194,14 +191,12 @@ void main() {
       onInteractivePrompt: (_) async => const [],
     );
     connection.emitStdout('WebGL only');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
 
     expect(controller.terminal.buffer.getText(), isNot(contains('WebGL only')));
-    expect(controller.webTerminalReplay.data, contains('WebGL only'));
+    expect(_text(controller.webTerminalReplay.data), contains('WebGL only'));
 
-    controller.enableFlutterTerminalMirror();
-
-    expect(controller.terminal.buffer.getText(), contains('WebGL only'));
+    expect(controller.terminal.buffer.getText(), isNot(contains('WebGL only')));
     controller.dispose();
   });
 
@@ -217,7 +212,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      compactFlutterBuffer: true,
     );
     final events = <WebTerminalDataEvent>[];
     controller.addWebTerminalDataListener(events.add);
@@ -228,23 +222,23 @@ void main() {
       onInteractivePrompt: (_) async => const [],
     );
     connection.emitStdout('first');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
 
     expect(events, hasLength(1));
     expect(events.single.sequence, 1);
-    expect(events.single.data, 'first');
-    expect(controller.webTerminalReplay.data, 'first');
+    expect(_text(events.single.data), 'first');
+    expect(_text(controller.webTerminalReplay.data), 'first');
     expect(controller.saveWebTerminalSnapshot('snapshot', 1), isTrue);
 
     connection.emitStdout('second');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
 
     final fullReplay = controller.webTerminalReplay;
     expect(fullReplay.throughSequence, 2);
-    expect(fullReplay.data, 'snapshotsecond');
+    expect(_text(fullReplay.data), 'snapshotsecond');
     final delta = controller.webTerminalReplayAfter(1);
     expect(delta.resetRequired, isFalse);
-    expect(delta.data, 'second');
+    expect(_text(delta.data), 'second');
     controller.dispose();
   });
 
@@ -268,12 +262,12 @@ void main() {
       onInteractivePrompt: (_) async => const [],
     );
     connection.emitStdout('before');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(controller.saveWebTerminalSnapshot('serialized', 1), isTrue);
 
     final replay = controller.webTerminalReplayAfter(0);
     expect(replay.resetRequired, isTrue);
-    expect(replay.data, 'serialized');
+    expect(_text(replay.data), 'serialized');
     controller.dispose();
   });
 
@@ -289,7 +283,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      compactFlutterBuffer: true,
     );
 
     await controller.connect(
@@ -297,7 +290,7 @@ void main() {
       onUnknownHostKey: (_) async => true,
       onInteractivePrompt: (_) async => const [],
     );
-    connection.emitStdout('x' * (140 * 1024));
+    connection.emitStdout('x' * (1024 * 1024));
     await Future<void>.delayed(Duration.zero);
 
     expect(controller.webTerminalCheckpointNeeded, isTrue);
@@ -322,7 +315,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      compactFlutterBuffer: true,
     );
 
     await controller.connect(
@@ -340,12 +332,12 @@ void main() {
     final replay = controller.webTerminalReplay;
     expect(replay.resetRequired, isFalse);
     expect(replay.data.length, output.length * 6);
-    expect(replay.data, startsWith('line-0000'));
-    expect(replay.data, endsWith('line-4999\r\n'));
+    expect(_text(replay.data), startsWith('line-0000'));
+    expect(_text(replay.data), endsWith('line-4999\r\n'));
     controller.dispose();
   });
 
-  test('描画と履歴のバックプレッシャーを重ねても受信を再開する', () async {
+  test('描画バックプレッシャー解除後に受信を再開する', () async {
     final connection = _FakeConnection();
     final controller = SshSessionController(
       _FakeGateway(connection),
@@ -357,7 +349,6 @@ void main() {
         port: 22,
         username: 'user',
       ),
-      compactFlutterBuffer: true,
     );
 
     await controller.connect(
@@ -378,15 +369,20 @@ void main() {
       ),
       isTrue,
     );
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(controller.webTerminalReplay.data, isNot(contains('held-output')));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(
+      _text(controller.webTerminalReplay.data),
+      isNot(contains('held-output')),
+    );
 
     controller.setOutputBackpressure(false);
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(controller.webTerminalReplay.data, contains('held-output'));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(_text(controller.webTerminalReplay.data), contains('held-output'));
     controller.dispose();
   });
 }
+
+String _text(Uint8List data) => utf8.decode(data);
 
 class _FakeGateway implements SshGateway {
   _FakeGateway(this.connection);

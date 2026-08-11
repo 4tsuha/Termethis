@@ -371,12 +371,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('RDP接続先を追加'), findsOneWidget);
-    expect(find.text('認証は接続先アプリで行います。Termethisからパスワードは渡しません。'), findsOneWidget);
+    expect(
+      find.text('パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。'),
+      findsOneWidget,
+    );
     final fields = find.byType(TextFormField);
     expect(tester.widget<TextFormField>(fields.at(2)).controller?.text, '3389');
   });
 
-  testWidgets('RDP接続先を対応アプリへ渡す', (tester) async {
+  testWidgets('RDP接続先をアプリ内画面で開く', (tester) async {
     final launcher = _RecordingRemoteDesktopLauncher();
     final repository = EphemeralConnectionProfileRepository(
       initialProfiles: const [
@@ -406,8 +409,9 @@ void main() {
     await tester.tap(find.text('Windowsサーバー'));
     await tester.pumpAndSettle();
 
-    expect(launcher.lastProfile?.connectionType, ConnectionType.rdp);
-    expect(launcher.lastProfile?.host, 'rdp.example.com');
+    expect(find.text('IronRDPで接続'), findsOneWidget);
+    expect(find.text('operator · rdp.example.com:3389'), findsOneWidget);
+    expect(launcher.lastProfile, isNull);
   });
 
   testWidgets('VNC接続先を対応アプリへ渡す', (tester) async {

@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -29,6 +30,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    buildFeatures {
+        compose = true
+    }
+
+    packaging {
+        jniLibs.excludes += setOf("**/libtermux.so")
+    }
 }
 
 kotlin {
@@ -39,4 +48,17 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+repositories {
+    maven(url = "https://jitpack.io")
+}
+
+dependencies {
+    implementation("org.connectbot:termlib:0.1.0")
+    implementation("com.termux.termux-app:terminal-view:0.118.0")
+    implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
+    implementation(platform("androidx.compose:compose-bom:2026.05.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
 }

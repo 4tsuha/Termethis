@@ -1,6 +1,17 @@
 enum RefreshRateMode { adaptive, balanced, maximum }
 
-enum TerminalRendererMode { webgl, flutter }
+enum TerminalRendererMode { webgl, connectBot, termux }
+
+enum TerminalFont { cascadiaMono, jetBrainsMono }
+
+extension TerminalFontFamily on TerminalFont {
+  String get family => switch (this) {
+    TerminalFont.cascadiaMono => 'CascadiaMono',
+    TerminalFont.jetBrainsMono => 'JetBrainsMono',
+  };
+}
+
+enum HardwareAccelerationMode { automatic, vulkan, disabled }
 
 enum TerminalSearchMode { shell, tmux, zellij, screen }
 
@@ -13,7 +24,9 @@ String terminalSearchSequence(TerminalSearchMode mode) => switch (mode) {
 
 class TerminalPerformanceSettings {
   const TerminalPerformanceSettings({
-    this.rendererMode = TerminalRendererMode.flutter,
+    this.rendererMode = TerminalRendererMode.webgl,
+    this.terminalFont = TerminalFont.cascadiaMono,
+    this.hardwareAccelerationMode = HardwareAccelerationMode.automatic,
     this.refreshRateMode = RefreshRateMode.adaptive,
     this.scrollbackLines = 2000,
     this.keepAliveInBackground = false,
@@ -28,9 +41,18 @@ class TerminalPerformanceSettings {
     this.resizeForKeyboard = false,
   });
 
-  static const supportedScrollbackLines = [2000, 5000, 10000];
+  static const supportedScrollbackLines = [
+    2000,
+    5000,
+    10000,
+    25000,
+    50000,
+    100000,
+  ];
 
   final TerminalRendererMode rendererMode;
+  final TerminalFont terminalFont;
+  final HardwareAccelerationMode hardwareAccelerationMode;
   final RefreshRateMode refreshRateMode;
   final int scrollbackLines;
   final bool keepAliveInBackground;
@@ -46,6 +68,8 @@ class TerminalPerformanceSettings {
 
   TerminalPerformanceSettings copyWith({
     TerminalRendererMode? rendererMode,
+    TerminalFont? terminalFont,
+    HardwareAccelerationMode? hardwareAccelerationMode,
     RefreshRateMode? refreshRateMode,
     int? scrollbackLines,
     bool? keepAliveInBackground,
@@ -61,6 +85,9 @@ class TerminalPerformanceSettings {
   }) {
     return TerminalPerformanceSettings(
       rendererMode: rendererMode ?? this.rendererMode,
+      terminalFont: terminalFont ?? this.terminalFont,
+      hardwareAccelerationMode:
+          hardwareAccelerationMode ?? this.hardwareAccelerationMode,
       refreshRateMode: refreshRateMode ?? this.refreshRateMode,
       scrollbackLines: scrollbackLines ?? this.scrollbackLines,
       keepAliveInBackground:

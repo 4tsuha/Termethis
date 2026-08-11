@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:xterm/xterm.dart';
@@ -26,7 +28,7 @@ class WebTerminalDataEvent {
   const WebTerminalDataEvent({required this.sequence, required this.data});
 
   final int sequence;
-  final String data;
+  final Uint8List data;
 }
 
 @immutable
@@ -38,7 +40,7 @@ class WebTerminalReplay {
   });
 
   final int throughSequence;
-  final String data;
+  final Uint8List data;
   final bool resetRequired;
 }
 
@@ -46,18 +48,12 @@ class _WebTerminalChunk {
   const _WebTerminalChunk(this.sequence, this.data);
 
   final int sequence;
-  final String data;
+  final Uint8List data;
 }
 
 class SshSessionController extends ChangeNotifier {
-  SshSessionController(
-    this._gateway,
-    this._codec, {
-    required this.profile,
-    int maxLines = 5000,
-    bool compactFlutterBuffer = false,
-  }) : terminal = Terminal(maxLines: compactFlutterBuffer ? 200 : maxLines),
-       _mirrorToFlutterTerminal = !compactFlutterBuffer {
+  SshSessionController(this._gateway, this._codec, {required this.profile})
+    : terminal = Terminal(maxLines: 50) {
     terminal.onOutput = _handleTerminalOutput;
     terminal.onResize = _handleResize;
     terminal.onTitleChange = (value) {
@@ -74,7 +70,6 @@ class SshSessionController extends ChangeNotifier {
   final Set<ValueChanged<String>> _terminalDataListeners = {};
   final Set<ValueChanged<WebTerminalDataEvent>> _webTerminalDataListeners = {};
   final Queue<_WebTerminalChunk> _webTerminalDelta = Queue();
-  bool _mirrorToFlutterTerminal;
 
   SshSessionStatus status = SshSessionStatus.idle;
   SshFailure? failure;
@@ -83,34 +78,33 @@ class SshSessionController extends ChangeNotifier {
   bool altArmed = false;
 
   SshConnection? _connection;
-  StreamSubscription<String>? _stdoutSubscription;
-  StreamSubscription<String>? _stderrSubscription;
+  StreamSubscription<Uint8List>? _stdoutSubscription;
+  StreamSubscription<Uint8List>? _stderrSubscription;
   bool _closing = false;
   bool _disposed = false;
   bool _viewportVisible = false;
   Timer? _terminalWriteTimer;
-  StringBuffer _pendingTerminalData = StringBuffer();
+  BytesBuilder _pendingTerminalData = BytesBuilder(copy: false);
   int _pendingTerminalLength = 0;
   int _webTerminalSequence = 0;
   int _webTerminalDeltaLength = 0;
   int _webTerminalSnapshotSequence = 0;
-  String _webTerminalSnapshot = '';
+  Uint8List _webTerminalSnapshot = Uint8List(0);
   bool _webTerminalDeltaTruncated = false;
   bool _rendererOutputBackpressured = false;
-  bool _historyOutputBackpressured = false;
   bool _outputSubscriptionsPaused = false;
 
-  static const _visibleWriteInterval = Duration(milliseconds: 16);
-  static const _hiddenWriteInterval = Duration(milliseconds: 16);
-  static const _maximumBufferedCharacters = 64 * 1024;
-  static const _webTerminalCheckpointCharacters = 128 * 1024;
-  static const _maximumWebTerminalDeltaCharacters = 1024 * 1024;
-  static const _maximumWebTerminalSnapshotCharacters = 4 * 1024 * 1024;
+  static const _visibleWriteInterval = Duration(milliseconds: 8);
+  static const _hiddenWriteInterval = Duration(milliseconds: 32);
+  static const _maximumBufferedBytes = 128 * 1024;
+  static const _webTerminalCheckpointBytes = 1024 * 1024;
+  static const _maximumWebTerminalDeltaBytes = 2 * 1024 * 1024;
+  static const _maximumWebTerminalSnapshotBytes = 8 * 1024 * 1024;
 
   bool get isConnected => status == SshSessionStatus.connected;
 
   bool get webTerminalCheckpointNeeded =>
-      _webTerminalDeltaLength >= _webTerminalCheckpointCharacters;
+      _webTerminalDeltaLength >= _webTerminalCheckpointBytes;
 
   void reportFailure(SshFailure value) {
     failure = value;
@@ -165,12 +159,14 @@ class SshSessionController extends ChangeNotifier {
       }
 
       _connection = connection;
-      _stdoutSubscription = _codec
-          .decode(connection.stdout.cast<List<int>>())
-          .listen(_queueTerminalWrite, onError: _handleStreamError);
-      _stderrSubscription = _codec
-          .decode(connection.stderr.cast<List<int>>())
-          .listen(_queueTerminalWrite, onError: _handleStreamError);
+      _stdoutSubscription = connection.stdout.listen(
+        _queueTerminalWrite,
+        onError: _handleStreamError,
+      );
+      _stderrSubscription = connection.stderr.listen(
+        _queueTerminalWrite,
+        onError: _handleStreamError,
+      );
       _applyOutputBackpressure();
       unawaited(
         connection.done.then(
@@ -201,10 +197,22 @@ class SshSessionController extends ChangeNotifier {
   }
 
   void sendKey(TerminalKey key) {
-    final control = controlArmed;
-    final alt = altArmed;
-    _clearModifiers();
+    final modifiers = consumeArmedModifiers();
+    sendKeyWithModifiers(key, control: modifiers.control, alt: modifiers.alt);
+  }
+
+  void sendKeyWithModifiers(
+    TerminalKey key, {
+    required bool control,
+    required bool alt,
+  }) {
     terminal.keyInput(key, ctrl: control, alt: alt);
+  }
+
+  ({bool control, bool alt}) consumeArmedModifiers() {
+    final modifiers = (control: controlArmed, alt: altArmed);
+    _clearModifiers();
+    return modifiers;
   }
 
   void paste(String text) => terminal.paste(text);
@@ -236,15 +244,15 @@ class SshSessionController extends ChangeNotifier {
   }
 
   WebTerminalReplay get webTerminalReplay {
-    final output = StringBuffer();
-    if (_webTerminalDeltaTruncated) output.write('\x1bc');
-    output.write(_webTerminalSnapshot);
+    final output = BytesBuilder(copy: false);
+    if (_webTerminalDeltaTruncated) output.add(const [0x1b, 0x63]);
+    output.add(_webTerminalSnapshot);
     for (final chunk in _webTerminalDelta) {
-      output.write(chunk.data);
+      output.add(chunk.data);
     }
     return WebTerminalReplay(
       throughSequence: _webTerminalSequence,
-      data: output.toString(),
+      data: output.takeBytes(),
       resetRequired: _webTerminalDeltaTruncated,
     );
   }
@@ -262,39 +270,68 @@ class SshSessionController extends ChangeNotifier {
       );
     }
 
-    final output = StringBuffer();
+    final output = BytesBuilder(copy: false);
     for (final chunk in _webTerminalDelta) {
-      if (chunk.sequence > sequence) output.write(chunk.data);
+      if (chunk.sequence > sequence) output.add(chunk.data);
     }
     return WebTerminalReplay(
       throughSequence: _webTerminalSequence,
-      data: output.toString(),
+      data: output.takeBytes(),
     );
   }
 
   bool saveWebTerminalSnapshot(String snapshot, int throughSequence) {
-    if (snapshot.length > _maximumWebTerminalSnapshotCharacters ||
+    final encoded = utf8.encode(snapshot);
+    if (encoded.length > _maximumWebTerminalSnapshotBytes ||
         throughSequence < _webTerminalSnapshotSequence ||
         throughSequence > _webTerminalSequence) {
       return false;
     }
 
-    _webTerminalSnapshot = snapshot;
+    _webTerminalSnapshot = Uint8List.fromList(encoded);
     _webTerminalSnapshotSequence = throughSequence;
     while (_webTerminalDelta.isNotEmpty &&
         _webTerminalDelta.first.sequence <= throughSequence) {
       _webTerminalDeltaLength -= _webTerminalDelta.removeFirst().data.length;
     }
     _webTerminalDeltaTruncated = false;
-    if (_historyOutputBackpressured &&
-        _webTerminalDeltaLength < _maximumWebTerminalDeltaCharacters) {
-      _historyOutputBackpressured = false;
-      _applyOutputBackpressure();
-    }
     return true;
   }
 
   void sendInput(String data) => _handleTerminalOutput(data);
+
+  void sendInputDirect(String data) {
+    final connection = _connection;
+    if (connection == null || status != SshSessionStatus.connected) return;
+    _reportTerminalActivity();
+    connection.write(_codec.encode(data));
+  }
+
+  void sendInputBytes(Uint8List data) {
+    final connection = _connection;
+    if (connection == null || status != SshSessionStatus.connected) return;
+    var output = data;
+    if (controlArmed && data.length == 1) {
+      var value = data.single;
+      if (value >= 65 && value <= 90) value += 32;
+      if (value >= 97 && value <= 122) {
+        output = Uint8List.fromList([value - 96]);
+      }
+    }
+    if (altArmed) {
+      output = Uint8List.fromList([0x1b, ...output]);
+    }
+    _clearModifiers();
+    _reportTerminalActivity();
+    connection.write(output);
+  }
+
+  void sendInputBytesDirect(Uint8List data) {
+    final connection = _connection;
+    if (connection == null || status != SshSessionStatus.connected) return;
+    _reportTerminalActivity();
+    connection.write(data);
+  }
 
   void resizeTerminal(int width, int height) {
     _handleResize(width, height, 0, 0);
@@ -312,8 +349,7 @@ class SshSessionController extends ChangeNotifier {
   }
 
   void _applyOutputBackpressure() {
-    final shouldPause =
-        _rendererOutputBackpressured || _historyOutputBackpressured;
+    final shouldPause = _rendererOutputBackpressured;
     if (_outputSubscriptionsPaused == shouldPause) return;
     _outputSubscriptionsPaused = shouldPause;
     if (shouldPause) {
@@ -323,14 +359,6 @@ class SshSessionController extends ChangeNotifier {
       _stdoutSubscription?.resume();
       _stderrSubscription?.resume();
     }
-  }
-
-  void enableFlutterTerminalMirror() {
-    if (_mirrorToFlutterTerminal || _disposed) return;
-    _mirrorToFlutterTerminal = true;
-    _historyOutputBackpressured = false;
-    _applyOutputBackpressure();
-    terminal.write('\x1bc${webTerminalReplay.data}');
   }
 
   Future<void> disconnect() async {
@@ -356,11 +384,11 @@ class SshSessionController extends ChangeNotifier {
     await connection?.close();
   }
 
-  void _queueTerminalWrite(String data) {
+  void _queueTerminalWrite(Uint8List data) {
     if (data.isEmpty || _disposed) return;
-    _pendingTerminalData.write(data);
+    _pendingTerminalData.add(data);
     _pendingTerminalLength += data.length;
-    if (_pendingTerminalLength >= _maximumBufferedCharacters) {
+    if (_pendingTerminalLength >= _maximumBufferedBytes) {
       _flushTerminalWrites();
       return;
     }
@@ -374,19 +402,21 @@ class SshSessionController extends ChangeNotifier {
     _terminalWriteTimer?.cancel();
     _terminalWriteTimer = null;
     if (_pendingTerminalLength == 0 || _disposed) return;
-    final data = _pendingTerminalData.toString();
-    _pendingTerminalData = StringBuffer();
+    final data = _pendingTerminalData.takeBytes();
+    _pendingTerminalData = BytesBuilder(copy: false);
     _pendingTerminalLength = 0;
-    if (_mirrorToFlutterTerminal) terminal.write(data);
     final event = WebTerminalDataEvent(
       sequence: ++_webTerminalSequence,
       data: data,
     );
     _appendWebTerminalDelta(event);
-    for (final listener in List<ValueChanged<String>>.of(
-      _terminalDataListeners,
-    )) {
-      listener(data);
+    if (_terminalDataListeners.isNotEmpty) {
+      final decoded = utf8.decode(data, allowMalformed: true);
+      for (final listener in List<ValueChanged<String>>.of(
+        _terminalDataListeners,
+      )) {
+        listener(decoded);
+      }
     }
     for (final listener in List<ValueChanged<WebTerminalDataEvent>>.of(
       _webTerminalDataListeners,
@@ -398,41 +428,26 @@ class SshSessionController extends ChangeNotifier {
 
   void _appendWebTerminalDelta(WebTerminalDataEvent event) {
     var data = event.data;
-    if (!_mirrorToFlutterTerminal) {
-      _webTerminalDelta.addLast(_WebTerminalChunk(event.sequence, data));
-      _webTerminalDeltaLength += data.length;
-      if (_webTerminalDeltaLength >= _maximumWebTerminalDeltaCharacters &&
-          !_historyOutputBackpressured) {
-        _historyOutputBackpressured = true;
-        _applyOutputBackpressure();
+    if (data.length > _maximumWebTerminalDeltaBytes) {
+      var start = data.length - _maximumWebTerminalDeltaBytes;
+      while (start < data.length && _isUtf8ContinuationByte(data[start])) {
+        start++;
       }
-      return;
-    }
-
-    if (data.length > _maximumWebTerminalDeltaCharacters) {
-      var start = data.length - _maximumWebTerminalDeltaCharacters;
-      if (start > 0 &&
-          _isLowSurrogate(data.codeUnitAt(start)) &&
-          _isHighSurrogate(data.codeUnitAt(start - 1))) {
-        start--;
-      }
-      data = data.substring(start);
+      data = Uint8List.sublistView(data, start);
       _webTerminalDelta.clear();
       _webTerminalDeltaLength = 0;
       _webTerminalDeltaTruncated = true;
     }
     _webTerminalDelta.addLast(_WebTerminalChunk(event.sequence, data));
     _webTerminalDeltaLength += data.length;
-    while (_webTerminalDeltaLength > _maximumWebTerminalDeltaCharacters &&
+    while (_webTerminalDeltaLength > _maximumWebTerminalDeltaBytes &&
         _webTerminalDelta.isNotEmpty) {
       _webTerminalDeltaLength -= _webTerminalDelta.removeFirst().data.length;
       _webTerminalDeltaTruncated = true;
     }
   }
 
-  static bool _isHighSurrogate(int value) => value >= 0xD800 && value <= 0xDBFF;
-
-  static bool _isLowSurrogate(int value) => value >= 0xDC00 && value <= 0xDFFF;
+  static bool _isUtf8ContinuationByte(int value) => value & 0xC0 == 0x80;
 
   void _handleTerminalOutput(String data) {
     final connection = _connection;
@@ -441,9 +456,8 @@ class SshSessionController extends ChangeNotifier {
     }
 
     var output = data;
-    final runes = data.runes.toList(growable: false);
-    if (controlArmed && runes.length == 1) {
-      var value = runes.single;
+    if (controlArmed && data.length == 1) {
+      var value = data.codeUnitAt(0);
       if (value >= 65 && value <= 90) {
         value += 32;
       }
@@ -520,7 +534,7 @@ class SshSessionController extends ChangeNotifier {
     setOutputBackpressure(false);
     _webTerminalDelta.clear();
     _webTerminalDeltaLength = 0;
-    _webTerminalSnapshot = '';
+    _webTerminalSnapshot = Uint8List(0);
     terminal.onOutput = null;
     terminal.onResize = null;
     terminal.onTitleChange = null;

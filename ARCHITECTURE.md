@@ -2,7 +2,7 @@
 
 最終更新：2026年8月11日
 
-状態：Termethis 0.3.0として、Android最適化と実用的なSSH／SFTP接続を実装済み
+状態：Termethis 0.4.0として、Android最適化と実用的なSSH／SFTP接続を実装済み
 
 ## 1. 対象と設計原則
 
@@ -138,11 +138,19 @@ SSH編集画面は基本情報、認証、端末、接続維持、詳細設定�
 
 ### 3.4 RDPとVNC
 
-RDPはMicrosoftのRDP URI形式を使用し、`full address`、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
+RDPはRustのIronRDPを内蔵し、接続、CredSSP/NLA認証、画面更新の復号、キーボードとポインター入力をアプリ内で処理する。
+
+同梱するIronRDP clientには借用フレームコールバックを追加し、`DecodedImage`のRGBAスライスを有効期間内にVulkanへ同期投入する。Android経路では画面全体の`Vec`、`Arc<Vec>`、RGBA変換バッファを生成せず、画素データをFlutter Rust BridgeやDartへ渡さない。Androidの`SurfaceView`から取得した`ANativeWindow`へVulkan専用スワップチェーンを作成し、Rust内で直接アップロード、合成、提示する。
+
+Vulkanテクスチャ生成直後だけ全画面をアップロードし、以降はIronRDPの`GraphicsUpdate`が示す更新矩形だけを書き換える。画面状態イベントは最初の描画時だけDartへ通知し、毎フレームのチャンネル通信を行わない。接続後の状態監視は1秒間隔とし、値が変わらない場合はFlutterの再ビルドを行わない。
+
+FlutterのPlatformViewはHybrid Compositionを使い、Android 14以降ではVulkanとImpellerが利用できる場合にHybrid Composition++を有効化する。Dart側は接続状態とエラーだけを監視し、`Uint8List`、`ui.Image`、`RawImage`をRDP描画経路で生成しない。IronRDPのCPUデコーダーからVulkanドライバーへの転送は必要だが、Termethisのアプリケーション層では中間フレームを複製しない。
+
+RDPパスワードは接続画面からRustへ直接渡し、SQLite、URI、ログには保存しない。初期実装は直接接続、Unicode文字入力、スキャンコード入力、ポインター入力、動的解像度変更を対象とする。
 
 VNCは`vnc://` URIを使用し、ホスト、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
 
-いずれも`ACTION_VIEW`で起動し、対応アプリがない場合は必要なクライアント種別を日本語で案内する。パスワードはURI、SQLite、ログへ渡さず、起動先のクライアントで入力する。
+VNCは`ACTION_VIEW`で起動し、対応アプリがない場合は必要なクライアント種別を日本語で案内する。VNCパスワードはURI、SQLite、ログへ渡さず、起動先のクライアントで入力する。
 
 ### 3.5 Wake on LAN
 
@@ -176,21 +184,21 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 端末の横幅は本文へ全て割り当て、接続状態と描画方式は端末上へ重ねずAppBarの副題に表示する。左右パディングは4px、スクロールバーは5pxとし、表示幅400dp未満では12px、400dp以上600dp未満では13px、600dp以上では14pxを基準フォントサイズにする。OSの文字倍率は反映しつつ18pxを上限とし、再レイアウト後の列数と行数をPTYへ送る。
 
-既定の描画系はローカルアセットとして同梱した`xterm.js`とWebGL AddonをAndroid WebView内で動かす。WebGLを初期化できない場合またはコンテキストを失った場合はxterm.jsのDOM描画へ落とし、設定からFlutter版`xterm`へ切り替えられるようにする。
+既定の描画系はローカルアセットとして同梱した`xterm.js` WebGLとし、複雑なTUI、120Hz表示、CJK、絵文字、Nerd Fontsとの互換性を優先する。ネイティブ描画は、ConnectBot `termlib`のHaven系forkとTermux `terminal-emulator`の2方式から選択できる。ConnectBotはJetpack Compose CanvasとJNI経由の`libvterm`、TermuxはAndroid Canvasと`terminal-view`のレンダラーを使用する。
 
 WebViewは外部URLを開かず、Content Security Policyでスクリプト、CSS、フォントを同梱アセットに限定する。SSH出力はUTF-8を最大64Ki文字に分割してBase64へ変換し、xterm.jsの`Terminal.write`完了ACKを受け取ってから次を送る。端末入力とPTY寸法はJSONメッセージでDart側へ戻す。
 
-WebGLモードではDart側のFlutter版端末へSSH出力を常時解析させない。画面表示と設定されたスクロールバックはxterm.jsへ任せ、WebGL障害時だけ保存済みスナップショットと差分から200行の互換端末を復元する。
+SSH出力は`SessionRegistry`内の共通セッション履歴へ一度だけ追加し、現在選択されている描画系だけが購読する。WebGL、ConnectBot、Termuxを同一セッションで同時に動かさず、Flutter版`xterm`は描画と出力解析に使用しない。
 
 タブを離れるときはSerialize Addonで画面、スクロールバック、端末モードをANSI文字列へ直列化し、セッションへ保存してWebViewを破棄する。非表示中の受信差分には単調増加する世代番号を付け、再表示時はスナップショット以降だけを再生する。これにより非表示タブのWebGL描画を止め、複数WebViewを同時保持しない。
 
 未保存差分はセッションごとに最大1Mi文字、直列化した状態は最大4Mi文字とする。JavaScript呼び出し待ちの出力が2Mi文字を超えた場合は、個別呼び出しを捨ててセッション側の状態から一括再構築する。未ACKの書き込みは1件に制限し、Dart側だけでなくJavaScript側にも未処理キューが無制限に移動しないようにする。
 
-WebViewアセットの読込失敗、初期化タイムアウト、JavaScriptブリッジ障害では、その画面だけFlutter版`xterm`へ自動的に切り替える。WebGLの設定値は維持し、次の画面生成時に再試行する。
+WebViewアセットの読込失敗、初期化タイムアウト、JavaScriptブリッジ障害では、その画面だけConnectBotへ自動的に切り替える。ConnectBotまたはTermuxのPlatformView初期化に失敗した場合はWebGLへ切り替える。設定値は維持し、次の画面生成時に利用者が選択した描画系を再試行する。
 
 接続タブバーには任意表示の検索と「直前のコマンド出力をコピー」を置く。検索は通常のシェル、tmux、zellij、screenから対象を選び、それぞれの検索キー列を端末入力として送る。「直前のコマンド出力をコピー」とプロンプト内のタップ移動はOSC 133のコマンド境界を利用し、マーカーがない場合はリモート環境を変更せずセットアップ案内を表示する。
 
-TUIのマウストラッキングは明示的に有効化し、タップを左クリック、長押しを右クリックとしてxterm.jsへ渡す。テキスト選択と競合するため、長押し右クリックはマウス入力を有効にした場合だけ選択できる。
+TUIのマウストラッキングは明示的に有効化し、タップを左クリック、長押しを右クリックとして選択中の描画系へ渡す。ConnectBotはDECSETを追跡してマウス列を生成し、Termuxは`TerminalEmulator`が保持するマウスモードを使用する。テキスト選択と競合するため、長押し右クリックはマウス入力を有効にした場合だけ選択できる。
 
 画面のスリープ抑止とIME表示時のリサイズは利用者が個別に選ぶ。スリープ抑止は接続中のターミナル画面だけに適用し、画面を離れたら解除する。IMEリサイズを無効にした場合は全画面TUIの表示領域を維持し、有効にした場合は可視領域からPTY寸法を再計算する。
 
@@ -216,11 +224,11 @@ SFTPとターミナルは認証資産を共有するが、transportとタブは�
 
 ### 3.9 設定
 
-設定画面は「クイック操作」「入力とジェスチャー」「表示と電源」「描画とパフォーマンス」の順に構成する。検索方式、最後の出力コピー、OSC 133セットアップ、TUIマウス、長押し右クリック、プロンプト内カーソル移動、タブバー表示、画面スリープ抑止、IMEリサイズ、テーマ、日本語フォント、フォントサイズ、リフレッシュレートモード、スクロールバック行数、バックグラウンド接続維持、貼り付け確認、診断ログを置く。
+設定画面は「クイック操作」「入力とジェスチャー」「表示と電源」「描画とパフォーマンス」の順に構成する。検索方式、最後の出力コピー、OSC 133セットアップ、TUIマウス、長押し右クリック、プロンプト内カーソル移動、タブバー表示、画面スリープ抑止、IMEリサイズ、ターミナルフォント、画面フォント、フォントサイズ、リフレッシュレートモード、スクロールバック行数、バックグラウンド接続維持、貼り付け確認、診断ログを置く。
 
 各説明文は機能名を言い換えず、オンにした結果、利用条件、電池・メモリ・入力操作への影響を優先して短く示す。依存する設定は無効状態と説明文の両方で関係を示す。
 
-同梱フォントはフォント名ごとにライセンス本文をアプリ内のオープンソースライセンス画面へ登録する。
+同梱フォントはフォント名ごとにライセンス本文をアプリ内のオープンソースライセンス画面へ登録する。Webターミナル、Flutterターミナル、Rustネイティブ依存も同じ画面へ登録し、APKに含まれる第三者コードを設定画面から確認できるようにする。
 
 診断ログは既定で無効とし、有効化しても入力文字列、端末本文、パスワード、秘密鍵を記録しない。
 
@@ -496,7 +504,7 @@ UTF-8デコーダーはセッション中保持し、複数チャンクに分割
 flowchart LR
     REMOTE[SSH Shell stdoutとstderr] --> DECODER[増分UTF-8 Decoder]
     DECODER --> BUFFER[フレーム単位の書込Buffer]
-    BUFFER --> XTERM[xterm.js WebGLまたはFlutter xterm]
+    BUFFER --> RENDERER[xterm.js WebGL、ConnectBot、またはTermux PlatformView]
     IME[IME確定文字列] --> ENCODER[UTF-8 Encoder]
     KEYS[補助キーの制御シーケンス] --> ENCODER
     ENCODER --> STDIN[SSH Shell stdin]
@@ -524,7 +532,7 @@ Gboardの12キー、QWERTY、物理キーボードを実機試験の対象とす
 
 英数字と罫線にはCascadia Monoを使用する。
 
-日本語字形にはNoto Sans JP、Koruri、Mejiroを同梱し、設定したフォントをアプリUIとターミナルのフォールバックへ反映する。
+画面フォントにはNoto Sans JP、Koruri、Mejiro、Roboto、Moralerspace、Source Code Pro、JetBrains Monoを同梱し、設定したフォントをアプリUIとターミナルのフォールバックへ反映する。ターミナルの主フォントはCascadia MonoまたはJetBrains Monoから独立して選択し、Nerd Fonts Symbols MonoとOSのカラー絵文字フォントを後段のフォールバックに置く。WebGL描画とネイティブ描画へ同じ設定を渡す。
 
 フォントサイズ変更後はセル寸法を再計算し、PTYへ新しい列数と行数を送る。
 
@@ -641,7 +649,8 @@ Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力�
 | Dart・Rust連携 | `flutter_rust_bridge` | 実装済み | 生成APIをInfrastructure Adapterに閉じ込め、UIとネイティブ処理を分離する |
 | SSHとPTY | Rust `russh` | 実装済み | パケット解析、鍵交換、認証、チャンネル、PTY、keepaliveをRust側で処理する |
 | SFTP | Rust `russh-sftp` | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
-| 端末エミュレーター | 同梱`xterm`、`xterm.js` WebGL | 実装済み | 150MiB目標のFlutter描画を既定とし、複雑なTUI向けにWebGLを選択可能にする |
+| 端末エミュレーター | `xterm.js` WebGL、ConnectBot `termlib`＋`libvterm`、Termux `terminal-emulator`＋`terminal-view` | 実装済み | WebGLを既定とし、ネイティブ描画は省メモリと互換性の要件に応じて選択する |
+| Android端末ブリッジ | Flutter PlatformView＋MethodChannel | 実装済み | UTF-8バイト列、入力、PTY寸法だけを交換し、端末状態と描画はAndroid側に閉じ込める |
 | WebViewブリッジ | `webview_flutter` | 実装済み | 外部通信を許可せず、Base64 UTF-8出力とJSON入力だけを交換する |
 | 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |
 | 非機密データ | `drift`, `drift_flutter` | 段階1を実装済み | 接続先とknown_hostsを型付きで保存し、後続段階で履歴を追加する |
@@ -824,21 +833,23 @@ SSHの鍵解析、鍵交換、認証、パケット処理、SFTPファイルI/O�
 
 独立したSSHとSFTPセッションはRust側のレジストリで管理し、Dart側へはセッションIDだけを返す。
 
-受信した小さなチャンクは1フレーム内でまとめ、チャンクごとのWidget再構築を行わない。
+受信した小さなチャンクは表示中8ms、非表示32msでまとめ、チャンクごとのWidget再構築を行わない。
 
-スクロールバックは既定2,000行とし、2,000、5,000、10,000行から選択する。
+スクロールバックは既定2,000行とし、2,000、5,000、10,000、25,000、50,000、100,000行から選択する。25,000行以上ではxterm.jsの循環バッファを推奨する。
 
 変更は新しく開くセッションから適用し、接続中セッションの履歴を暗黙に破棄しない。
 
-Rust側はSSH出力をセッションごとの上限512KiBのキューへ蓄積し、Dart側は最大64KiBずつ読み出して16ms単位で`Terminal.write`へまとめる。WebGLの未描画データは256KiBまでとし、192KiBで受信を一時停止、64KiBまで減ると再開する。選択中の描画系だけへ反映し、端末出力による高Hz通知はバランスモードだけで行う。
+Rust側はSSH出力をセッションごとの上限2MiBのキューへ蓄積し、Dart側は最大128KiBずつ読み出す。WebGL境界は128KiB単位とし、WebView内では16KiBかつ4ms以下の解析スライスへ分割して、長いANSI解析の間にも描画フレームへ制御を返す。未描画データは2MiBまで、1MiBで受信を一時停止し、256KiBまで減ると再開する。ネイティブ端末のANSI解析は表示優先の専用スレッドで実行し、Androidメインスレッドを占有しない。
 
 キューが上限へ達した場合はRust側の読み取りを待機させ、SSHチャンネルのフロー制御までバックプレッシャーを伝える。小さな受信チャンクごとにDartとRustの境界を往復しない。
 
-releaseビルドの接続中PSSは150MiB以下を目標とする。既定のFlutter描画ではWebView rendererを生成しない。xterm.js WebGLは複雑なTUIと高速更新を優先する利用者が明示的に選び、約57MiBのrenderer固定費を許容するモードとする。
+通常操作は120fps、P95フレーム時間8.33ms未満、P99フレーム時間16.67ms未満を目標とする。入力からローカル表示処理まで16ms以下を優先し、5MiB/s級のANSI・UTF-8を安定処理する。10MiB/s級では最大throughputより入力応答と最低60fpsの維持を優先してSSHフロー制御をかける。
+
+releaseビルドの接続中PSSは150MiB以下を引き続き目標とする。ただしWebGL rendererの固定費と100,000行の履歴量は端末環境に依存するため、高フレームレート構成と省メモリ構成を別々に測定する。
 
 ターミナル画面を破棄しても`SessionRegistry`内のSSHセッションは維持する。
 
-非表示タブは`TerminalView`を保持しないため再描画されず、受信データのデコードと履歴更新だけを継続する。
+非表示タブはWebView、ConnectBot、TermuxのPlatformViewを保持しないため再描画されず、受信データのデコードと上限付き共通履歴の更新だけを継続する。
 
 入力は受信バッチを待たずにSSHへ直接書き込み、大量出力中も操作を優先する。
 
@@ -858,7 +869,7 @@ profileビルドでホスト鍵登録済みの同一LAN接続を計測し、中�
 
 リフレッシュレート制御は適応、バランス、最大の3モードとする。
 
-適応は既定値で、固定Hzを要求せず、タッチブーストを有効にしてOSへ評価を任せる。
+適応は既定値で、固定Hzを要求せず、タッチ、入力、スクロール、端末出力中だけ高カテゴリを通知して最終判断をOSへ任せる。
 
 バランスは通常カテゴリまたは60Hz相当を要求し、タッチ、スクロール、端末出力中だけ高カテゴリへ切り替える。
 

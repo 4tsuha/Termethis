@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_output`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `finalize_ssh_session`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `resolve_sftp_path`, `sftp_connect_error`
+// These functions are ignored because they are not marked as `pub`: `append_output`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `finalize_ssh_session`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `release_excess_capacity`, `resolve_sftp_path`, `sftp_connect_error`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `HostKeyHandler`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`
 

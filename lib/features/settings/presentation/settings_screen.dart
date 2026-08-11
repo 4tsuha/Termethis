@@ -6,6 +6,7 @@ import '../../../app/l10n/app_localizations.dart';
 import '../application/app_font_controller.dart';
 import '../application/terminal_performance_settings_controller.dart';
 import '../domain/app_font.dart';
+import '../domain/hardware_acceleration_controller.dart';
 import '../domain/terminal_performance_settings.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -16,6 +17,9 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final appFont = ref.watch(appFontProvider);
     final performance = ref.watch(terminalPerformanceSettingsProvider);
+    final hardwareAcceleration = ref.watch(
+      hardwareAccelerationCapabilitiesProvider,
+    );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
@@ -146,7 +150,17 @@ class SettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.text_fields),
                 title: Text(l10n.settingsTerminalFont),
-                subtitle: Text(l10n.settingsTerminalFontValue),
+                subtitle: Text(
+                  '${_terminalFontLabel(l10n, performance.terminalFont)}\n'
+                  '${l10n.settingsTerminalFontValue}',
+                ),
+                isThreeLine: true,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showTerminalFontPicker(
+                  context,
+                  ref,
+                  performance.terminalFont,
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.developer_board_outlined),
@@ -157,6 +171,28 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () =>
                     _showRendererPicker(context, ref, performance.rendererMode),
+              ),
+              ListTile(
+                leading: const Icon(Icons.memory_outlined),
+                title: const Text('Vulkanハードウェアアクセラレーション'),
+                subtitle: Text(
+                  hardwareAcceleration.when(
+                    data: (capabilities) => _hardwareAccelerationDescription(
+                      performance.hardwareAccelerationMode,
+                      capabilities,
+                    ),
+                    loading: () => '端末のVulkan対応情報を確認しています。',
+                    error: (_, _) => '端末情報を取得できませんでした。互換描画を使用します。',
+                  ),
+                ),
+                isThreeLine: true,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showHardwareAccelerationPicker(
+                  context,
+                  ref,
+                  performance.hardwareAccelerationMode,
+                  hardwareAcceleration.asData?.value,
+                ),
               ),
               ListTile(
                 leading: const Icon(Icons.translate),
@@ -298,6 +334,54 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _showTerminalFontPicker(
+    BuildContext context,
+    WidgetRef ref,
+    TerminalFont selectedFont,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            child: Text(
+              l10n.settingsSelectTerminalFont,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          for (final font in TerminalFont.values)
+            ListTile(
+              title: Text(
+                _terminalFontLabel(l10n, font),
+                style: TextStyle(fontFamily: font.family),
+              ),
+              subtitle: Text(
+                r'user@host:~$ printf "Hello, Termethis!\n"',
+                style: TextStyle(fontFamily: font.family),
+              ),
+              trailing: Icon(
+                font == selectedFont
+                    ? Icons.check_circle
+                    : Icons.circle_outlined,
+              ),
+              onTap: () {
+                ref
+                    .read(terminalPerformanceSettingsProvider.notifier)
+                    .selectTerminalFont(font);
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showRefreshRatePicker(
     BuildContext context,
     WidgetRef ref,
@@ -382,11 +466,73 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _showHardwareAccelerationPicker(
+    BuildContext context,
+    WidgetRef ref,
+    HardwareAccelerationMode selectedMode,
+    HardwareAccelerationCapabilities? capabilities,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            child: Text(
+              '描画アクセラレーション',
+              style: Theme.of(sheetContext).textTheme.titleLarge,
+            ),
+          ),
+          for (final mode in HardwareAccelerationMode.values)
+            ListTile(
+              enabled:
+                  mode != HardwareAccelerationMode.vulkan ||
+                  capabilities?.isVulkanSupported == true,
+              title: Text(_hardwareAccelerationLabel(mode)),
+              subtitle: Text(_hardwareAccelerationModeDescription(mode)),
+              trailing: Icon(
+                mode == selectedMode
+                    ? Icons.check_circle
+                    : Icons.circle_outlined,
+              ),
+              onTap:
+                  mode == HardwareAccelerationMode.vulkan &&
+                      capabilities?.isVulkanSupported != true
+                  ? null
+                  : () {
+                      ref
+                          .read(terminalPerformanceSettingsProvider.notifier)
+                          .selectHardwareAccelerationMode(mode);
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('描画設定はアプリの次回起動から反映されます。')),
+                      );
+                    },
+            ),
+        ],
+      ),
+    );
+  }
+
   String _fontLabel(AppLocalizations l10n, AppFont font) => switch (font) {
     AppFont.notoSansJp => l10n.fontNotoSansJp,
     AppFont.koruri => l10n.fontKoruri,
     AppFont.mejiro => l10n.fontMejiro,
+    AppFont.roboto => l10n.fontRoboto,
+    AppFont.moralerspace => l10n.fontMoralerspace,
+    AppFont.sourceCodePro => l10n.fontSourceCodePro,
+    AppFont.jetBrainsMono => l10n.fontJetBrainsMono,
   };
+
+  String _terminalFontLabel(AppLocalizations l10n, TerminalFont font) =>
+      switch (font) {
+        TerminalFont.cascadiaMono => l10n.terminalFontCascadiaMono,
+        TerminalFont.jetBrainsMono => l10n.terminalFontJetBrainsMono,
+      };
 
   String _searchModeLabel(TerminalSearchMode mode) => switch (mode) {
     TerminalSearchMode.shell => '通常のシェル',
@@ -445,15 +591,51 @@ class SettingsScreen extends ConsumerWidget {
   String _rendererLabel(AppLocalizations l10n, TerminalRendererMode mode) =>
       switch (mode) {
         TerminalRendererMode.webgl => l10n.terminalRendererWebgl,
-        TerminalRendererMode.flutter => l10n.terminalRendererFlutter,
+        TerminalRendererMode.connectBot => l10n.terminalRendererConnectBot,
+        TerminalRendererMode.termux => l10n.terminalRendererTermux,
       };
+
+  String _hardwareAccelerationLabel(HardwareAccelerationMode mode) =>
+      switch (mode) {
+        HardwareAccelerationMode.automatic => '自動（推奨）',
+        HardwareAccelerationMode.vulkan => 'Vulkanを優先',
+        HardwareAccelerationMode.disabled => 'Vulkanを使用しない',
+      };
+
+  String _hardwareAccelerationModeDescription(HardwareAccelerationMode mode) =>
+      switch (mode) {
+        HardwareAccelerationMode.automatic =>
+          '端末とOSの判定に任せ、利用可能な場合だけVulkanを使用します。',
+        HardwareAccelerationMode.vulkan => '対応端末でImpellerのVulkanバックエンドを優先します。',
+        HardwareAccelerationMode.disabled =>
+          'Impeller Vulkanを無効にし、Flutterの互換描画を使用します。',
+      };
+
+  String _hardwareAccelerationDescription(
+    HardwareAccelerationMode mode,
+    HardwareAccelerationCapabilities capabilities,
+  ) {
+    if (!capabilities.isAndroidHardwareAccelerated) {
+      return 'Androidのハードウェアアクセラレーションを利用できません。互換描画を使用します。';
+    }
+    if (!capabilities.isVulkanSupported) {
+      return 'この端末はVulkan対応を報告していません。互換描画を使用します。';
+    }
+    final version = capabilities.vulkanVersion == null
+        ? 'Vulkan対応'
+        : 'Vulkan ${capabilities.vulkanVersion}対応';
+    final restart = capabilities.requiresRestart ? ' 再起動後に反映されます。' : '';
+    return '$version。${_hardwareAccelerationModeDescription(mode)}$restart';
+  }
 
   String _rendererDescription(
     AppLocalizations l10n,
     TerminalRendererMode mode,
   ) => switch (mode) {
     TerminalRendererMode.webgl => l10n.terminalRendererWebglDescription,
-    TerminalRendererMode.flutter => l10n.terminalRendererFlutterDescription,
+    TerminalRendererMode.connectBot =>
+      l10n.terminalRendererConnectBotDescription,
+    TerminalRendererMode.termux => l10n.terminalRendererTermuxDescription,
   };
 
   String _refreshRateLabel(AppLocalizations l10n, RefreshRateMode mode) =>

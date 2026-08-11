@@ -94,30 +94,6 @@ void main() {
     expect(second, isNot(same(first)));
     registry.dispose();
   });
-
-  test('設定したスクロールバック行数を新規セッションごとに適用する', () {
-    var lines = 2000;
-    const profile = ConnectionProfile(
-      id: 'scrollback',
-      name: '履歴設定',
-      host: 'server.example.com',
-      port: 22,
-      username: 'developer',
-    );
-    final registry = SessionRegistry(
-      _UnusedSshGateway(),
-      const Utf8TerminalCodec(),
-      scrollbackLines: () => lines,
-    );
-
-    final compact = registry.open('tab-compact', profile);
-    lines = 10000;
-    final large = registry.open('tab-large', profile);
-
-    expect(compact.terminal.maxLines, 2000);
-    expect(large.terminal.maxLines, 10000);
-    registry.dispose();
-  });
 }
 
 class _GateLoadSshTabStore implements SshTabStore {
