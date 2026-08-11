@@ -111,7 +111,7 @@ void main() {
     controller.dispose();
   });
 
-  test('SSH受信チャンクを8ms単位でまとめてターミナルへ反映する', () async {
+  test('SSH受信チャンクを16ms単位でまとめてターミナルへ反映する', () async {
     final connection = _FakeConnection();
     final controller = SshSessionController(
       _FakeGateway(connection),
@@ -146,7 +146,7 @@ void main() {
       isNot(contains('firstsecond')),
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 12));
+    await Future<void>.delayed(const Duration(milliseconds: 20));
 
     expect(controller.terminal.buffer.getText(), contains('firstsecond'));
     expect(renderedChunks, ['firstsecond']);

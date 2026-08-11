@@ -299,11 +299,11 @@ Domain層には接続先、認証方式、ホスト鍵、タイムアウト、�
 
 ### 4.4 Infrastructure層
 
-Infrastructure層は`dartssh2`、SQLite、Android Keystore、Storage Access Framework、ネットワーク監視、端末CodecをPortへ接続する。
+Infrastructure層は`flutter_rust_bridge`経由のRust SSHコア、SQLite、Android Keystore、Storage Access Framework、ネットワーク監視、端末CodecをPortへ接続する。
 
-`dartssh2`の`SSHClient`、`SSHSession`、`SSHKeyPair`をInfrastructure層から外へ出さない。
+Rust側のセッションID、認証結果、SFTPエントリーはDart AdapterでDomain型へ変換し、`russh`と`russh-sftp`の型をInfrastructure層から外へ出さない。
 
-同梱forkへ加えた変更は`third_party/dartssh2/LOCAL_PATCHES.md`へ理由、参照仕様、試験を記録する。
+SSHパケット処理、鍵交換、認証、PTY、SFTP、受信バッファは`rust/vbterminal_core`が所有する。Flutter側は接続設定、端末表示、入力、タブ状態に集中する。
 
 ## 5. SSH接続の実行モデル
 
@@ -412,7 +412,7 @@ known_hostsは入力された正規化ホスト名とポートの組で検索す
 
 サーバーが提示した方式だけを試し、選択されていない方式へ暗黙にフォールバックしない。
 
-秘密鍵認証ではOpenSSH形式のRSA、ECDSA、Ed25519鍵をアプリ内で解析し、公開鍵認証に必要な`SSHKeyPair`へ変換する。
+秘密鍵認証ではOpenSSH形式のRSA、ECDSA、Ed25519鍵をRust側で解析し、公開鍵認証に使用する。
 
 暗号化秘密鍵のパスフレーズは毎回入力を既定とし、利用者が選択した場合だけCredential Vaultへ保存する。
 
@@ -422,7 +422,7 @@ keyboard-interactiveは複数ラウンドと複数質問を扱い、`echo=false`
 
 ### 5.7 暗号アルゴリズム方針
 
-アルゴリズム選択は`dartssh2`の既定値を無条件に画面へ露出せず、アプリ側の`SshAlgorithmPolicy`で管理する。
+アルゴリズム選択は`russh`の既定値を無条件に画面へ露出せず、アプリ側の`SshAlgorithmPolicy`で管理する。
 
 既定ポリシーは現在のライブラリが提供するSHA-2系、Curve25519系、Ed25519系を優先する。
 
@@ -628,9 +628,10 @@ Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力�
 
 | 役割 | パッケージまたは実装 | 状態 | 方針 |
 |---|---|---|---|
-| SSHとPTY | 同梱`dartssh2` fork | 実装済み | 外部型をAdapterに閉じ込め、ローカル修正を文書化する |
-| SFTP | 同梱`dartssh2` fork | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
-| 端末エミュレーター | `xterm.js` WebGL、同梱`xterm` | 実装済み | WebGLを既定とし、DOMとFlutter描画を互換経路として維持する |
+| Dart・Rust連携 | `flutter_rust_bridge` | 実装済み | 生成APIをInfrastructure Adapterに閉じ込め、UIとネイティブ処理を分離する |
+| SSHとPTY | Rust `russh` | 実装済み | パケット解析、鍵交換、認証、チャンネル、PTY、keepaliveをRust側で処理する |
+| SFTP | Rust `russh-sftp` | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
+| 端末エミュレーター | 同梱`xterm`、`xterm.js` WebGL | 実装済み | 150MiB目標のFlutter描画を既定とし、複雑なTUI向けにWebGLを選択可能にする |
 | WebViewブリッジ | `webview_flutter` | 実装済み | 外部通信を許可せず、Base64 UTF-8出力とJSON入力だけを交換する |
 | 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |
 | 非機密データ | `drift`, `drift_flutter` | 段階1を実装済み | 接続先とknown_hostsを型付きで保存し、後続段階で履歴を追加する |
@@ -809,19 +810,21 @@ Wi-Fiからモバイル回線へ移った場合は、維持、切断、再接続
 
 ## 14. 性能と資源管理
 
-SSHの鍵解析、鍵交換、大量出力でUI isolateを長時間占有しない。
+SSHの鍵解析、鍵交換、認証、パケット処理、SFTPファイルI/OはRustの非同期ランタイムで処理し、UI isolateを占有しない。
 
-秘密鍵解析とライブラリが対応する暗号計算はIsolateで実行する。
+独立したSSHとSFTPセッションはRust側のレジストリで管理し、Dart側へはセッションIDだけを返す。
 
 受信した小さなチャンクは1フレーム内でまとめ、チャンクごとのWidget再構築を行わない。
 
-スクロールバックは既定5,000行とし、2,000、5,000、10,000行から選択する。
+スクロールバックは既定2,000行とし、2,000、5,000、10,000行から選択する。
 
 変更は新しく開くセッションから適用し、接続中セッションの履歴を暗黙に破棄しない。
 
-SSHのstdoutとstderrは増分UTF-8デコード後に表示中8ms、非表示16ms、または64Ki文字の早い方でまとめ、選択中の描画系だけへ反映する。端末出力による高Hz通知はバランスモードだけで行い、100ms以内の連続通知をまとめる。
+Rust側はSSH出力をセッションごとの上限512KiBのキューへ蓄積し、Dart側は最大64KiBずつ読み出して16ms単位で`Terminal.write`へまとめる。WebGLの未描画データは256KiBまでとし、192KiBで受信を一時停止、64KiBまで減ると再開する。選択中の描画系だけへ反映し、端末出力による高Hz通知はバランスモードだけで行う。
 
-SSHチャンネルの2MiB受信ウィンドウは半分を消費した時点でまとめて補充し、受信パケットごとの`SSH_MSG_CHANNEL_WINDOW_ADJUST`、暗号化、ソケット書き込みを行わない。
+キューが上限へ達した場合はRust側の読み取りを待機させ、SSHチャンネルのフロー制御までバックプレッシャーを伝える。小さな受信チャンクごとにDartとRustの境界を往復しない。
+
+releaseビルドの接続中PSSは150MiB以下を目標とする。既定のFlutter描画ではWebView rendererを生成しない。xterm.js WebGLは複雑なTUIと高速更新を優先する利用者が明示的に選び、約57MiBのrenderer固定費を許容するモードとする。
 
 ターミナル画面を破棄しても`SessionRegistry`内のSSHセッションは維持する。
 
@@ -905,7 +908,7 @@ Magic Packetの構造、UDP送信、UI操作、アプリ再起動後の設定復
 
 ### 段階2.7：Android性能・Android 16対応（実装中）
 
-3段階のリフレッシュレート制御、750msの高Hzパルス、2,000／5,000／10,000行の履歴設定、8ms受信バッチを実装した。
+3段階のリフレッシュレート制御、750msの高Hzパルス、2,000／5,000／10,000行の履歴設定、16ms受信バッチを実装した。
 
 600dp以上の`NavigationRail`、`PopScope`による予測戻る互換、明示設定時だけ動くForeground Serviceを実装した。
 

@@ -46,9 +46,9 @@ class SharedPreferencesTerminalPerformanceSettingsStore
           savedLines,
         )
         ? savedLines!
-        : 5000;
+        : 2000;
     return TerminalPerformanceSettings(
-      rendererMode: renderer ?? TerminalRendererMode.webgl,
+      rendererMode: renderer ?? TerminalRendererMode.flutter,
       refreshRateMode: mode ?? RefreshRateMode.adaptive,
       scrollbackLines: lines,
       keepAliveInBackground: savedKeepAlive ?? false,

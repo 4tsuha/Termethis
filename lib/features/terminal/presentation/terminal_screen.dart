@@ -45,19 +45,22 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   SshSessionController? _session;
   SessionRegistry? _sessionRegistry;
   Timer? _performancePulseTimer;
+  late String _activeTabId;
   String _webRenderer = '起動中';
   bool _webTerminalFailed = false;
+  bool _switchingTab = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _activeTabId = widget.tabId;
     _profile = ref
         .read(connectionProfilesProvider.notifier)
         .findById(widget.profileId);
     if (_profile case final profile?) {
       _sessionRegistry = ref.read(sessionRegistryProvider);
-      _session = _sessionRegistry!.open(widget.tabId, profile);
+      _session = _sessionRegistry!.open(_activeTabId, profile);
       if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
           TerminalRendererMode.flutter) {
         _session!.enableFlutterTerminalMirror();
@@ -99,12 +102,18 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   }
 
   Future<void> _initializeTab() async {
+    final expectedTabId = _activeTabId;
     final tabs = await ref.read(sshTabsProvider.future);
     SshTab? tab;
     for (final item in tabs) {
-      if (item.id == widget.tabId) tab = item;
+      if (item.id == expectedTabId) tab = item;
     }
-    if (!mounted || tab == null || tab.restored) return;
+    if (!mounted ||
+        _activeTabId != expectedTabId ||
+        tab == null ||
+        tab.restored) {
+      return;
+    }
     if (_session?.status == SshSessionStatus.idle) {
       await _startConnection();
     }
@@ -128,7 +137,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         ? _webRenderer == 'webgl'
               ? 'WebGL'
               : _webRenderer
-        : 'Flutter互換';
+        : 'Flutter省メモリ';
     final tabs = ref.watch(sshTabsProvider).value ?? const <SshTab>[];
     final session = _session;
     if (_profile == null || session == null) {
@@ -176,7 +185,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                         const SizedBox(width: 8),
                         _TabOverviewButton(
                           label:
-                              '${tabs.indexWhere((tab) => tab.id == widget.tabId) + 1}/${tabs.length}',
+                              '${tabs.indexWhere((tab) => tab.id == _activeTabId) + 1}/${tabs.length}',
                           onTap: () => _showTabOverview(tabs),
                         ),
                       ],
@@ -202,7 +211,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                       preferredSize: const Size.fromHeight(60),
                       child: _TerminalSessionBar(
                         tabs: tabs,
-                        currentTabId: widget.tabId,
+                        currentTabId: _activeTabId,
                         registry: _sessionRegistry,
                         showSearch: performance.showSearchButton,
                         showCopy: performance.showCopyOutputButton,
@@ -314,10 +323,44 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   }
 
   Future<void> _switchTab(SshTab tab) async {
-    if (tab.id == widget.tabId) return;
-    await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
-    if (!mounted) return;
-    context.pushReplacement('/terminal/${tab.profileId}?tab=${tab.id}');
+    if (tab.id == _activeTabId || _switchingTab) return;
+    final profile = ref
+        .read(connectionProfilesProvider.notifier)
+        .findById(tab.profileId);
+    if (profile == null) return;
+
+    _switchingTab = true;
+    try {
+      await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+      if (!mounted) return;
+      _session?.removeTerminalActivityListener(_pulseHighFrameRate);
+      _session?.setViewportVisible(false);
+      _activateTab(tab, profile);
+      await ref.read(sshTabsProvider.notifier).markActive(tab.id);
+      if (!mounted || _activeTabId != tab.id) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _activeTabId != tab.id) return;
+        _webTerminalKey.currentState?.resume();
+        _focusTerminal();
+      });
+    } finally {
+      _switchingTab = false;
+    }
+  }
+
+  void _activateTab(SshTab tab, ConnectionProfile profile) {
+    final session = _sessionRegistry!.open(tab.id, profile);
+    if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
+        TerminalRendererMode.flutter) {
+      session.enableFlutterTerminalMirror();
+    }
+    session.setViewportVisible(true);
+    session.addTerminalActivityListener(_pulseHighFrameRate);
+    setState(() {
+      _activeTabId = tab.id;
+      _profile = profile;
+      _session = session;
+    });
   }
 
   Future<void> _showTabOverview(List<SshTab> tabs) async {
@@ -359,7 +402,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                   final statusLabel = tabSession == null && tab.restored
                       ? '復元済み'
                       : _statusText(AppLocalizations.of(context), status);
-                  final selected = tab.id == widget.tabId;
+                  final selected = tab.id == _activeTabId;
                   return ListTile(
                     leading: _SessionStatusIcon(
                       status: status,
@@ -480,7 +523,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       return;
     }
 
-    await ref.read(sshTabsProvider.notifier).markActive(widget.tabId);
+    await ref.read(sshTabsProvider.notifier).markActive(_activeTabId);
 
     final authentication = await _resolveAuthentication(profile, session);
     if (!mounted || authentication == null) {
@@ -743,13 +786,31 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       }
       await session.disconnect();
     }
-    _sessionRegistry?.remove(widget.tabId);
-    await ref.read(sshTabsProvider.notifier).close(widget.tabId);
+    await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+    session.removeTerminalActivityListener(_pulseHighFrameRate);
+    session.setViewportVisible(false);
+    final closingTabId = _activeTabId;
+    _sessionRegistry?.remove(closingTabId);
+    await ref.read(sshTabsProvider.notifier).close(closingTabId);
     final remaining = ref.read(sshTabsProvider).value ?? const <SshTab>[];
     if (!mounted) return;
     if (remaining.isNotEmpty) {
       final next = remaining.last;
-      context.pushReplacement('/terminal/${next.profileId}?tab=${next.id}');
+      final profile = ref
+          .read(connectionProfilesProvider.notifier)
+          .findById(next.profileId);
+      if (profile == null) {
+        context.pop();
+        return;
+      }
+      _activateTab(next, profile);
+      await ref.read(sshTabsProvider.notifier).markActive(next.id);
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _activeTabId != next.id) return;
+        _webTerminalKey.currentState?.resume();
+        _focusTerminal();
+      });
     } else {
       context.pop();
     }

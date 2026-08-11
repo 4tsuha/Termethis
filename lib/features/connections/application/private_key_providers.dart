@@ -8,5 +8,5 @@ final privateKeyImporterProvider = Provider<PrivateKeyImporter>(
 );
 
 final privateKeyValidatorProvider = Provider<PrivateKeyValidator>(
-  (ref) => DartSshPrivateKeyValidator(),
+  (ref) => RustSshPrivateKeyValidator(),
 );

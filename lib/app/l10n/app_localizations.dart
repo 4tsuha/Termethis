@@ -961,19 +961,19 @@ abstract class AppLocalizations {
   /// No description provided for @terminalRendererWebglDescription.
   ///
   /// In ja, this message translates to:
-  /// **'高速更新するTUI向けの既定値です。WebGLを使えない環境ではDOM描画へ自動で切り替わります。'**
+  /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
 
   /// No description provided for @terminalRendererFlutter.
   ///
   /// In ja, this message translates to:
-  /// **'Flutter互換描画'**
+  /// **'Flutter省メモリ描画'**
   String get terminalRendererFlutter;
 
   /// No description provided for @terminalRendererFlutterDescription.
   ///
   /// In ja, this message translates to:
-  /// **'WebViewで表示や入力に問題がある場合の互換モードです。描画性能は低くなることがあります。'**
+  /// **'メモリ使用量を抑える既定値です。複雑なTUIや大量出力では表示更新が遅くなる場合があります。'**
   String get terminalRendererFlutterDescription;
 
   /// No description provided for @settingsJapaneseFont.

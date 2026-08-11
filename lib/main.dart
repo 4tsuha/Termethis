@@ -34,9 +34,11 @@ import 'infrastructure/settings/shared_preferences_app_font_store.dart';
 import 'infrastructure/settings/shared_preferences_ssh_tab_store.dart';
 import 'infrastructure/settings/shared_preferences_terminal_performance_settings_store.dart';
 import 'infrastructure/wake_on_lan/udp_wake_on_lan_sender.dart';
+import 'src/rust/frb_generated.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await RustLib.init();
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   registerBundledFontLicenses();
   final fontStore = SharedPreferencesAppFontStore();

@@ -6,7 +6,8 @@
 
 ## 主な機能
 
-- xterm.js WebGLを既定にし、DOMとFlutter描画へ切り替えられるSSHターミナル
+- 省メモリなFlutter描画を既定にし、TUI向けxterm.js WebGLへ切り替えられるSSHターミナル
+- releaseビルドのFlutter描画で接続中150MiB以下を目標とするメモリ設計
 - 日本語IME、UTF-8、CJK文字幅に対応した入出力
 - 非表示タブのWebViewを解放し、ANSIスナップショットと受信差分から画面を復元
 - Cascadia MonoとNoto Sans JPによるWindows Terminal寄りの表示
@@ -18,7 +19,8 @@
 - TUIマウス、長押し右クリック、対応プロンプト内のタップ移動
 - タブバー、画面スリープ抑止、IME表示時リサイズの個別設定
 - Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
-- SSH接続準備の並列化とPTY・Shell要求のパイプライン化
+- RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
+- RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
 - 接続先ごとのWake on LAN設定とMagic Packet送信
 - SSH、FTP、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
@@ -36,9 +38,11 @@ SSHセッションの保存対象はタブID、接続先ID、表示名だけで�
 ## 開発
 
 Flutter 3.44.9とDart 3.12.2を使用します。
+SSH・SFTPコアにはRust 1.96.0を使用し、`flutter_rust_bridge`でFlutterへ接続します。
 
 ```powershell
 flutter pub get
+cargo check --manifest-path rust/Cargo.toml
 flutter analyze
 flutter test
 flutter build apk --debug

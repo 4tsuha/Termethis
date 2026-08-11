@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/connections/domain/private_key_importer.dart';
+import '../../src/rust/api/core.dart' as rust;
 
 class AndroidPrivateKeyImporter implements PrivateKeyImporter {
   const AndroidPrivateKeyImporter([
@@ -51,15 +51,12 @@ class AndroidPrivateKeyImporter implements PrivateKeyImporter {
     }
 
     try {
+      final isEncrypted = await rust.privateKeyIsEncrypted(pem: pem);
+      if (!isEncrypted) await rust.validatePrivateKey(pem: pem);
       return ImportedPrivateKey(
         pem: pem,
         label: name,
-        isEncrypted: SSHKeyPair.isEncryptedPem(pem),
-      );
-    } on UnsupportedError catch (error) {
-      throw PrivateKeyImportFailure(
-        PrivateKeyImportFailureCode.unsupportedKey,
-        error,
+        isEncrypted: isEncrypted,
       );
     } catch (error) {
       throw PrivateKeyImportFailure(
@@ -70,7 +67,7 @@ class AndroidPrivateKeyImporter implements PrivateKeyImporter {
   }
 }
 
-class DartSshPrivateKeyValidator implements PrivateKeyValidator {
+class RustSshPrivateKeyValidator implements PrivateKeyValidator {
   @override
   Future<void> validate(ImportedPrivateKey key, {String? passphrase}) async {
     if (key.isEncrypted && (passphrase == null || passphrase.isEmpty)) {
@@ -79,20 +76,15 @@ class DartSshPrivateKeyValidator implements PrivateKeyValidator {
       );
     }
     try {
-      SSHKeyPair.fromPem(key.pem, key.isEncrypted ? passphrase : null);
-    } on SSHKeyDecryptError catch (error) {
-      throw PrivateKeyImportFailure(
-        PrivateKeyImportFailureCode.invalidPassphrase,
-        error,
-      );
-    } on UnsupportedError catch (error) {
-      throw PrivateKeyImportFailure(
-        PrivateKeyImportFailureCode.unsupportedKey,
-        error,
+      await rust.validatePrivateKey(
+        pem: key.pem,
+        passphrase: key.isEncrypted ? passphrase : null,
       );
     } catch (error) {
       throw PrivateKeyImportFailure(
-        PrivateKeyImportFailureCode.invalidKey,
+        key.isEncrypted
+            ? PrivateKeyImportFailureCode.invalidPassphrase
+            : PrivateKeyImportFailureCode.invalidKey,
         error,
       );
     }

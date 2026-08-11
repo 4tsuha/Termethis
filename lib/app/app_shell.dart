@@ -35,34 +35,38 @@ class AppShell extends StatelessWidget {
           return Scaffold(
             body: Row(
               children: [
-                NavigationRail(
-                  selectedIndex: navigationShell.currentIndex,
-                  extended: constraints.maxWidth >= 840,
-                  labelType: constraints.maxWidth >= 840
-                      ? NavigationRailLabelType.none
-                      : NavigationRailLabelType.all,
-                  onDestinationSelected: _goToBranch,
-                  destinations: [
-                    for (final destination in destinations)
-                      NavigationRailDestination(
-                        icon: destination.icon,
-                        selectedIcon: destination.selectedIcon,
-                        label: Text(destination.label),
-                      ),
-                  ],
+                RepaintBoundary(
+                  child: NavigationRail(
+                    selectedIndex: navigationShell.currentIndex,
+                    extended: constraints.maxWidth >= 840,
+                    labelType: constraints.maxWidth >= 840
+                        ? NavigationRailLabelType.none
+                        : NavigationRailLabelType.all,
+                    onDestinationSelected: _goToBranch,
+                    destinations: [
+                      for (final destination in destinations)
+                        NavigationRailDestination(
+                          icon: destination.icon,
+                          selectedIcon: destination.selectedIcon,
+                          label: Text(destination.label),
+                        ),
+                    ],
+                  ),
                 ),
                 const VerticalDivider(width: 1),
-                Expanded(child: navigationShell),
+                Expanded(child: RepaintBoundary(child: navigationShell)),
               ],
             ),
           );
         }
         return Scaffold(
-          body: navigationShell,
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: _goToBranch,
-            destinations: destinations,
+          body: RepaintBoundary(child: navigationShell),
+          bottomNavigationBar: RepaintBoundary(
+            child: NavigationBar(
+              selectedIndex: navigationShell.currentIndex,
+              onDestinationSelected: _goToBranch,
+              destinations: destinations,
+            ),
           ),
         );
       },

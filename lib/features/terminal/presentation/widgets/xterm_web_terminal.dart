@@ -36,8 +36,10 @@ class XtermWebTerminal extends StatefulWidget {
 }
 
 class XtermWebTerminalState extends State<XtermWebTerminal> {
-  static const _maximumPendingCharacters = 2 * 1024 * 1024;
-  static const _maximumWriteCharacters = 64 * 1024;
+  static const _maximumPendingCharacters = 256 * 1024;
+  static const _pauseOutputAtCharacters = 192 * 1024;
+  static const _resumeOutputAtCharacters = 64 * 1024;
+  static const _maximumWriteCharacters = 32 * 1024;
   static const _readyTimeout = Duration(seconds: 12);
   static const _snapshotTimeout = Duration(seconds: 3);
   static const _writeAckTimeout = Duration(seconds: 10);
@@ -61,6 +63,8 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   var _disposed = false;
   var _fatalReported = false;
   var _resumeRequested = false;
+  var _resetOnResume = false;
+  var _outputBackpressured = false;
 
   @override
   void initState() {
@@ -101,13 +105,19 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.session != widget.session) {
       oldWidget.session.removeWebTerminalDataListener(_handleTerminalData);
+      oldWidget.session.setOutputBackpressure(false);
+      _outputBackpressured = false;
       _listenerAttached = false;
       _pendingOutput.clear();
       _pendingOutputCharacters = 0;
       _lastQueuedSequence = 0;
       _lastSentSequence = 0;
-      _synchronizeFromSession(reset: true);
-      if (_active) _attachSessionListener();
+      if (_active) {
+        _synchronizeFromSession(reset: true);
+        _attachSessionListener();
+      } else {
+        _resetOnResume = true;
+      }
     }
     if (_ready &&
         (oldWidget.scrollbackLines != widget.scrollbackLines ||
@@ -139,6 +149,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     _writeAckRequests.clear();
     _pendingOutput.clear();
     _pendingOutputCharacters = 0;
+    _setOutputBackpressure(false);
     _pendingScripts.clear();
     unawaited(
       _controller
@@ -243,7 +254,8 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     if (_ready) {
       _enqueueScript('window.vbTerminal.setActive(true);');
     }
-    _synchronizeFromSession(reset: false);
+    _synchronizeFromSession(reset: _resetOnResume);
+    _resetOnResume = false;
     _attachSessionListener();
     _scheduleDrain();
   }
@@ -283,6 +295,9 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       _pendingOutputCharacters = 0;
     }
     _appendOutputChunks(data, throughSequence, reset: reset);
+    if (_pendingOutputCharacters >= _pauseOutputAtCharacters) {
+      _setOutputBackpressure(true);
+    }
 
     if (_pendingOutputCharacters > _maximumPendingCharacters) {
       final replay = widget.session.webTerminalReplay;
@@ -459,6 +474,9 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       } else if (_ready && _active && _pendingOutput.isNotEmpty) {
         final output = _pendingOutput.removeFirst();
         _pendingOutputCharacters -= output.data.length;
+        if (_pendingOutputCharacters <= _resumeOutputAtCharacters) {
+          _setOutputBackpressure(false);
+        }
         outputSequence = output.throughSequence;
         final requestId = ++_writeRequestId;
         final acknowledgement = Completer<void>();
@@ -513,7 +531,14 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       if (!completer.isCompleted) completer.completeError(StateError(message));
     }
     _writeAckRequests.clear();
+    _setOutputBackpressure(false);
     widget.onFatalError?.call(message);
+  }
+
+  void _setOutputBackpressure(bool paused) {
+    if (_outputBackpressured == paused) return;
+    _outputBackpressured = paused;
+    widget.session.setOutputBackpressure(paused);
   }
 
   static bool _isHighSurrogate(int value) => value >= 0xD800 && value <= 0xDBFF;

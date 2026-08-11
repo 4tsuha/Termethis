@@ -97,11 +97,11 @@ class SshSessionController extends ChangeNotifier {
   String _webTerminalSnapshot = '';
   bool _webTerminalDeltaTruncated = false;
 
-  static const _visibleWriteInterval = Duration(milliseconds: 8);
+  static const _visibleWriteInterval = Duration(milliseconds: 16);
   static const _hiddenWriteInterval = Duration(milliseconds: 16);
   static const _maximumBufferedCharacters = 64 * 1024;
-  static const _maximumWebTerminalDeltaCharacters = 1024 * 1024;
-  static const _maximumWebTerminalSnapshotCharacters = 4 * 1024 * 1024;
+  static const _maximumWebTerminalDeltaCharacters = 256 * 1024;
+  static const _maximumWebTerminalSnapshotCharacters = 2 * 1024 * 1024;
 
   bool get isConnected => status == SshSessionStatus.connected;
 
@@ -291,6 +291,17 @@ class SshSessionController extends ChangeNotifier {
     _viewportVisible = visible;
   }
 
+  void setOutputBackpressure(bool paused) {
+    if (_disposed) return;
+    if (paused) {
+      _stdoutSubscription?.pause();
+      _stderrSubscription?.pause();
+    } else {
+      _stdoutSubscription?.resume();
+      _stderrSubscription?.resume();
+    }
+  }
+
   void enableFlutterTerminalMirror() {
     if (_mirrorToFlutterTerminal || _disposed) return;
     _mirrorToFlutterTerminal = true;
@@ -469,6 +480,7 @@ class SshSessionController extends ChangeNotifier {
     _terminalActivityListeners.clear();
     _terminalDataListeners.clear();
     _webTerminalDataListeners.clear();
+    setOutputBackpressure(false);
     _webTerminalDelta.clear();
     _webTerminalDeltaLength = 0;
     _webTerminalSnapshot = '';

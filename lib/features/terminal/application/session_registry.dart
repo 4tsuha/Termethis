@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../infrastructure/ssh/dart_ssh_gateway.dart';
 import '../../../infrastructure/ssh/in_memory_host_key_repository.dart';
+import '../../../infrastructure/ssh/rust_ssh_gateway.dart';
 import '../../../infrastructure/terminal/utf8_terminal_codec.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../settings/application/background_session_coordinator.dart';
@@ -19,7 +19,7 @@ final terminalCodecProvider = Provider<TerminalCodec>(
 );
 
 final sshGatewayProvider = Provider<SshGateway>(
-  (ref) => DartSshGateway(ref.watch(hostKeyRepositoryProvider)),
+  (ref) => RustSshGateway(ref.watch(hostKeyRepositoryProvider)),
 );
 
 final sessionRegistryProvider = Provider<SessionRegistry>((ref) {
@@ -93,7 +93,7 @@ class SessionRegistry {
     );
   }
 
-  static int _defaultScrollbackLines() => 5000;
+  static int _defaultScrollbackLines() => 2000;
 
   static bool _defaultCompactFlutterBuffer() => false;
 }

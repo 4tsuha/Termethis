@@ -13,9 +13,9 @@ String terminalSearchSequence(TerminalSearchMode mode) => switch (mode) {
 
 class TerminalPerformanceSettings {
   const TerminalPerformanceSettings({
-    this.rendererMode = TerminalRendererMode.webgl,
+    this.rendererMode = TerminalRendererMode.flutter,
     this.refreshRateMode = RefreshRateMode.adaptive,
-    this.scrollbackLines = 5000,
+    this.scrollbackLines = 2000,
     this.keepAliveInBackground = false,
     this.showSearchButton = true,
     this.showCopyOutputButton = true,
