@@ -23,6 +23,7 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::new);
 static PENDING_AUTHS: Lazy<DashMap<i64, PendingAuthentication>> = Lazy::new(DashMap::new);
 static SFTP_SESSIONS: Lazy<DashMap<i64, Arc<SftpSessionState>>> = Lazy::new(DashMap::new);
+static SSH_EXEC_CANCELLATIONS: Lazy<DashMap<i64, Arc<Notify>>> = Lazy::new(DashMap::new);
 
 #[derive(Clone)]
 pub struct RustSshConnectRequest {
@@ -70,6 +71,33 @@ pub struct RustSshReadResult {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub closed: bool,
+    pub error_message: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct RustSshExecRequest {
+    pub execution_id: i64,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_kind: String,
+    pub password: String,
+    pub private_key_pem: String,
+    pub passphrase: Option<String>,
+    pub trusted_host_keys: Vec<String>,
+    pub command: String,
+    pub timeout_millis: u32,
+    pub output_limit_bytes: u32,
+}
+
+pub struct RustSshExecResult {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_status: Option<u32>,
+    pub timed_out: bool,
+    pub cancelled: bool,
+    pub truncated: bool,
+    pub error_code: Option<String>,
     pub error_message: Option<String>,
 }
 
@@ -304,6 +332,47 @@ pub async fn ssh_close(session_id: i64) -> Result<()> {
             .await;
     }
     Ok(())
+}
+
+pub async fn ssh_execute(request: RustSshExecRequest) -> Result<RustSshExecResult> {
+    let timeout_millis = request.timeout_millis.clamp(1_000, 120_000);
+    let output_limit = (request.output_limit_bytes as usize).clamp(1_024, 1024 * 1024);
+    let cancellation = Arc::new(Notify::new());
+    SSH_EXEC_CANCELLATIONS.insert(request.execution_id, Arc::clone(&cancellation));
+    let execution = execute_ssh_command(&request, output_limit);
+    let result = tokio::select! {
+        _ = cancellation.notified() => RustSshExecResult {
+            stdout: Vec::new(), stderr: Vec::new(), exit_status: None,
+            timed_out: false, cancelled: true, truncated: false,
+            error_code: Some("cancelled".to_owned()),
+            error_message: Some("SSH command was cancelled".to_owned()),
+        },
+        value = tokio::time::timeout(Duration::from_millis(timeout_millis as u64), execution) => {
+            match value {
+                Ok(Ok(result)) => result,
+                Ok(Err(error)) => RustSshExecResult {
+                    stdout: Vec::new(), stderr: Vec::new(), exit_status: None,
+                    timed_out: false, cancelled: false, truncated: false,
+                    error_code: Some("execution_failed".to_owned()),
+                    error_message: Some(format!("{error:#}")),
+                },
+                Err(_) => RustSshExecResult {
+                    stdout: Vec::new(), stderr: Vec::new(), exit_status: None,
+                    timed_out: true, cancelled: false, truncated: false,
+                    error_code: Some("timeout".to_owned()),
+                    error_message: Some("SSH command timed out".to_owned()),
+                },
+            }
+        }
+    };
+    SSH_EXEC_CANCELLATIONS.remove(&request.execution_id);
+    Ok(result)
+}
+
+pub fn ssh_cancel_execution(execution_id: i64) {
+    if let Some(cancellation) = SSH_EXEC_CANCELLATIONS.get(&execution_id) {
+        cancellation.notify_waiters();
+    }
 }
 
 pub fn private_key_is_encrypted(pem: String) -> bool {
@@ -646,6 +715,98 @@ async fn authenticate_sftp(
     } else {
         Err(anyhow!("SFTP authentication was rejected"))
     }
+}
+
+async fn execute_ssh_command(
+    request: &RustSshExecRequest,
+    output_limit: usize,
+) -> Result<RustSshExecResult> {
+    if request.command.is_empty() {
+        return Err(anyhow!("SSH command is empty"));
+    }
+    if request.trusted_host_keys.is_empty() {
+        return Err(anyhow!("No trusted host key is stored for this connection"));
+    }
+    let observed = Arc::new(StdMutex::new(None));
+    let handler = HostKeyHandler {
+        trusted: request.trusted_host_keys.iter().cloned().collect(),
+        observed,
+    };
+    let mut client = connect_client(&request.host, request.port, handler).await?;
+    match request.auth_kind.as_str() {
+        "private_key" => {
+            authenticate_private_key(
+                &mut client,
+                &request.username,
+                &request.private_key_pem,
+                request.passphrase.as_deref(),
+            )
+            .await?;
+        }
+        "password" => {
+            let result = client
+                .authenticate_password(&request.username, &request.password)
+                .await
+                .context("Password authentication failed")?;
+            if !result.success() {
+                return Err(anyhow!("Password authentication was rejected"));
+            }
+        }
+        _ => return Err(anyhow!("Unsupported SSH authentication type")),
+    }
+
+    let mut channel = client
+        .channel_open_session()
+        .await
+        .context("Failed to open SSH exec channel")?;
+    channel
+        .exec(true, request.command.as_bytes())
+        .await
+        .context("SSH exec request was rejected")?;
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut exit_status = None;
+    let mut truncated = false;
+    while let Some(message) = channel.wait().await {
+        match message {
+            ChannelMsg::Data { data } => {
+                truncated |= append_limited(&mut stdout, data.as_ref(), output_limit, stderr.len());
+            }
+            ChannelMsg::ExtendedData { data, ext } if ext == 1 => {
+                truncated |= append_limited(&mut stderr, data.as_ref(), output_limit, stdout.len());
+            }
+            ChannelMsg::ExitStatus {
+                exit_status: status,
+            } => exit_status = Some(status),
+            ChannelMsg::Eof | ChannelMsg::Close => break,
+            _ => {}
+        }
+        if truncated {
+            let _ = channel.close().await;
+            break;
+        }
+    }
+    let _ = client
+        .disconnect(Disconnect::ByApplication, "", "English")
+        .await;
+    Ok(RustSshExecResult {
+        stdout,
+        stderr,
+        exit_status,
+        timed_out: false,
+        cancelled: false,
+        truncated,
+        error_code: None,
+        error_message: None,
+    })
+}
+
+fn append_limited(target: &mut Vec<u8>, data: &[u8], limit: usize, other_len: usize) -> bool {
+    let available = limit.saturating_sub(target.len() + other_len);
+    let copied = available.min(data.len());
+    target.extend_from_slice(&data[..copied]);
+    copied < data.len()
 }
 
 async fn authenticate_private_key(

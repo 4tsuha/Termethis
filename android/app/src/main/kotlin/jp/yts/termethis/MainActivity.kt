@@ -42,6 +42,7 @@ class MainActivity : FlutterActivity() {
     private var appliedHardwareAccelerationMode = HardwareAccelerationMode.AUTOMATIC
     private var pendingPrivateKeyResult: MethodChannel.Result? = null
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
+    private var shizukuDiagnosticsChannel: ShizukuDiagnosticsChannel? = null
 
     @Suppress("DEPRECATION")
     override fun getFlutterShellArgs(): FlutterShellArgs {
@@ -65,6 +66,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        shizukuDiagnosticsChannel = ShizukuDiagnosticsChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
         flutterEngine.platformViewsController.registry.registerViewFactory(
             NATIVE_TERMINAL_VIEW_TYPE,
             NativeTerminalViewFactory(flutterEngine.dartExecutor.binaryMessenger),
@@ -169,19 +174,13 @@ class MainActivity : FlutterActivity() {
                 return@setMethodCallHandler
             }
             val keepAwake = call.argument<Boolean>("keepScreenAwake") == true
-            val resizeForKeyboard = call.argument<Boolean>("resizeForKeyboard") == true
             if (keepAwake) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             } else {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
-            window.setSoftInputMode(
-                if (resizeForKeyboard) {
-                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                } else {
-                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
-                },
-            )
+            // Keep the IME below Flutter controls. PTY reflow remains a renderer setting.
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             result.success(null)
         }
         MethodChannel(
@@ -261,6 +260,8 @@ class MainActivity : FlutterActivity() {
             null,
         )
         pendingBackgroundSessionResult = null
+        shizukuDiagnosticsChannel?.dispose()
+        shizukuDiagnosticsChannel = null
         refreshRateController.detach()
         super.onDestroy()
     }

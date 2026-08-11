@@ -769,7 +769,7 @@ abstract class AppLocalizations {
   /// No description provided for @connectionTypeRdpDescription.
   ///
   /// In ja, this message translates to:
-  /// **'IronRDPを使用して、Windowsのリモートデスクトップをアプリ内で開きます。'**
+  /// **'Windowsのリモートデスクトップへアプリ内から接続します。'**
   String get connectionTypeRdpDescription;
 
   /// No description provided for @connectionTypeVnc.
@@ -1147,7 +1147,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSelectTerminalRenderer.
   ///
   /// In ja, this message translates to:
-  /// **'描画エンジンを選択'**
+  /// **'ターミナルエミュレータを選択'**
   String get settingsSelectTerminalRenderer;
 
   /// No description provided for @terminalRendererWebgl.
@@ -1161,6 +1161,18 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
+
+  /// No description provided for @terminalRendererAlacritty.
+  ///
+  /// In ja, this message translates to:
+  /// **'Flutter Alacritty'**
+  String get terminalRendererAlacritty;
+
+  /// No description provided for @terminalRendererAlacrittyDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。'**
+  String get terminalRendererAlacrittyDescription;
 
   /// No description provided for @terminalRendererConnectBot.
   ///

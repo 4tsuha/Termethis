@@ -31,6 +31,7 @@ void main() {
 
     expect(find.text('接続先'), findsOneWidget);
     expect(find.text('接続先がありません'), findsOneWidget);
+    expect(find.text('接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。'), findsNothing);
     expect(find.text('接続先を追加'), findsNothing);
     expect(find.byTooltip('接続先を追加'), findsNothing);
     expect(find.byIcon(Icons.add), findsOneWidget);

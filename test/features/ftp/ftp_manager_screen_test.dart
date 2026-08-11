@@ -109,6 +109,7 @@ void main() {
       '描画とパフォーマンス',
       '電源とバックグラウンド',
       'キー管理',
+      '連携と診断',
     ]) {
       await tester.scrollUntilVisible(find.text(label), 420);
       expect(find.text(label), findsOneWidget);
@@ -116,6 +117,7 @@ void main() {
 
     await tester.tap(find.text('秘密鍵と信頼済みホスト鍵'));
     await tester.pumpAndSettle();
+    expect(find.text('認証情報はこの端末内に保存'), findsOneWidget);
     expect(find.text('秘密鍵'), findsOneWidget);
     expect(find.text('信頼済みホスト鍵'), findsOneWidget);
   });

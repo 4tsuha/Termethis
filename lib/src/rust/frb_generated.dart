@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -878831189;
+  int get rustContentHash => -1609249272;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -164,6 +164,10 @@ abstract class RustLibApi extends BaseApi {
     required String newName,
   });
 
+  Future<void> crateApiCoreSshCancelExecution({
+    required PlatformInt64 executionId,
+  });
+
   Future<void> crateApiCoreSshClose({required PlatformInt64 sessionId});
 
   Future<RustSshConnectResult> crateApiCoreSshConnect({
@@ -173,6 +177,10 @@ abstract class RustLibApi extends BaseApi {
   Future<RustSshConnectResult> crateApiCoreSshContinueAuthentication({
     required PlatformInt64 pendingAuthId,
     required List<String> responses,
+  });
+
+  Future<RustSshExecResult> crateApiCoreSshExecute({
+    required RustSshExecRequest request,
   });
 
   Future<RustSshReadResult> crateApiCoreSshRead({
@@ -838,6 +846,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<void> crateApiCoreSshCancelExecution({
+    required PlatformInt64 executionId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(executionId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCoreSshCancelExecutionConstMeta,
+        argValues: [executionId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreSshCancelExecutionConstMeta =>
+      const TaskConstMeta(
+        debugName: "ssh_cancel_execution",
+        argNames: ["executionId"],
+      );
+
+  @override
   Future<void> crateApiCoreSshClose({required PlatformInt64 sessionId}) {
     return handler.executeNormal(
       NormalTask(
@@ -847,7 +888,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -877,7 +918,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -909,7 +950,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -931,6 +972,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<RustSshExecResult> crateApiCoreSshExecute({
+    required RustSshExecRequest request,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_rust_ssh_exec_request(request, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_ssh_exec_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreSshExecuteConstMeta,
+        argValues: [request],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreSshExecuteConstMeta =>
+      const TaskConstMeta(debugName: "ssh_execute", argNames: ["request"]);
+
+  @override
   Future<RustSshReadResult> crateApiCoreSshRead({
     required PlatformInt64 sessionId,
     required int maxBytes,
@@ -946,7 +1017,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 25,
             port: port_,
           );
         },
@@ -986,7 +1057,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1020,7 +1091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1054,7 +1125,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1136,6 +1207,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustSshExecRequest dco_decode_box_autoadd_rust_ssh_exec_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_rust_ssh_exec_request(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1205,6 +1288,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RustHostKey? dco_decode_opt_box_autoadd_rust_host_key(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_rust_host_key(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
   }
 
   @protected
@@ -1389,6 +1478,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustSshExecRequest dco_decode_rust_ssh_exec_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    return RustSshExecRequest(
+      executionId: dco_decode_i_64(arr[0]),
+      host: dco_decode_String(arr[1]),
+      port: dco_decode_u_16(arr[2]),
+      username: dco_decode_String(arr[3]),
+      authKind: dco_decode_String(arr[4]),
+      password: dco_decode_String(arr[5]),
+      privateKeyPem: dco_decode_String(arr[6]),
+      passphrase: dco_decode_opt_String(arr[7]),
+      trustedHostKeys: dco_decode_list_String(arr[8]),
+      command: dco_decode_String(arr[9]),
+      timeoutMillis: dco_decode_u_32(arr[10]),
+      outputLimitBytes: dco_decode_u_32(arr[11]),
+    );
+  }
+
+  @protected
+  RustSshExecResult dco_decode_rust_ssh_exec_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return RustSshExecResult(
+      stdout: dco_decode_list_prim_u_8_strict(arr[0]),
+      stderr: dco_decode_list_prim_u_8_strict(arr[1]),
+      exitStatus: dco_decode_opt_box_autoadd_u_32(arr[2]),
+      timedOut: dco_decode_bool(arr[3]),
+      cancelled: dco_decode_bool(arr[4]),
+      truncated: dco_decode_bool(arr[5]),
+      errorCode: dco_decode_opt_String(arr[6]),
+      errorMessage: dco_decode_opt_String(arr[7]),
+    );
+  }
+
+  @protected
   RustSshReadResult dco_decode_rust_ssh_read_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1490,6 +1619,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_rust_ssh_connect_request(deserializer));
+  }
+
+  @protected
+  RustSshExecRequest sse_decode_box_autoadd_rust_ssh_exec_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_rust_ssh_exec_request(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
   }
 
   @protected
@@ -1601,6 +1744,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_rust_host_key(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
     } else {
       return null;
     }
@@ -1828,6 +1982,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustSshExecRequest sse_decode_rust_ssh_exec_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_executionId = sse_decode_i_64(deserializer);
+    var var_host = sse_decode_String(deserializer);
+    var var_port = sse_decode_u_16(deserializer);
+    var var_username = sse_decode_String(deserializer);
+    var var_authKind = sse_decode_String(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_privateKeyPem = sse_decode_String(deserializer);
+    var var_passphrase = sse_decode_opt_String(deserializer);
+    var var_trustedHostKeys = sse_decode_list_String(deserializer);
+    var var_command = sse_decode_String(deserializer);
+    var var_timeoutMillis = sse_decode_u_32(deserializer);
+    var var_outputLimitBytes = sse_decode_u_32(deserializer);
+    return RustSshExecRequest(
+      executionId: var_executionId,
+      host: var_host,
+      port: var_port,
+      username: var_username,
+      authKind: var_authKind,
+      password: var_password,
+      privateKeyPem: var_privateKeyPem,
+      passphrase: var_passphrase,
+      trustedHostKeys: var_trustedHostKeys,
+      command: var_command,
+      timeoutMillis: var_timeoutMillis,
+      outputLimitBytes: var_outputLimitBytes,
+    );
+  }
+
+  @protected
+  RustSshExecResult sse_decode_rust_ssh_exec_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_stdout = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_stderr = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_exitStatus = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_timedOut = sse_decode_bool(deserializer);
+    var var_cancelled = sse_decode_bool(deserializer);
+    var var_truncated = sse_decode_bool(deserializer);
+    var var_errorCode = sse_decode_opt_String(deserializer);
+    var var_errorMessage = sse_decode_opt_String(deserializer);
+    return RustSshExecResult(
+      stdout: var_stdout,
+      stderr: var_stderr,
+      exitStatus: var_exitStatus,
+      timedOut: var_timedOut,
+      cancelled: var_cancelled,
+      truncated: var_truncated,
+      errorCode: var_errorCode,
+      errorMessage: var_errorMessage,
+    );
+  }
+
+  @protected
   RustSshReadResult sse_decode_rust_ssh_read_result(
     SseDeserializer deserializer,
   ) {
@@ -1943,6 +2155,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_rust_ssh_exec_request(
+    RustSshExecRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rust_ssh_exec_request(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -2055,6 +2282,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_rust_host_key(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
     }
   }
 
@@ -2205,6 +2442,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.pendingAuthId, serializer);
     sse_encode_opt_box_autoadd_rust_host_key(self.hostKey, serializer);
     sse_encode_opt_box_autoadd_rust_auth_challenge(self.challenge, serializer);
+    sse_encode_opt_String(self.errorCode, serializer);
+    sse_encode_opt_String(self.errorMessage, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_ssh_exec_request(
+    RustSshExecRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.executionId, serializer);
+    sse_encode_String(self.host, serializer);
+    sse_encode_u_16(self.port, serializer);
+    sse_encode_String(self.username, serializer);
+    sse_encode_String(self.authKind, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_String(self.privateKeyPem, serializer);
+    sse_encode_opt_String(self.passphrase, serializer);
+    sse_encode_list_String(self.trustedHostKeys, serializer);
+    sse_encode_String(self.command, serializer);
+    sse_encode_u_32(self.timeoutMillis, serializer);
+    sse_encode_u_32(self.outputLimitBytes, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_ssh_exec_result(
+    RustSshExecResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.stdout, serializer);
+    sse_encode_list_prim_u_8_strict(self.stderr, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.exitStatus, serializer);
+    sse_encode_bool(self.timedOut, serializer);
+    sse_encode_bool(self.cancelled, serializer);
+    sse_encode_bool(self.truncated, serializer);
     sse_encode_opt_String(self.errorCode, serializer);
     sse_encode_opt_String(self.errorMessage, serializer);
   }

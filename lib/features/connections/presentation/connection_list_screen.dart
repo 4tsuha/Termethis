@@ -47,12 +47,6 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
       ),
       body: Column(
         children: [
-          if (!desktopOnly)
-            MaterialBanner(
-              content: Text(l10n.stageOneNotice),
-              leading: const Icon(Icons.info_outline),
-              actions: const [SizedBox.shrink()],
-            ),
           Expanded(
             child: profiles.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -154,7 +148,9 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
       if (profile.connectionType == ConnectionType.ssh) {
         final tabId = await ref.read(sshTabsProvider.notifier).open(profile);
         if (context.mounted) {
-          context.push('/terminal/${profile.id}?tab=$tabId');
+          context.go(
+            Uri(path: '/terminals', queryParameters: {'tab': tabId}).toString(),
+          );
         }
         return;
       }

@@ -53,6 +53,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustSshExecRequest dco_decode_box_autoadd_rust_ssh_exec_request(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -90,6 +96,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustHostKey? dco_decode_opt_box_autoadd_rust_host_key(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
   RustAuthChallenge dco_decode_rust_auth_challenge(dynamic raw);
 
   @protected
@@ -124,6 +133,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustSshConnectResult dco_decode_rust_ssh_connect_result(dynamic raw);
+
+  @protected
+  RustSshExecRequest dco_decode_rust_ssh_exec_request(dynamic raw);
+
+  @protected
+  RustSshExecResult dco_decode_rust_ssh_exec_result(dynamic raw);
 
   @protected
   RustSshReadResult dco_decode_rust_ssh_read_result(dynamic raw);
@@ -178,6 +193,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustSshExecRequest sse_decode_box_autoadd_rust_ssh_exec_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -217,6 +240,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustHostKey? sse_decode_opt_box_autoadd_rust_host_key(
     SseDeserializer deserializer,
   );
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   RustAuthChallenge sse_decode_rust_auth_challenge(
@@ -267,6 +293,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustSshConnectResult sse_decode_rust_ssh_connect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustSshExecRequest sse_decode_rust_ssh_exec_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustSshExecResult sse_decode_rust_ssh_exec_result(
     SseDeserializer deserializer,
   );
 
@@ -336,6 +372,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rust_ssh_exec_request(
+    RustSshExecRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -385,6 +430,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RustHostKey? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_rust_auth_challenge(
@@ -443,6 +491,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_rust_ssh_connect_result(
     RustSshConnectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_ssh_exec_request(
+    RustSshExecRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_ssh_exec_result(
+    RustSshExecResult self,
     SseSerializer serializer,
   );
 

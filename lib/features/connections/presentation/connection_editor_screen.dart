@@ -10,6 +10,7 @@ import '../domain/connection_profile.dart';
 import '../domain/credential_vault.dart';
 import '../domain/private_key_importer.dart';
 import '../../wake_on_lan/domain/wake_on_lan.dart';
+import '../../settings/application/credential_settings_controller.dart';
 
 class ConnectionEditorScreen extends ConsumerStatefulWidget {
   const ConnectionEditorScreen({
@@ -38,6 +39,7 @@ class _ConnectionEditorScreenState
   late final TextEditingController _wakeOnLanPortController;
   final TextEditingController _keyPassphraseController =
       TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   ConnectionProfile? _existing;
   late final ConnectionType _connectionType;
   late AuthenticationType _authenticationType;
@@ -90,6 +92,7 @@ class _ConnectionEditorScreenState
       _wakeOnLanBroadcastController,
       _wakeOnLanPortController,
       _keyPassphraseController,
+      _passwordController,
     ]) {
       controller.addListener(_markDirty);
     }
@@ -105,12 +108,18 @@ class _ConnectionEditorScreenState
     _wakeOnLanBroadcastController.dispose();
     _wakeOnLanPortController.dispose();
     _keyPassphraseController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final saveSshPasswords = ref.watch(
+      credentialSettingsProvider.select(
+        (settings) => settings.saveSshPasswords,
+      ),
+    );
 
     return PopScope<void>(
       canPop: !_dirty && !_saving,
@@ -250,7 +259,10 @@ class _ConnectionEditorScreenState
                     label:
                         _selectedPrivateKey?.label ??
                         _existing?.privateKeyLabel,
-                    hasExistingKey: _existing?.credentialReference != null,
+                    hasExistingKey:
+                        _existing?.authenticationType ==
+                            AuthenticationType.privateKey &&
+                        _existing?.credentialReference != null,
                     isEncrypted: _selectedPrivateKey?.isEncrypted ?? false,
                     passphraseController: _keyPassphraseController,
                     savePassphrase: _saveKeyPassphrase,
@@ -261,6 +273,39 @@ class _ConnectionEditorScreenState
                       });
                     },
                     onPick: _pickPrivateKey,
+                  ),
+                ] else if (_connectionType == ConnectionType.ssh &&
+                    saveSshPasswords) ...[
+                  const SizedBox(height: 16),
+                  Card.outlined(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText:
+                              _existing?.authenticationType !=
+                                      AuthenticationType
+                                          .passwordOrInteractive ||
+                                  _existing?.credentialReference == null
+                              ? '保存するパスワード'
+                              : '新しいパスワード（空欄なら変更しない）',
+                          helperText: '設定でパスワード保存が有効です。暗号化Vaultへ保存します。',
+                          border: const OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (_existing?.authenticationType ==
+                                  AuthenticationType.passwordOrInteractive &&
+                              _existing?.credentialReference != null) {
+                            return null;
+                          }
+                          return _required(value, l10n);
+                        },
+                      ),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -448,7 +493,8 @@ class _ConnectionEditorScreenState
     if (_connectionType == ConnectionType.ssh &&
         _authenticationType == AuthenticationType.privateKey &&
         selectedKey == null &&
-        _existing?.credentialReference == null) {
+        !(_existing?.authenticationType == AuthenticationType.privateKey &&
+            _existing?.credentialReference != null)) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(l10n.privateKeyNotSelected)));
@@ -458,6 +504,7 @@ class _ConnectionEditorScreenState
     setState(() => _saving = true);
     try {
       PrivateKeyCredential? replacementCredential;
+      PasswordCredential? replacementPassword;
       if (_connectionType == ConnectionType.ssh &&
           _authenticationType == AuthenticationType.privateKey &&
           selectedKey != null) {
@@ -477,13 +524,27 @@ class _ConnectionEditorScreenState
               : null,
         );
       }
+      if (_connectionType == ConnectionType.ssh &&
+          _authenticationType == AuthenticationType.passwordOrInteractive &&
+          ref.read(credentialSettingsProvider).saveSshPasswords &&
+          _passwordController.text.isNotEmpty) {
+        replacementPassword = PasswordCredential(_passwordController.text);
+      }
 
       final id =
           _existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
       final keepExistingCredential =
           _connectionType == ConnectionType.ssh &&
-          _authenticationType == AuthenticationType.privateKey &&
-          selectedKey == null;
+          ((_authenticationType == AuthenticationType.privateKey &&
+                  selectedKey == null &&
+                  _existing?.authenticationType ==
+                      AuthenticationType.privateKey) ||
+              (_authenticationType ==
+                      AuthenticationType.passwordOrInteractive &&
+                  ref.read(credentialSettingsProvider).saveSshPasswords &&
+                  _passwordController.text.isEmpty &&
+                  _existing?.authenticationType ==
+                      AuthenticationType.passwordOrInteractive));
       final wakeOnLan = _wakeOnLanEnabled
           ? WakeOnLanConfiguration(
               macAddress: WakeOnLanConfiguration.normalizeMacAddress(
@@ -513,6 +574,7 @@ class _ConnectionEditorScreenState
               wakeOnLan: wakeOnLan,
             ),
             replacementPrivateKey: replacementCredential,
+            replacementPassword: replacementPassword,
           );
       if (mounted) {
         setState(() => _dirty = false);

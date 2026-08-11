@@ -6,11 +6,14 @@ import '../features/ftp/presentation/ftp_manager_screen.dart';
 import '../features/connections/presentation/connection_editor_screen.dart';
 import '../features/connections/presentation/connection_list_screen.dart';
 import '../features/connections/domain/connection_profile.dart';
+import '../features/connection_logs/presentation/connection_logs_screen.dart';
+import '../features/diagnostics/presentation/logcat_capture_screen.dart';
+import '../features/diagnostics/presentation/shizuku_screen.dart';
+import '../features/mcp/presentation/mcp_server_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/key_management_screen.dart';
 import '../features/remote_desktop/presentation/rdp_screen.dart';
-import '../features/terminal/presentation/terminal_screen.dart';
-import '../features/terminal/presentation/terminal_sessions_screen.dart';
+import '../features/terminal/presentation/terminal_workspace_screen.dart';
 import 'app_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -36,7 +39,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/terminals',
-                builder: (context, state) => const TerminalSessionsScreen(),
+                builder: (context, state) => TerminalWorkspaceScreen(
+                  requestedTabId: state.uri.queryParameters['tab'],
+                  openShizukuShell:
+                      state.uri.queryParameters['mode'] == 'shizuku',
+                ),
               ),
             ],
           ),
@@ -68,6 +75,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'keys',
                     builder: (context, state) => const KeyManagementScreen(),
                   ),
+                  GoRoute(
+                    path: 'shizuku',
+                    builder: (context, state) => const ShizukuScreen(),
+                  ),
+                  GoRoute(
+                    path: 'logcat',
+                    builder: (context, state) => const LogcatCaptureScreen(),
+                  ),
+                  GoRoute(
+                    path: 'connection-logs',
+                    builder: (context, state) => const ConnectionLogsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'mcp',
+                    builder: (context, state) => const McpServerScreen(),
+                  ),
                 ],
               ),
             ],
@@ -89,15 +112,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/connections/:id/edit',
         builder: (context, state) =>
             ConnectionEditorScreen(profileId: state.pathParameters['id']),
-      ),
-      GoRoute(
-        parentNavigatorKey: rootNavigatorKey,
-        path: '/terminal/:id',
-        builder: (context, state) => TerminalScreen(
-          profileId: state.pathParameters['id']!,
-          tabId:
-              state.uri.queryParameters['tab'] ?? state.pathParameters['id']!,
-        ),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

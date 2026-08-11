@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../infrastructure/ssh/in_memory_host_key_repository.dart';
 import '../../../infrastructure/ssh/rust_ssh_gateway.dart';
 import '../../../infrastructure/terminal/utf8_terminal_codec.dart';
+import '../../connection_logs/application/connection_logs_controller.dart';
+import '../../connection_logs/domain/connection_log_repository.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../settings/application/background_session_coordinator.dart';
 import '../domain/ssh_gateway.dart';
@@ -25,22 +27,35 @@ final sessionRegistryProvider = Provider<SessionRegistry>((ref) {
     ref.watch(sshGatewayProvider),
     ref.watch(terminalCodecProvider),
     backgroundSessions: ref.watch(backgroundSessionCoordinatorProvider),
+    connectionLogs: ref.watch(connectionLogRepositoryProvider),
   );
   ref.onDispose(registry.dispose);
   return registry;
 });
 
 class SessionRegistry {
-  SessionRegistry(this._gateway, this._codec, {this._backgroundSessions});
+  SessionRegistry(
+    this._gateway,
+    this._codec, {
+    this.backgroundSessions,
+    this.connectionLogs,
+  });
 
   final SshGateway _gateway;
   final TerminalCodec _codec;
-  final BackgroundSessionCoordinator? _backgroundSessions;
+  final BackgroundSessionCoordinator? backgroundSessions;
+  final ConnectionLogRepository? connectionLogs;
   final Map<String, SshSessionController> _sessions = {};
 
   SshSessionController open(String tabId, ConnectionProfile profile) {
     return _sessions.putIfAbsent(tabId, () {
-      final session = SshSessionController(_gateway, _codec, profile: profile);
+      final session = SshSessionController(
+        _gateway,
+        _codec,
+        profile: profile,
+        tabId: tabId,
+        connectionLogs: connectionLogs,
+      );
       session.addListener(_syncBackgroundSessions);
       return session;
     });
@@ -61,11 +76,11 @@ class SessionRegistry {
       session.dispose();
     }
     _sessions.clear();
-    _backgroundSessions?.setHasActiveSession(false);
+    backgroundSessions?.setHasActiveSession(false);
   }
 
   void _syncBackgroundSessions() {
-    _backgroundSessions?.setHasActiveSession(
+    backgroundSessions?.setHasActiveSession(
       _sessions.values.any((session) => session.isConnected),
     );
   }

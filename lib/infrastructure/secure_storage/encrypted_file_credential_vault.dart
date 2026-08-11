@@ -88,6 +88,46 @@ class EncryptedFileCredentialVault implements CredentialVault {
   }
 
   @override
+  Future<CredentialHandle> putPassword(PasswordCredential credential) async {
+    if (credential.password.length > 64 * 1024) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.unavailable,
+      );
+    }
+    try {
+      final clearText = utf8.encode(
+        jsonEncode({
+          'version': _recordVersion,
+          'type': 'password',
+          'password': credential.password,
+        }),
+      );
+      final secretBox = await _cipher.encrypt(
+        clearText,
+        secretKey: await _masterKey(),
+      );
+      final handle = CredentialHandle(_randomId());
+      final envelope = jsonEncode({
+        'version': _recordVersion,
+        'nonce': base64Encode(secretBox.nonce),
+        'cipherText': base64Encode(secretBox.cipherText),
+        'mac': base64Encode(secretBox.mac.bytes),
+      });
+      final file = await _fileFor(handle);
+      await file.parent.create(recursive: true);
+      final temporaryFile = File('${file.path}.tmp');
+      await temporaryFile.writeAsString(envelope, flush: true);
+      await temporaryFile.rename(file.path);
+      return handle;
+    } catch (error) {
+      throw CredentialVaultFailure(
+        CredentialVaultFailureCode.unavailable,
+        error,
+      );
+    }
+  }
+
+  @override
   Future<PrivateKeyCredential?> readPrivateKey(CredentialHandle handle) async {
     try {
       final file = await _fileFor(handle);
@@ -116,12 +156,12 @@ class EncryptedFileCredentialVault implements CredentialVault {
       );
       final record = jsonDecode(utf8.decode(clearText));
       if (record is! Map<String, dynamic> ||
-          record['version'] != _recordVersion ||
-          record['type'] != 'privateKey') {
+          record['version'] != _recordVersion) {
         throw const CredentialVaultFailure(
           CredentialVaultFailureCode.corruptData,
         );
       }
+      if (record['type'] != 'privateKey') return null;
       return PrivateKeyCredential(
         pem: record['pem'] as String,
         label: record['label'] as String,
@@ -141,6 +181,51 @@ class EncryptedFileCredentialVault implements CredentialVault {
         error,
       );
     }
+  }
+
+  @override
+  Future<PasswordCredential?> readPassword(CredentialHandle handle) async {
+    try {
+      final record = await _readRecord(handle);
+      if (record == null || record['type'] != 'password') return null;
+      return PasswordCredential(record['password'] as String);
+    } on CredentialVaultFailure {
+      rethrow;
+    } catch (error) {
+      throw CredentialVaultFailure(
+        CredentialVaultFailureCode.corruptData,
+        error,
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> _readRecord(CredentialHandle handle) async {
+    final file = await _fileFor(handle);
+    if (!await file.exists()) return null;
+    final envelope = jsonDecode(await file.readAsString());
+    if (envelope is! Map<String, dynamic> ||
+        envelope['version'] != _recordVersion) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.corruptData,
+      );
+    }
+    final secretBox = SecretBox(
+      base64Decode(envelope['cipherText'] as String),
+      nonce: base64Decode(envelope['nonce'] as String),
+      mac: Mac(base64Decode(envelope['mac'] as String)),
+    );
+    final clearText = await _cipher.decrypt(
+      secretBox,
+      secretKey: await _masterKey(),
+    );
+    final record = jsonDecode(utf8.decode(clearText));
+    if (record is! Map<String, dynamic> ||
+        record['version'] != _recordVersion) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.corruptData,
+      );
+    }
+    return record;
   }
 
   @override

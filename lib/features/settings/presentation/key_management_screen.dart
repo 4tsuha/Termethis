@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
+import '../application/credential_settings_controller.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/domain/ssh_gateway.dart';
 
@@ -33,6 +34,20 @@ class _KeyManagementScreenState extends ConsumerState<KeyManagementScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
+          const _SectionHeader('保存方針'),
+          _KeyCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.shield_outlined),
+                title: const Text('認証情報はこの端末内に保存'),
+                subtitle: Text(
+                  ref.watch(credentialSettingsProvider).saveSshPasswords
+                      ? 'SSH秘密鍵、保存したパスフレーズとパスワードは暗号化Vaultで保護します。'
+                      : 'SSH秘密鍵と保存したパスフレーズは暗号化Vaultで保護します。パスワードは保存しません。',
+                ),
+              ),
+            ],
+          ),
           _SectionHeader(l10n.privateKeysTitle),
           _PrivateKeysCard(profiles: ref.watch(connectionProfilesProvider)),
           _SectionHeader(l10n.knownHostsTitle),

@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:xterm/xterm.dart';
 
 import '../../connections/domain/connection_profile.dart';
+import '../../connection_logs/domain/connection_log_entry.dart';
+import '../../connection_logs/domain/connection_log_repository.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
 
@@ -52,8 +54,13 @@ class _WebTerminalChunk {
 }
 
 class SshSessionController extends ChangeNotifier {
-  SshSessionController(this._gateway, this._codec, {required this.profile})
-    : terminal = Terminal(maxLines: 50) {
+  SshSessionController(
+    this._gateway,
+    this._codec, {
+    required this.profile,
+    this.tabId,
+    this.connectionLogs,
+  }) : terminal = Terminal(maxLines: 50) {
     terminal.onOutput = _handleTerminalOutput;
     terminal.onResize = _handleResize;
     terminal.onTitleChange = (value) {
@@ -63,8 +70,10 @@ class SshSessionController extends ChangeNotifier {
   }
 
   final ConnectionProfile profile;
+  final String? tabId;
   final SshGateway _gateway;
   final TerminalCodec _codec;
+  final ConnectionLogRepository? connectionLogs;
   final Terminal terminal;
   final Set<VoidCallback> _terminalActivityListeners = {};
   final Set<ValueChanged<String>> _terminalDataListeners = {};
@@ -512,8 +521,51 @@ class SshSessionController extends ChangeNotifier {
   }
 
   void _setStatus(SshSessionStatus next) {
+    final changed = status != next;
     status = next;
+    if (changed) _recordConnectionState(next);
     _notify();
+  }
+
+  void _recordConnectionState(SshSessionStatus next) {
+    final logs = connectionLogs;
+    final currentTabId = tabId;
+    if (logs == null || currentTabId == null) return;
+    final failureCode = switch (next) {
+      SshSessionStatus.failed ||
+      SshSessionStatus.reconnectPrompt => failure?.code,
+      _ => null,
+    };
+    unawaited(
+      logs
+          .append(
+            ConnectionLogEntry(
+              timestamp: DateTime.now(),
+              profileId: profile.id,
+              profileName: profile.name,
+              target: profile.target,
+              tabId: currentTabId,
+              state: _connectionLogState(next),
+              failureCode: failureCode,
+            ),
+          )
+          .catchError((Object _, StackTrace _) {}),
+    );
+  }
+
+  static ConnectionLogState _connectionLogState(SshSessionStatus status) {
+    return switch (status) {
+      SshSessionStatus.idle => ConnectionLogState.idle,
+      SshSessionStatus.connecting => ConnectionLogState.connecting,
+      SshSessionStatus.verifyingHost => ConnectionLogState.verifyingHost,
+      SshSessionStatus.authenticating => ConnectionLogState.authenticating,
+      SshSessionStatus.openingPty => ConnectionLogState.openingPty,
+      SshSessionStatus.connected => ConnectionLogState.connected,
+      SshSessionStatus.reconnectPrompt => ConnectionLogState.reconnectPrompt,
+      SshSessionStatus.closing => ConnectionLogState.closing,
+      SshSessionStatus.closed => ConnectionLogState.closed,
+      SshSessionStatus.failed => ConnectionLogState.failed,
+    };
   }
 
   void _notify() {
