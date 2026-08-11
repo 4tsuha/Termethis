@@ -310,10 +310,38 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navHome => 'ホーム';
 
   @override
+  String get navTerminal => 'ターミナル';
+
+  @override
+  String get navDesktop => 'デスクトップ';
+
+  @override
   String get navFtp => 'FTP';
 
   @override
   String get navSettings => '設定';
+
+  @override
+  String get terminalSessionsTitle => 'ターミナル';
+
+  @override
+  String get terminalSessionsEmptyTitle => 'ターミナルは開かれていません';
+
+  @override
+  String get terminalSessionsEmptyMessage =>
+      'ホームのSSH接続先からターミナルを開くと、ここで切り替えと終了ができます。';
+
+  @override
+  String get terminalSessionsOpenConnections => 'SSH接続先を開く';
+
+  @override
+  String get desktopTitle => 'デスクトップ';
+
+  @override
+  String get desktopEmptyTitle => 'デスクトップ接続がありません';
+
+  @override
+  String get desktopEmptyMessage => 'RDPまたはVNC接続先を右下の追加ボタンから登録できます。';
 
   @override
   String get chooseConnectionTypeTitle => '接続方式を選択';
@@ -611,6 +639,44 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get settingsBackgroundSessionDescription =>
       '接続中はTermethisの常駐通知を表示し、画面消灯中もSSH接続の維持を試みます。OSの省電力制御によって切断される場合があります。';
+
+  @override
+  String get settingsKeyManagementSection => 'キー管理';
+
+  @override
+  String get settingsKeyManagement => '秘密鍵と信頼済みホスト鍵';
+
+  @override
+  String get settingsKeyManagementDescription =>
+      '接続先で使用する秘密鍵と、SSH接続時に登録したホスト鍵を確認します。';
+
+  @override
+  String get settingsCredentialProtection => '認証情報の保護';
+
+  @override
+  String get settingsCredentialProtectionDescription =>
+      '秘密鍵と保存したパスフレーズは端末内で暗号化します。SSHパスワードは保存しません。';
+
+  @override
+  String get keyManagementTitle => 'キー管理';
+
+  @override
+  String get privateKeysTitle => '秘密鍵';
+
+  @override
+  String get privateKeysEmpty => '秘密鍵を使用する接続先はありません。接続先の編集画面から登録できます。';
+
+  @override
+  String get knownHostsTitle => '信頼済みホスト鍵';
+
+  @override
+  String get knownHostsEmpty => '登録済みのホスト鍵はありません。初回SSH接続時に確認して登録します。';
+
+  @override
+  String get removeKnownHostTitle => 'ホスト鍵を削除しますか';
+
+  @override
+  String get removeKnownHostMessage => '次回接続時に、この接続先のホスト鍵をもう一度確認します。';
 
   @override
   String get fontNotoSansJp => 'Noto Sans JP';

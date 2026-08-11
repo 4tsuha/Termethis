@@ -13,9 +13,19 @@ class AppShell extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final destinations = [
       NavigationDestination(
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home),
+        label: l10n.navHome,
+      ),
+      NavigationDestination(
         icon: const Icon(Icons.terminal_outlined),
         selectedIcon: const Icon(Icons.terminal),
-        label: l10n.navHome,
+        label: l10n.navTerminal,
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.desktop_windows_outlined),
+        selectedIcon: const Icon(Icons.desktop_windows),
+        label: l10n.navDesktop,
       ),
       NavigationDestination(
         icon: const Icon(Icons.folder_copy_outlined),

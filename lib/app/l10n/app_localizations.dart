@@ -670,6 +670,18 @@ abstract class AppLocalizations {
   /// **'ホーム'**
   String get navHome;
 
+  /// No description provided for @navTerminal.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナル'**
+  String get navTerminal;
+
+  /// No description provided for @navDesktop.
+  ///
+  /// In ja, this message translates to:
+  /// **'デスクトップ'**
+  String get navDesktop;
+
   /// No description provided for @navFtp.
   ///
   /// In ja, this message translates to:
@@ -681,6 +693,48 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'設定'**
   String get navSettings;
+
+  /// No description provided for @terminalSessionsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナル'**
+  String get terminalSessionsTitle;
+
+  /// No description provided for @terminalSessionsEmptyTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナルは開かれていません'**
+  String get terminalSessionsEmptyTitle;
+
+  /// No description provided for @terminalSessionsEmptyMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホームのSSH接続先からターミナルを開くと、ここで切り替えと終了ができます。'**
+  String get terminalSessionsEmptyMessage;
+
+  /// No description provided for @terminalSessionsOpenConnections.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH接続先を開く'**
+  String get terminalSessionsOpenConnections;
+
+  /// No description provided for @desktopTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'デスクトップ'**
+  String get desktopTitle;
+
+  /// No description provided for @desktopEmptyTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'デスクトップ接続がありません'**
+  String get desktopEmptyTitle;
+
+  /// No description provided for @desktopEmptyMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'RDPまたはVNC接続先を右下の追加ボタンから登録できます。'**
+  String get desktopEmptyMessage;
 
   /// No description provided for @chooseConnectionTypeTitle.
   ///
@@ -1221,6 +1275,78 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'接続中はTermethisの常駐通知を表示し、画面消灯中もSSH接続の維持を試みます。OSの省電力制御によって切断される場合があります。'**
   String get settingsBackgroundSessionDescription;
+
+  /// No description provided for @settingsKeyManagementSection.
+  ///
+  /// In ja, this message translates to:
+  /// **'キー管理'**
+  String get settingsKeyManagementSection;
+
+  /// No description provided for @settingsKeyManagement.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵と信頼済みホスト鍵'**
+  String get settingsKeyManagement;
+
+  /// No description provided for @settingsKeyManagementDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先で使用する秘密鍵と、SSH接続時に登録したホスト鍵を確認します。'**
+  String get settingsKeyManagementDescription;
+
+  /// No description provided for @settingsCredentialProtection.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証情報の保護'**
+  String get settingsCredentialProtection;
+
+  /// No description provided for @settingsCredentialProtectionDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵と保存したパスフレーズは端末内で暗号化します。SSHパスワードは保存しません。'**
+  String get settingsCredentialProtectionDescription;
+
+  /// No description provided for @keyManagementTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'キー管理'**
+  String get keyManagementTitle;
+
+  /// No description provided for @privateKeysTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵'**
+  String get privateKeysTitle;
+
+  /// No description provided for @privateKeysEmpty.
+  ///
+  /// In ja, this message translates to:
+  /// **'秘密鍵を使用する接続先はありません。接続先の編集画面から登録できます。'**
+  String get privateKeysEmpty;
+
+  /// No description provided for @knownHostsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'信頼済みホスト鍵'**
+  String get knownHostsTitle;
+
+  /// No description provided for @knownHostsEmpty.
+  ///
+  /// In ja, this message translates to:
+  /// **'登録済みのホスト鍵はありません。初回SSH接続時に確認して登録します。'**
+  String get knownHostsEmpty;
+
+  /// No description provided for @removeKnownHostTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'ホスト鍵を削除しますか'**
+  String get removeKnownHostTitle;
+
+  /// No description provided for @removeKnownHostMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'次回接続時に、この接続先のホスト鍵をもう一度確認します。'**
+  String get removeKnownHostMessage;
 
   /// No description provided for @fontNotoSansJp.
   ///

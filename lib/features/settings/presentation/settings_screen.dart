@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../application/app_font_controller.dart';
@@ -25,9 +26,18 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          const _SectionHeader('クイック操作'),
+          const _SectionHeader('タブバーとクイック操作'),
           _SettingsCard(
             children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.tab_outlined),
+                title: const Text('ターミナルのタブバーを表示'),
+                subtitle: const Text('セッション切り替え、検索、コピーの操作をターミナル上部に表示します。'),
+                value: performance.showSessionTabBar,
+                onChanged: ref
+                    .read(terminalPerformanceSettingsProvider.notifier)
+                    .setShowSessionTabBar,
+              ),
               SwitchListTile(
                 secondary: const Icon(Icons.search),
                 title: const Text('タブバーに検索ボタンを表示'),
@@ -41,16 +51,21 @@ class SettingsScreen extends ConsumerWidget {
                 leading: const Icon(Icons.keyboard_command_key),
                 title: const Text('検索方式'),
                 subtitle: Text(_searchModeDescription(performance.searchMode)),
+                enabled: performance.showSearchButton,
                 trailing: DropdownButton<TerminalSearchMode>(
                   value: performance.searchMode,
                   underline: const SizedBox.shrink(),
-                  onChanged: (mode) {
-                    if (mode != null) {
-                      ref
-                          .read(terminalPerformanceSettingsProvider.notifier)
-                          .selectSearchMode(mode);
-                    }
-                  },
+                  onChanged: performance.showSearchButton
+                      ? (mode) {
+                          if (mode != null) {
+                            ref
+                                .read(
+                                  terminalPerformanceSettingsProvider.notifier,
+                                )
+                                .selectSearchMode(mode);
+                          }
+                        }
+                      : null,
                   items: [
                     for (final mode in TerminalSearchMode.values)
                       DropdownMenuItem(
@@ -78,7 +93,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const _SectionHeader('入力とジェスチャー'),
+          const _SectionHeader('入力とターミナル動作'),
           _SettingsCard(
             children: [
               SwitchListTile(
@@ -110,29 +125,6 @@ class SettingsScreen extends ConsumerWidget {
                     .read(terminalPerformanceSettingsProvider.notifier)
                     .setTapToMovePromptCursor,
               ),
-            ],
-          ),
-          const _SectionHeader('表示と電源'),
-          _SettingsCard(
-            children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.tab_outlined),
-                title: const Text('ターミナルのタブバーを表示'),
-                subtitle: const Text('セッション切り替え、検索、コピーの操作をターミナル上部に表示します。'),
-                value: performance.showSessionTabBar,
-                onChanged: ref
-                    .read(terminalPerformanceSettingsProvider.notifier)
-                    .setShowSessionTabBar,
-              ),
-              SwitchListTile(
-                secondary: const Icon(Icons.light_mode_outlined),
-                title: const Text('ターミナルで画面をオンに保つ'),
-                subtitle: const Text('ターミナルを開いている間は画面を消灯しません。消費電力が増えます。'),
-                value: performance.keepScreenAwake,
-                onChanged: ref
-                    .read(terminalPerformanceSettingsProvider.notifier)
-                    .setKeepScreenAwake,
-              ),
               SwitchListTile(
                 secondary: const Icon(Icons.keyboard_alt_outlined),
                 title: const Text('キーボードに合わせて端末をリサイズ'),
@@ -144,7 +136,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const _SectionHeader('描画とパフォーマンス'),
+          const _SectionHeader('フォントと表示'),
           _SettingsCard(
             children: [
               ListTile(
@@ -162,6 +154,21 @@ class SettingsScreen extends ConsumerWidget {
                   performance.terminalFont,
                 ),
               ),
+              ListTile(
+                leading: const Icon(Icons.translate),
+                title: Text(l10n.settingsJapaneseFont),
+                subtitle: Text(
+                  '${_fontLabel(l10n, appFont)}\n${l10n.settingsJapaneseFontMessage}',
+                ),
+                isThreeLine: true,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showFontPicker(context, ref, appFont),
+              ),
+            ],
+          ),
+          const _SectionHeader('描画とパフォーマンス'),
+          _SettingsCard(
+            children: [
               ListTile(
                 leading: const Icon(Icons.developer_board_outlined),
                 title: Text(l10n.settingsTerminalRenderer),
@@ -193,16 +200,6 @@ class SettingsScreen extends ConsumerWidget {
                   performance.hardwareAccelerationMode,
                   hardwareAcceleration.asData?.value,
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.translate),
-                title: Text(l10n.settingsJapaneseFont),
-                subtitle: Text(
-                  '${_fontLabel(l10n, appFont)}\n${l10n.settingsJapaneseFontMessage}',
-                ),
-                isThreeLine: true,
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showFontPicker(context, ref, appFont),
               ),
               ListTile(
                 leading: const Icon(Icons.speed_outlined),
@@ -242,6 +239,20 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            ],
+          ),
+          const _SectionHeader('電源とバックグラウンド'),
+          _SettingsCard(
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.light_mode_outlined),
+                title: const Text('ターミナルで画面をオンに保つ'),
+                subtitle: const Text('ターミナルを開いている間は画面を消灯しません。消費電力が増えます。'),
+                value: performance.keepScreenAwake,
+                onChanged: ref
+                    .read(terminalPerformanceSettingsProvider.notifier)
+                    .setKeepScreenAwake,
+              ),
               SwitchListTile(
                 secondary: const Icon(Icons.notifications_active_outlined),
                 title: Text(l10n.settingsBackgroundSession),
@@ -250,6 +261,23 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
                     .setKeepAliveInBackground,
+              ),
+            ],
+          ),
+          _SectionHeader(l10n.settingsKeyManagementSection),
+          _SettingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.key_outlined),
+                title: Text(l10n.settingsKeyManagement),
+                subtitle: Text(l10n.settingsKeyManagementDescription),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/keys'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.enhanced_encryption_outlined),
+                title: Text(l10n.settingsCredentialProtection),
+                subtitle: Text(l10n.settingsCredentialProtectionDescription),
               ),
             ],
           ),

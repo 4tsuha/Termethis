@@ -7,8 +7,10 @@ import '../features/connections/presentation/connection_editor_screen.dart';
 import '../features/connections/presentation/connection_list_screen.dart';
 import '../features/connections/domain/connection_profile.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/settings/presentation/key_management_screen.dart';
 import '../features/remote_desktop/presentation/rdp_screen.dart';
 import '../features/terminal/presentation/terminal_screen.dart';
+import '../features/terminal/presentation/terminal_sessions_screen.dart';
 import 'app_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -33,6 +35,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/terminals',
+                builder: (context, state) => const TerminalSessionsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/desktop',
+                builder: (context, state) => const ConnectionListScreen(
+                  mode: ConnectionListMode.desktop,
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/ftp',
                 builder: (context, state) => const FtpManagerScreen(),
               ),
@@ -43,6 +63,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/settings',
                 builder: (context, state) => const SettingsScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'keys',
+                    builder: (context, state) => const KeyManagementScreen(),
+                  ),
+                ],
               ),
             ],
           ),

@@ -4,15 +4,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:termethis/app/app.dart';
 import 'package:termethis/features/ftp/application/ftp_tabs_controller.dart';
 import 'package:termethis/features/ftp/domain/ftp_gateway.dart';
+import 'package:termethis/features/terminal/application/ssh_tabs_controller.dart';
+import 'package:termethis/features/terminal/domain/ssh_tab.dart';
 
 void main() {
-  testWidgets('ボトムナビでホーム・FTP・設定を切り替える', (tester) async {
+  testWidgets('ボトムナビで主要な5画面を切り替える', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('ホーム'), findsOneWidget);
+    expect(find.text('ターミナル'), findsOneWidget);
+    expect(find.text('デスクトップ'), findsOneWidget);
     expect(find.text('FTP'), findsOneWidget);
     expect(find.text('設定'), findsOneWidget);
+
+    await tester.tap(find.text('ターミナル'));
+    await tester.pumpAndSettle();
+    expect(find.text('ターミナルは開かれていません'), findsOneWidget);
+
+    await tester.tap(find.text('デスクトップ'));
+    await tester.pumpAndSettle();
+    expect(find.text('デスクトップ接続がありません'), findsOneWidget);
 
     await tester.tap(find.text('FTP'));
     await tester.pumpAndSettle();
@@ -79,7 +91,54 @@ void main() {
     await tester.pumpAndSettle();
     final robotoApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(robotoApp.theme?.textTheme.bodyMedium?.fontFamily, 'Roboto');
+  });
 
+  testWidgets('設定項目を機能別のカードにグループ化する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(411, 891));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('設定'));
+    await tester.pumpAndSettle();
+
+    for (final label in const [
+      'タブバーとクイック操作',
+      '入力とターミナル動作',
+      'フォントと表示',
+      '描画とパフォーマンス',
+      '電源とバックグラウンド',
+      'キー管理',
+    ]) {
+      await tester.scrollUntilVisible(find.text(label), 420);
+      expect(find.text(label), findsOneWidget);
+    }
+
+    await tester.tap(find.text('秘密鍵と信頼済みホスト鍵'));
+    await tester.pumpAndSettle();
+    expect(find.text('秘密鍵'), findsOneWidget);
+    expect(find.text('信頼済みホスト鍵'), findsOneWidget);
+  });
+
+  testWidgets('SSHタブ履歴はホームではなくターミナル画面に表示する', (tester) async {
+    final store = EphemeralSshTabStore();
+    await store.save(const [
+      SshTab(id: 'restored-tab', profileId: 'profile-1', title: '作業セッション'),
+    ]);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sshTabStoreProvider.overrideWithValue(store)],
+        child: const TermethisApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('作業セッション'), findsNothing);
+    expect(find.byType(InputChip), findsNothing);
+
+    await tester.tap(find.text('ターミナル'));
+    await tester.pumpAndSettle();
+    expect(find.text('作業セッション'), findsOneWidget);
   });
 
   testWidgets('FTPタブからフォルダーを階層移動する', (tester) async {

@@ -9,25 +9,24 @@ class DriftHostKeyRepository implements HostKeyRepository {
   final AppDatabase _database;
 
   @override
+  Future<List<KnownHost>> listAll() async {
+    final query = _database.select(_database.knownHostRecords)
+      ..orderBy([
+        (row) => OrderingTerm.asc(row.host),
+        (row) => OrderingTerm.asc(row.port),
+        (row) => OrderingTerm.asc(row.acceptedAt),
+      ]);
+    return (await query.get()).map(_knownHost).toList(growable: false);
+  }
+
+  @override
   Future<List<KnownHost>> find(String host, int port) async {
     final normalizedHost = normalizeSshHost(host);
     final query = _database.select(_database.knownHostRecords)
       ..where((row) => row.host.equals(normalizedHost) & row.port.equals(port))
       ..orderBy([(row) => OrderingTerm.asc(row.acceptedAt)]);
     final rows = await query.get();
-    return rows
-        .map(
-          (row) => KnownHost(
-            info: HostKeyInfo(
-              host: row.host,
-              port: row.port,
-              algorithm: row.algorithm,
-              fingerprintSha256: row.fingerprintSha256,
-            ),
-            acceptedAt: row.acceptedAt,
-          ),
-        )
-        .toList(growable: false);
+    return rows.map(_knownHost).toList(growable: false);
   }
 
   @override
@@ -53,4 +52,14 @@ class DriftHostKeyRepository implements HostKeyRepository {
       ..where((row) => row.host.equals(normalizedHost) & row.port.equals(port));
     await query.go();
   }
+
+  KnownHost _knownHost(KnownHostRecord row) => KnownHost(
+    info: HostKeyInfo(
+      host: row.host,
+      port: row.port,
+      algorithm: row.algorithm,
+      fingerprintSha256: row.fingerprintSha256,
+    ),
+    acceptedAt: row.acceptedAt,
+  );
 }

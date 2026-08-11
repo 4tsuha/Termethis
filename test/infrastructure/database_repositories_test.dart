@@ -117,6 +117,7 @@ void main() {
     repository = DriftHostKeyRepository(database);
     final restored = await repository.find('ssh.example.com', 22);
 
+    expect(await repository.listAll(), hasLength(2));
     expect(restored.map((host) => host.info.fingerprintSha256), [
       'SHA256:first',
       'SHA256:second',

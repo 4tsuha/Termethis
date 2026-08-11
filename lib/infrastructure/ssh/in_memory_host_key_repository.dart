@@ -6,6 +6,17 @@ class InMemoryHostKeyRepository implements HostKeyRepository {
   String _key(String host, int port) => '${normalizeSshHost(host)}:$port';
 
   @override
+  Future<List<KnownHost>> listAll() async {
+    final hosts = _hosts.values.expand((items) => items).toList(growable: false)
+      ..sort((left, right) {
+        final hostOrder = left.info.host.compareTo(right.info.host);
+        if (hostOrder != 0) return hostOrder;
+        return left.info.port.compareTo(right.info.port);
+      });
+    return List.unmodifiable(hosts);
+  }
+
+  @override
   Future<List<KnownHost>> find(String host, int port) async {
     return List.unmodifiable(_hosts[_key(host, port)] ?? const []);
   }

@@ -41,6 +41,7 @@ HostKeyTrust evaluateHostKeyTrust(
 }
 
 abstract interface class HostKeyRepository {
+  Future<List<KnownHost>> listAll();
   Future<List<KnownHost>> find(String host, int port);
   Future<void> trust(KnownHost host);
   Future<void> remove(String host, int port);

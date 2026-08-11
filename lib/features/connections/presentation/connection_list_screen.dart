@@ -14,8 +14,12 @@ import '../../terminal/application/ssh_session_controller.dart';
 
 enum _ConnectionMenuAction { wakeOnLan, edit, delete }
 
+enum ConnectionListMode { all, desktop }
+
 class ConnectionListScreen extends ConsumerStatefulWidget {
-  const ConnectionListScreen({super.key});
+  const ConnectionListScreen({this.mode = ConnectionListMode.all, super.key});
+
+  final ConnectionListMode mode;
 
   @override
   ConsumerState<ConnectionListScreen> createState() =>
@@ -32,45 +36,22 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
     final profiles = ref.watch(connectionProfilesProvider);
     final sshTabs = ref.watch(sshTabsProvider).value ?? const [];
     final sessionRegistry = ref.read(sessionRegistryProvider);
+    final desktopOnly = widget.mode == ConnectionListMode.desktop;
+    final allowedTypes = desktopOnly
+        ? const {ConnectionType.rdp, ConnectionType.vnc}
+        : ConnectionType.values.toSet();
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.connectionsTitle)),
+      appBar: AppBar(
+        title: Text(desktopOnly ? l10n.desktopTitle : l10n.connectionsTitle),
+      ),
       body: Column(
         children: [
-          MaterialBanner(
-            content: Text(l10n.stageOneNotice),
-            leading: const Icon(Icons.info_outline),
-            actions: const [SizedBox.shrink()],
-          ),
-          if (sshTabs.isNotEmpty)
-            SizedBox(
-              height: 56,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                itemCount: sshTabs.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final tab = sshTabs[index];
-                  return InputChip(
-                    avatar: Icon(
-                      tab.restored ? Icons.history : Icons.terminal,
-                      size: 18,
-                    ),
-                    label: Text(tab.title),
-                    onPressed: () => context.push(
-                      '/terminal/${tab.profileId}?tab=${tab.id}',
-                    ),
-                    onDeleted: () async {
-                      ref.read(sessionRegistryProvider).remove(tab.id);
-                      await ref.read(sshTabsProvider.notifier).close(tab.id);
-                    },
-                  );
-                },
-              ),
+          if (!desktopOnly)
+            MaterialBanner(
+              content: Text(l10n.stageOneNotice),
+              leading: const Icon(Icons.info_outline),
+              actions: const [SizedBox.shrink()],
             ),
           Expanded(
             child: profiles.when(
@@ -80,60 +61,83 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
                 retryLabel: l10n.retry,
                 onRetry: () => ref.invalidate(connectionProfilesProvider),
               ),
-              data: (items) => items.isEmpty
-                  ? _EmptyConnections(l10n: l10n)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final profile = items[index];
-                        final sessions =
-                            [
-                              for (final tab in sshTabs)
-                                if (tab.profileId == profile.id)
-                                  sessionRegistry.find(tab.id),
-                            ].whereType<SshSessionController>().toList(
-                              growable: false,
-                            );
-                        return _ConnectionProfileCard(
-                          profile: profile,
-                          typeLabel: _connectionTypeLabel(
-                            l10n,
-                            profile.connectionType,
-                          ),
-                          typeIcon: _connectionTypeIcon(profile.connectionType),
-                          sessions: sessions,
-                          isLaunching: _launchingProfileIds.contains(
-                            profile.id,
-                          ),
-                          isWaking: _wakingProfileIds.contains(profile.id),
-                          onConnect: () => _openProfile(context, profile),
-                          onMenuSelected: (action) =>
-                              _handleMenuAction(context, profile, action),
-                        );
-                      },
-                    ),
+              data: (items) {
+                final visibleItems = items
+                    .where(
+                      (profile) =>
+                          allowedTypes.contains(profile.connectionType),
+                    )
+                    .toList(growable: false);
+                return visibleItems.isEmpty
+                    ? _EmptyConnections(
+                        title: desktopOnly
+                            ? l10n.desktopEmptyTitle
+                            : l10n.emptyConnectionsTitle,
+                        message: desktopOnly
+                            ? l10n.desktopEmptyMessage
+                            : l10n.emptyConnectionsMessage,
+                        icon: desktopOnly
+                            ? Icons.desktop_windows_outlined
+                            : Icons.dns_outlined,
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                        itemCount: visibleItems.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final profile = visibleItems[index];
+                          final sessions =
+                              [
+                                for (final tab in sshTabs)
+                                  if (tab.profileId == profile.id)
+                                    sessionRegistry.find(tab.id),
+                              ].whereType<SshSessionController>().toList(
+                                growable: false,
+                              );
+                          return _ConnectionProfileCard(
+                            profile: profile,
+                            typeLabel: _connectionTypeLabel(
+                              l10n,
+                              profile.connectionType,
+                            ),
+                            typeIcon: _connectionTypeIcon(
+                              profile.connectionType,
+                            ),
+                            sessions: sessions,
+                            isLaunching: _launchingProfileIds.contains(
+                              profile.id,
+                            ),
+                            isWaking: _wakingProfileIds.contains(profile.id),
+                            onConnect: () => _openProfile(context, profile),
+                            onMenuSelected: (action) =>
+                                _handleMenuAction(context, profile, action),
+                          );
+                        },
+                      );
+              },
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showConnectionTypePicker(context),
+        onPressed: () => _showConnectionTypePicker(context, allowedTypes),
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  Future<void> _showConnectionTypePicker(BuildContext context) async {
+  Future<void> _showConnectionTypePicker(
+    BuildContext context,
+    Set<ConnectionType> allowedTypes,
+  ) async {
     final selected = await showModalBottomSheet<ConnectionType>(
       context: context,
       useRootNavigator: true,
       useSafeArea: true,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => const _ConnectionTypePicker(),
+      builder: (context) => _ConnectionTypePicker(allowedTypes: allowedTypes),
     );
     if (selected != null && context.mounted) {
       await context.push('/connections/new?type=${selected.name}');
@@ -615,7 +619,9 @@ Color _connectionStatusColor(ColorScheme colors, SshSessionStatus status) =>
     };
 
 class _ConnectionTypePicker extends StatelessWidget {
-  const _ConnectionTypePicker();
+  const _ConnectionTypePicker({required this.allowedTypes});
+
+  final Set<ConnectionType> allowedTypes;
 
   @override
   Widget build(BuildContext context) {
@@ -640,26 +646,32 @@ class _ConnectionTypePicker extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 20),
-          _ConnectionTypeOption(
-            type: ConnectionType.ssh,
-            icon: Icons.terminal,
-            title: l10n.connectionTypeSsh,
-            description: l10n.connectionTypeSshDescription,
-          ),
-          const SizedBox(height: 10),
-          _ConnectionTypeOption(
-            type: ConnectionType.rdp,
-            icon: Icons.desktop_windows_outlined,
-            title: l10n.connectionTypeRdp,
-            description: l10n.connectionTypeRdpDescription,
-          ),
-          const SizedBox(height: 10),
-          _ConnectionTypeOption(
-            type: ConnectionType.vnc,
-            icon: Icons.monitor_outlined,
-            title: l10n.connectionTypeVnc,
-            description: l10n.connectionTypeVncDescription,
-          ),
+          if (allowedTypes.contains(ConnectionType.ssh)) ...[
+            _ConnectionTypeOption(
+              type: ConnectionType.ssh,
+              icon: Icons.terminal,
+              title: l10n.connectionTypeSsh,
+              description: l10n.connectionTypeSshDescription,
+            ),
+            if (allowedTypes.length > 1) const SizedBox(height: 10),
+          ],
+          if (allowedTypes.contains(ConnectionType.rdp)) ...[
+            _ConnectionTypeOption(
+              type: ConnectionType.rdp,
+              icon: Icons.desktop_windows_outlined,
+              title: l10n.connectionTypeRdp,
+              description: l10n.connectionTypeRdpDescription,
+            ),
+            if (allowedTypes.contains(ConnectionType.vnc))
+              const SizedBox(height: 10),
+          ],
+          if (allowedTypes.contains(ConnectionType.vnc))
+            _ConnectionTypeOption(
+              type: ConnectionType.vnc,
+              icon: Icons.monitor_outlined,
+              title: l10n.connectionTypeVnc,
+              description: l10n.connectionTypeVncDescription,
+            ),
         ],
       ),
     );
@@ -750,9 +762,15 @@ class _LoadFailure extends StatelessWidget {
 }
 
 class _EmptyConnections extends StatelessWidget {
-  const _EmptyConnections({required this.l10n});
+  const _EmptyConnections({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
 
-  final AppLocalizations l10n;
+  final String title;
+  final String message;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
@@ -762,18 +780,11 @@ class _EmptyConnections extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.dns_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
+            Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 16),
-            Text(
-              l10n.emptyConnectionsTitle,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(l10n.emptyConnectionsMessage, textAlign: TextAlign.center),
+            Text(message, textAlign: TextAlign.center),
           ],
         ),
       ),
