@@ -11,6 +11,7 @@ import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../connections/domain/credential_vault.dart';
 import '../../settings/application/app_font_controller.dart';
+import '../../settings/application/credential_settings_controller.dart';
 import '../../settings/application/terminal_performance_settings_controller.dart';
 import '../../settings/domain/terminal_performance_settings.dart';
 import '../application/session_registry.dart';
@@ -20,6 +21,7 @@ import '../domain/ssh_tab.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
 import '../../../infrastructure/display/android_terminal_window_controller.dart';
+import 'widgets/alacritty_terminal_view.dart';
 import 'widgets/native_terminal_view.dart';
 import 'widgets/xterm_web_terminal.dart';
 
@@ -27,11 +29,13 @@ class TerminalScreen extends ConsumerStatefulWidget {
   const TerminalScreen({
     required this.profileId,
     required this.tabId,
+    this.popWhenEmpty = true,
     super.key,
   });
 
   final String profileId;
   final String tabId;
+  final bool popWhenEmpty;
 
   @override
   ConsumerState<TerminalScreen> createState() => _TerminalScreenState();
@@ -41,15 +45,16 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     with WidgetsBindingObserver {
   var _webTerminalKey = GlobalKey<XtermWebTerminalState>();
   var _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
+  var _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
   final _windowController = const AndroidTerminalWindowController();
   ConnectionProfile? _profile;
   SshSessionController? _session;
   SessionRegistry? _sessionRegistry;
   Timer? _performancePulseTimer;
   late String _activeTabId;
-  String _webRenderer = '起動中';
   bool _webTerminalFailed = false;
   bool _nativeTerminalFailed = false;
+  bool _alacrittyTerminalFailed = false;
   bool _switchingTab = false;
 
   @override
@@ -80,6 +85,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
     unawaited(_nativeTerminalKey.currentState?.setActive(false));
+    unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
     _performancePulseTimer?.cancel();
     _session?.removeTerminalActivityListener(_pulseHighFrameRate);
     _session?.setViewportVisible(false);
@@ -94,11 +100,13 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     if (visible) {
       _webTerminalKey.currentState?.resume();
       unawaited(_nativeTerminalKey.currentState?.setActive(true));
+      unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
     } else {
       unawaited(
         _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
       );
       unawaited(_nativeTerminalKey.currentState?.setActive(false));
+      unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
     }
   }
 
@@ -130,22 +138,18 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         setState(() {
           _webTerminalFailed = false;
           _nativeTerminalFailed = false;
+          _alacrittyTerminalFailed = false;
           _webTerminalKey = GlobalKey<XtermWebTerminalState>();
           _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
+          _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
         });
       }
       unawaited(_applyTerminalWindowSettings(next));
     });
     final useWebRenderer = _usesWebRenderer(performance.rendererMode);
-    final rendererLabel = useWebRenderer
-        ? _webRenderer == 'webgl'
-              ? 'WebGL'
-              : _webRenderer
-        : switch (performance.rendererMode) {
-            TerminalRendererMode.connectBot => 'ConnectBot',
-            TerminalRendererMode.termux => 'Termux',
-            TerminalRendererMode.webgl => _webRenderer,
-          };
+    final useAlacrittyRenderer = _usesAlacrittyRenderer(
+      performance.rendererMode,
+    );
     final tabs = ref.watch(sshTabsProvider).value ?? const <SshTab>[];
     final session = _session;
     if (_profile == null || session == null) {
@@ -161,6 +165,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
           unawaited(
             _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
           );
+          unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
         }
       },
       child: ListenableBuilder(
@@ -168,72 +173,21 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         builder: (context, child) {
           return Scaffold(
             backgroundColor: Colors.black,
-            resizeToAvoidBottomInset: performance.resizeForKeyboard,
-            appBar: AppBar(
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    session.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _SessionStatusDot(status: session.status, size: 8),
-                      const SizedBox(width: 6),
-                      Text(
-                        _statusText(l10n, session.status),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                      const SizedBox(width: 8),
-                      _RendererBadge(label: rendererLabel),
-                      if (tabs.length > 1) ...[
-                        const SizedBox(width: 8),
-                        _TabOverviewButton(
-                          label:
-                              '${tabs.indexWhere((tab) => tab.id == _activeTabId) + 1}/${tabs.length}',
-                          onTap: () => _showTabOverview(tabs),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                if (session.isConnected)
-                  IconButton.filledTonal(
-                    tooltip: l10n.disconnect,
-                    onPressed: session.disconnect,
-                    icon: const Icon(Icons.link_off),
-                  ),
-                IconButton(
-                  tooltip: l10n.closeSessionTab,
-                  onPressed: _requestClose,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-              bottom: performance.showSessionTabBar
-                  ? PreferredSize(
-                      preferredSize: const Size.fromHeight(48),
-                      child: _TerminalSessionBar(
-                        tabs: tabs,
-                        currentTabId: _activeTabId,
-                        registry: _sessionRegistry,
-                        showSearch: performance.showSearchButton,
-                        showCopy: performance.showCopyOutputButton,
-                        onSelect: (tab) => unawaited(_switchTab(tab)),
-                        onSearch: _sendSearchShortcut,
-                        onCopy: _copyLastOutput,
-                      ),
-                    )
-                  : null,
-            ),
+            resizeToAvoidBottomInset: true,
             body: SafeArea(
-              top: false,
               child: Column(
                 children: [
+                  _TerminalSessionBar(
+                    tabs: tabs,
+                    currentTabId: _activeTabId,
+                    registry: _sessionRegistry,
+                    showSearch: performance.showSearchButton,
+                    showCopy: performance.showCopyOutputButton,
+                    onSelect: (tab) => unawaited(_switchTab(tab)),
+                    onClose: _requestClose,
+                    onSearch: _sendSearchShortcut,
+                    onCopy: _copyLastOutput,
+                  ),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -248,7 +202,22 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                                 behavior: HitTestBehavior.translucent,
                                 onPointerDown: (_) => _pulseHighFrameRate(),
                                 onPointerMove: (_) => _pulseHighFrameRate(),
-                                child: useWebRenderer
+                                child: useAlacrittyRenderer
+                                    ? AlacrittyTerminalView(
+                                        key: _alacrittyTerminalKey,
+                                        session: session,
+                                        scrollbackLines:
+                                            performance.scrollbackLines,
+                                        terminalFontFamily:
+                                            performance.terminalFont.family,
+                                        japaneseFontFamily: appFont.family,
+                                        fontSize: fontSize,
+                                        hardwareAccelerationMode: performance
+                                            .hardwareAccelerationMode,
+                                        onFatalError:
+                                            _fallbackFromAlacrittyTerminal,
+                                      )
+                                    : useWebRenderer
                                     ? XtermWebTerminal(
                                         key: _webTerminalKey,
                                         session: session,
@@ -263,14 +232,6 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                                             performance.longPressRightClick,
                                         tapToMovePromptCursor:
                                             performance.tapToMovePromptCursor,
-                                        onRendererChanged: (renderer) {
-                                          if (mounted &&
-                                              renderer != _webRenderer) {
-                                            setState(
-                                              () => _webRenderer = renderer,
-                                            );
-                                          }
-                                        },
                                         onFatalError: _fallbackToNativeTerminal,
                                       )
                                     : NativeTerminalView(
@@ -290,14 +251,6 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                                             performance.tapToMovePromptCursor,
                                         resizeForKeyboard:
                                             performance.resizeForKeyboard,
-                                        onRendererReady: (renderer) {
-                                          if (mounted &&
-                                              renderer != _webRenderer) {
-                                            setState(
-                                              () => _webRenderer = renderer,
-                                            );
-                                          }
-                                        },
                                         onFatalError: _fallbackToWebTerminal,
                                       ),
                               ),
@@ -348,6 +301,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     try {
       await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
       await _nativeTerminalKey.currentState?.setActive(false);
+      await _alacrittyTerminalKey.currentState?.setActive(false);
       if (!mounted) return;
       _session?.removeTerminalActivityListener(_pulseHighFrameRate);
       _session?.setViewportVisible(false);
@@ -358,6 +312,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         if (!mounted || _activeTabId != tab.id) return;
         _webTerminalKey.currentState?.resume();
         unawaited(_nativeTerminalKey.currentState?.setActive(true));
+        unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
         _focusTerminal();
       });
     } finally {
@@ -375,80 +330,16 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       _session = session;
       _webTerminalKey = GlobalKey<XtermWebTerminalState>();
       _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
+      _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
       _webTerminalFailed = false;
       _nativeTerminalFailed = false;
+      _alacrittyTerminalFailed = false;
     });
-  }
-
-  Future<void> _showTabOverview(List<SshTab> tabs) async {
-    final selected = await showModalBottomSheet<SshTab>(
-      context: context,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'SSHセッション',
-                      style: Theme.of(sheetContext).textTheme.titleLarge,
-                    ),
-                  ),
-                  Text('${tabs.length}件'),
-                ],
-              ),
-            ),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: tabs.length,
-                itemBuilder: (context, index) {
-                  final tab = tabs[index];
-                  final tabSession = _sessionRegistry?.find(tab.id);
-                  final status = tabSession?.status ?? SshSessionStatus.closed;
-                  final statusLabel = tabSession == null && tab.restored
-                      ? '復元済み'
-                      : _statusText(AppLocalizations.of(context), status);
-                  final selected = tab.id == _activeTabId;
-                  return ListTile(
-                    leading: _SessionStatusIcon(
-                      status: status,
-                      restored: tab.restored,
-                    ),
-                    title: Text(tab.title),
-                    subtitle: Text(statusLabel),
-                    selected: selected,
-                    trailing: selected
-                        ? const Icon(Icons.check_circle)
-                        : const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.pop(context, tab),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null && mounted) await _switchTab(selected);
   }
 
   Future<void> _applyTerminalWindowSettings(
     TerminalPerformanceSettings settings,
-  ) => _windowController.apply(
-    keepScreenAwake: settings.keepScreenAwake,
-    resizeForKeyboard: settings.resizeForKeyboard,
-  );
+  ) => _windowController.apply(keepScreenAwake: settings.keepScreenAwake);
 
   void _sendSearchShortcut() {
     final session = _session;
@@ -528,9 +419,25 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     );
   }
 
+  void _fallbackFromAlacrittyTerminal(String _) {
+    if (!mounted || _alacrittyTerminalFailed) return;
+    setState(() => _alacrittyTerminalFailed = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Flutter Alacrittyを利用できないためxterm.js WebGLへ切り替えました。'),
+      ),
+    );
+  }
+
+  bool _usesAlacrittyRenderer(TerminalRendererMode renderer) =>
+      renderer == TerminalRendererMode.alacritty && !_alacrittyTerminalFailed;
+
   bool _usesWebRenderer(TerminalRendererMode renderer) =>
-      _nativeTerminalFailed ||
-      renderer == TerminalRendererMode.webgl && !_webTerminalFailed;
+      !_webTerminalFailed &&
+      (renderer == TerminalRendererMode.webgl ||
+          renderer == TerminalRendererMode.alacritty &&
+              _alacrittyTerminalFailed ||
+          _nativeTerminalFailed);
 
   void _pulseHighFrameRate() {
     final mode = ref.read(terminalPerformanceSettingsProvider).refreshRateMode;
@@ -589,6 +496,23 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   ) async {
     if (profile.authenticationType ==
         AuthenticationType.passwordOrInteractive) {
+      final reference = profile.credentialReference;
+      final passwordStorageEnabled = ref
+          .read(credentialSettingsProvider)
+          .saveSshPasswords;
+      if (passwordStorageEnabled && reference != null) {
+        try {
+          final saved = await ref
+              .read(credentialVaultProvider)
+              .readPassword(CredentialHandle(reference));
+          if (saved != null) return SshPasswordAuthentication(saved.password);
+        } on CredentialVaultFailure {
+          session.reportFailure(
+            const SshFailure(SshFailureCode.authenticationFailed),
+          );
+          return null;
+        }
+      }
       final password = await _askPassword(profile);
       return password == null ? null : SshPasswordAuthentication(password);
     }
@@ -763,6 +687,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
     if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.paste(text);
+    } else if (_usesAlacrittyRenderer(renderer)) {
+      await _alacrittyTerminalKey.currentState?.paste(text);
     } else {
       await _nativeTerminalKey.currentState?.paste(text);
     }
@@ -773,6 +699,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
     if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.focus();
+    } else if (_usesAlacrittyRenderer(renderer)) {
+      unawaited(_alacrittyTerminalKey.currentState?.focus());
     } else {
       unawaited(_nativeTerminalKey.currentState?.focus());
     }
@@ -789,6 +717,14 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       if (_usesWebRenderer(renderer)) {
         handled =
             _webTerminalKey.currentState?.sendKey(
+              key,
+              control: modifiers.control,
+              alt: modifiers.alt,
+            ) ??
+            false;
+      } else if (_usesAlacrittyRenderer(renderer)) {
+        handled =
+            await _alacrittyTerminalKey.currentState?.sendKey(
               key,
               control: modifiers.control,
               alt: modifiers.alt,
@@ -850,6 +786,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       await session.disconnect();
     }
     await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+    await _alacrittyTerminalKey.currentState?.setActive(false);
     session.removeTerminalActivityListener(_pulseHighFrameRate);
     session.setViewportVisible(false);
     final closingTabId = _activeTabId;
@@ -872,10 +809,11 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _activeTabId != next.id) return;
         _webTerminalKey.currentState?.resume();
+        unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
         _focusTerminal();
       });
     } else {
-      context.pop();
+      if (widget.popWhenEmpty) context.pop();
     }
   }
 
@@ -1033,6 +971,7 @@ class _TerminalSessionBar extends StatelessWidget {
     required this.showSearch,
     required this.showCopy,
     required this.onSelect,
+    required this.onClose,
     required this.onSearch,
     required this.onCopy,
   });
@@ -1043,6 +982,7 @@ class _TerminalSessionBar extends StatelessWidget {
   final bool showSearch;
   final bool showCopy;
   final ValueChanged<SshTab> onSelect;
+  final VoidCallback onClose;
   final VoidCallback onSearch;
   final VoidCallback onCopy;
 
@@ -1070,6 +1010,7 @@ class _TerminalSessionBar extends StatelessWidget {
                     session: registry?.find(tab.id),
                     selected: tab.id == currentTabId,
                     onTap: () => onSelect(tab),
+                    onClose: tab.id == currentTabId ? onClose : null,
                   );
                 },
               ),
@@ -1108,12 +1049,14 @@ class _SessionTabButton extends StatelessWidget {
     required this.session,
     required this.selected,
     required this.onTap,
+    required this.onClose,
   });
 
   final SshTab tab;
   final SshSessionController? session;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -1177,102 +1120,22 @@ class _SessionTabButton extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onClose != null) ...[
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: AppLocalizations.of(context).closeSessionTab,
+                    child: InkResponse(
+                      onTap: onClose,
+                      radius: 14,
+                      child: const Padding(
+                        padding: EdgeInsets.all(3),
+                        child: Icon(Icons.close, size: 16),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionStatusDot extends StatelessWidget {
-  const _SessionStatusDot({required this.status, this.size = 8});
-
-  final SshSessionStatus status;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: _sessionStatusColor(Theme.of(context).colorScheme, status),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _SessionStatusIcon extends StatelessWidget {
-  const _SessionStatusIcon({required this.status, required this.restored});
-
-  final SshSessionStatus status;
-  final bool restored;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final color = _sessionStatusColor(colors, status);
-    return CircleAvatar(
-      backgroundColor: color.withValues(alpha: 0.14),
-      foregroundColor: color,
-      child: Icon(_sessionStatusIcon(status, restored: restored), size: 20),
-    );
-  }
-}
-
-class _TabOverviewButton extends StatelessWidget {
-  const _TabOverviewButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(5, 1, 3, 1),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-              const Icon(Icons.arrow_drop_down, size: 15),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RendererBadge extends StatelessWidget {
-  const _RendererBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colors.onSurfaceVariant,
-            height: 1.2,
           ),
         ),
       ),
@@ -1292,22 +1155,6 @@ Color _sessionStatusColor(ColorScheme colors, SshSessionStatus status) =>
       SshSessionStatus.reconnectPrompt => colors.error,
       SshSessionStatus.idle || SshSessionStatus.closed => colors.outline,
     };
-
-IconData _sessionStatusIcon(
-  SshSessionStatus status, {
-  required bool restored,
-}) => switch (status) {
-  SshSessionStatus.connected => Icons.terminal,
-  SshSessionStatus.connecting ||
-  SshSessionStatus.verifyingHost ||
-  SshSessionStatus.authenticating ||
-  SshSessionStatus.openingPty ||
-  SshSessionStatus.closing => Icons.sync,
-  SshSessionStatus.failed ||
-  SshSessionStatus.reconnectPrompt => Icons.error_outline,
-  SshSessionStatus.idle ||
-  SshSessionStatus.closed => restored ? Icons.history : Icons.terminal_outlined,
-};
 
 class _SpecialKeyBar extends StatelessWidget {
   const _SpecialKeyBar({

@@ -103,6 +103,7 @@ void registerBundledLicenses() {
       'russh': ['assets/licenses/LICENSE-russh-APACHE.txt'],
       'russh-sftp': ['assets/licenses/LICENSE-russh-sftp.txt'],
       'tokio': ['assets/licenses/LICENSE-tokio.txt'],
+      'Shizuku API': ['assets/licenses/LICENSE-Shizuku-API.txt'],
     }.entries) {
       for (final asset in license.value) {
         yield LicenseEntryWithLineBreaks([

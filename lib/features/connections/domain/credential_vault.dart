@@ -27,6 +27,11 @@ class PrivateKeyCredential {
   final String? passphrase;
 }
 
+class PasswordCredential {
+  const PasswordCredential(this.password);
+  final String password;
+}
+
 enum CredentialVaultFailureCode {
   unavailable,
   corruptData,
@@ -49,11 +54,15 @@ abstract interface class CredentialVault {
 
   Future<PrivateKeyCredential?> readPrivateKey(CredentialHandle handle);
 
+  Future<CredentialHandle> putPassword(PasswordCredential credential);
+
+  Future<PasswordCredential?> readPassword(CredentialHandle handle);
+
   Future<void> delete(CredentialHandle handle);
 }
 
 class EphemeralCredentialVault implements CredentialVault {
-  final Map<String, PrivateKeyCredential> _credentials = {};
+  final Map<String, Object> _credentials = {};
   int _nextId = 0;
 
   @override
@@ -67,7 +76,21 @@ class EphemeralCredentialVault implements CredentialVault {
 
   @override
   Future<PrivateKeyCredential?> readPrivateKey(CredentialHandle handle) async {
-    return _credentials[handle.value];
+    final value = _credentials[handle.value];
+    return value is PrivateKeyCredential ? value : null;
+  }
+
+  @override
+  Future<CredentialHandle> putPassword(PasswordCredential credential) async {
+    final handle = CredentialHandle('ephemeral-${_nextId++}');
+    _credentials[handle.value] = credential;
+    return handle;
+  }
+
+  @override
+  Future<PasswordCredential?> readPassword(CredentialHandle handle) async {
+    final value = _credentials[handle.value];
+    return value is PasswordCredential ? value : null;
   }
 
   @override

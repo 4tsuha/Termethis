@@ -47,12 +47,6 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
       ),
       body: Column(
         children: [
-          if (!desktopOnly)
-            MaterialBanner(
-              content: Text(l10n.stageOneNotice),
-              leading: const Icon(Icons.info_outline),
-              actions: const [SizedBox.shrink()],
-            ),
           Expanded(
             child: profiles.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -121,27 +115,12 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showConnectionTypePicker(context, allowedTypes),
+        onPressed: () => context.push(
+          desktopOnly ? '/connections/new?scope=desktop' : '/connections/new',
+        ),
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  Future<void> _showConnectionTypePicker(
-    BuildContext context,
-    Set<ConnectionType> allowedTypes,
-  ) async {
-    final selected = await showModalBottomSheet<ConnectionType>(
-      context: context,
-      useRootNavigator: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => _ConnectionTypePicker(allowedTypes: allowedTypes),
-    );
-    if (selected != null && context.mounted) {
-      await context.push('/connections/new?type=${selected.name}');
-    }
   }
 
   Future<void> _openProfile(
@@ -154,7 +133,9 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
       if (profile.connectionType == ConnectionType.ssh) {
         final tabId = await ref.read(sshTabsProvider.notifier).open(profile);
         if (context.mounted) {
-          context.push('/terminal/${profile.id}?tab=$tabId');
+          context.go(
+            Uri(path: '/terminals', queryParameters: {'tab': tabId}).toString(),
+          );
         }
         return;
       }
@@ -617,118 +598,6 @@ Color _connectionStatusColor(ColorScheme colors, SshSessionStatus status) =>
       SshSessionStatus.reconnectPrompt => colors.error,
       SshSessionStatus.idle || SshSessionStatus.closed => colors.outline,
     };
-
-class _ConnectionTypePicker extends StatelessWidget {
-  const _ConnectionTypePicker({required this.allowedTypes});
-
-  final Set<ConnectionType> allowedTypes;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        4,
-        20,
-        24 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.chooseConnectionTypeTitle,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.chooseConnectionTypeMessage,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 20),
-          if (allowedTypes.contains(ConnectionType.ssh)) ...[
-            _ConnectionTypeOption(
-              type: ConnectionType.ssh,
-              icon: Icons.terminal,
-              title: l10n.connectionTypeSsh,
-              description: l10n.connectionTypeSshDescription,
-            ),
-            if (allowedTypes.length > 1) const SizedBox(height: 10),
-          ],
-          if (allowedTypes.contains(ConnectionType.rdp)) ...[
-            _ConnectionTypeOption(
-              type: ConnectionType.rdp,
-              icon: Icons.desktop_windows_outlined,
-              title: l10n.connectionTypeRdp,
-              description: l10n.connectionTypeRdpDescription,
-            ),
-            if (allowedTypes.contains(ConnectionType.vnc))
-              const SizedBox(height: 10),
-          ],
-          if (allowedTypes.contains(ConnectionType.vnc))
-            _ConnectionTypeOption(
-              type: ConnectionType.vnc,
-              icon: Icons.monitor_outlined,
-              title: l10n.connectionTypeVnc,
-              description: l10n.connectionTypeVncDescription,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionTypeOption extends StatelessWidget {
-  const _ConnectionTypeOption({
-    required this.type,
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final ConnectionType type;
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Card.outlined(
-      clipBehavior: Clip.antiAlias,
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: () => Navigator.pop(context, type),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: colors.primaryContainer,
-                foregroundColor: colors.onPrimaryContainer,
-                child: Icon(icon),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(description),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _LoadFailure extends StatelessWidget {
   const _LoadFailure({

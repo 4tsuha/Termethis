@@ -51,7 +51,11 @@ class ConnectionProfilesController
   Future<ConnectionProfile> save(
     ConnectionProfile profile, {
     PrivateKeyCredential? replacementPrivateKey,
+    PasswordCredential? replacementPassword,
   }) async {
+    if (replacementPrivateKey != null && replacementPassword != null) {
+      throw ArgumentError('秘密鍵とパスワードを同時には保存できません。');
+    }
     final existing = await _repository.findById(profile.id);
     CredentialHandle? newHandle;
     var savedProfile = profile;
@@ -61,6 +65,12 @@ class ConnectionProfilesController
       savedProfile = profile.withCredential(
         credentialReference: newHandle.value,
         privateKeyLabel: replacementPrivateKey.label,
+      );
+    } else if (replacementPassword != null) {
+      newHandle = await _vault.putPassword(replacementPassword);
+      savedProfile = profile.withCredential(
+        credentialReference: newHandle.value,
+        privateKeyLabel: null,
       );
     }
 

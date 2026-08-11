@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_output`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `finalize_ssh_session`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `release_excess_capacity`, `resolve_sftp_path`, `sftp_connect_error`
+// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `release_excess_capacity`, `resolve_sftp_path`, `sftp_connect_error`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `HostKeyHandler`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<RustSshConnectResult> sshConnect({
   required RustSshConnectRequest request,
@@ -54,6 +54,14 @@ Future<void> sshResize({
 
 Future<void> sshClose({required PlatformInt64 sessionId}) =>
     RustLib.instance.api.crateApiCoreSshClose(sessionId: sessionId);
+
+Future<RustSshExecResult> sshExecute({required RustSshExecRequest request}) =>
+    RustLib.instance.api.crateApiCoreSshExecute(request: request);
+
+Future<void> sshCancelExecution({required PlatformInt64 executionId}) => RustLib
+    .instance
+    .api
+    .crateApiCoreSshCancelExecution(executionId: executionId);
 
 Future<bool> privateKeyIsEncrypted({required String pem}) =>
     RustLib.instance.api.crateApiCorePrivateKeyIsEncrypted(pem: pem);
@@ -376,6 +384,116 @@ class RustSshConnectResult {
           pendingAuthId == other.pendingAuthId &&
           hostKey == other.hostKey &&
           challenge == other.challenge &&
+          errorCode == other.errorCode &&
+          errorMessage == other.errorMessage;
+}
+
+class RustSshExecRequest {
+  final PlatformInt64 executionId;
+  final String host;
+  final int port;
+  final String username;
+  final String authKind;
+  final String password;
+  final String privateKeyPem;
+  final String? passphrase;
+  final List<String> trustedHostKeys;
+  final String command;
+  final int timeoutMillis;
+  final int outputLimitBytes;
+
+  const RustSshExecRequest({
+    required this.executionId,
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.authKind,
+    required this.password,
+    required this.privateKeyPem,
+    this.passphrase,
+    required this.trustedHostKeys,
+    required this.command,
+    required this.timeoutMillis,
+    required this.outputLimitBytes,
+  });
+
+  @override
+  int get hashCode =>
+      executionId.hashCode ^
+      host.hashCode ^
+      port.hashCode ^
+      username.hashCode ^
+      authKind.hashCode ^
+      password.hashCode ^
+      privateKeyPem.hashCode ^
+      passphrase.hashCode ^
+      trustedHostKeys.hashCode ^
+      command.hashCode ^
+      timeoutMillis.hashCode ^
+      outputLimitBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSshExecRequest &&
+          runtimeType == other.runtimeType &&
+          executionId == other.executionId &&
+          host == other.host &&
+          port == other.port &&
+          username == other.username &&
+          authKind == other.authKind &&
+          password == other.password &&
+          privateKeyPem == other.privateKeyPem &&
+          passphrase == other.passphrase &&
+          trustedHostKeys == other.trustedHostKeys &&
+          command == other.command &&
+          timeoutMillis == other.timeoutMillis &&
+          outputLimitBytes == other.outputLimitBytes;
+}
+
+class RustSshExecResult {
+  final Uint8List stdout;
+  final Uint8List stderr;
+  final int? exitStatus;
+  final bool timedOut;
+  final bool cancelled;
+  final bool truncated;
+  final String? errorCode;
+  final String? errorMessage;
+
+  const RustSshExecResult({
+    required this.stdout,
+    required this.stderr,
+    this.exitStatus,
+    required this.timedOut,
+    required this.cancelled,
+    required this.truncated,
+    this.errorCode,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      stdout.hashCode ^
+      stderr.hashCode ^
+      exitStatus.hashCode ^
+      timedOut.hashCode ^
+      cancelled.hashCode ^
+      truncated.hashCode ^
+      errorCode.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSshExecResult &&
+          runtimeType == other.runtimeType &&
+          stdout == other.stdout &&
+          stderr == other.stderr &&
+          exitStatus == other.exitStatus &&
+          timedOut == other.timedOut &&
+          cancelled == other.cancelled &&
+          truncated == other.truncated &&
           errorCode == other.errorCode &&
           errorMessage == other.errorMessage;
 }

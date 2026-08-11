@@ -357,17 +357,25 @@ class AppLocalizationsJa extends AppLocalizations {
   String get connectionTypeSshDescription => 'Termethis内のターミナルで、シェルやTUIを操作します。';
 
   @override
+  String get connectionTypeSshCompactDescription => 'ターミナル接続';
+
+  @override
   String get connectionTypeRdp => 'RDP';
 
   @override
-  String get connectionTypeRdpDescription =>
-      'IronRDPを使用して、Windowsのリモートデスクトップをアプリ内で開きます。';
+  String get connectionTypeRdpDescription => 'Windowsのリモートデスクトップへアプリ内から接続します。';
+
+  @override
+  String get connectionTypeRdpCompactDescription => 'Windowsリモート';
 
   @override
   String get connectionTypeVnc => 'VNC';
 
   @override
   String get connectionTypeVncDescription => 'VNC対応アプリでリモート画面を開きます。';
+
+  @override
+  String get connectionTypeVncCompactDescription => 'リモート画面';
 
   @override
   String addTypedConnection(String type) {
@@ -386,7 +394,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get internalRdpAuthenticationNotice =>
-      'パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。';
+      'パスワードは接続時に入力し、リモートデスクトップ接続にのみ使用します。接続先やログには保存しません。';
 
   @override
   String get remoteClientUnavailableTitle => '対応アプリが見つかりません';
@@ -565,7 +573,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTerminalRenderer => 'ターミナル描画エンジン';
 
   @override
-  String get settingsSelectTerminalRenderer => '描画エンジンを選択';
+  String get settingsSelectTerminalRenderer => 'ターミナルエミュレータを選択';
 
   @override
   String get terminalRendererWebgl => 'xterm.js WebGL';
@@ -573,6 +581,13 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get terminalRendererWebglDescription =>
       '複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。';
+
+  @override
+  String get terminalRendererAlacritty => 'Flutter Alacritty';
+
+  @override
+  String get terminalRendererAlacrittyDescription =>
+      'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。';
 
   @override
   String get terminalRendererConnectBot => 'ConnectBot';
@@ -719,7 +734,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.4.1';
+  String get settingsVersionValue => '0.5.0';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

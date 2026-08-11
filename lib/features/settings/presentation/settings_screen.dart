@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../application/app_font_controller.dart';
+import '../application/credential_settings_controller.dart';
 import '../application/terminal_performance_settings_controller.dart';
 import '../domain/app_font.dart';
 import '../domain/hardware_acceleration_controller.dart';
@@ -18,6 +19,7 @@ class SettingsScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final appFont = ref.watch(appFontProvider);
     final performance = ref.watch(terminalPerformanceSettingsProvider);
+    final credentialSettings = ref.watch(credentialSettingsProvider);
     final hardwareAcceleration = ref.watch(
       hardwareAccelerationCapabilitiesProvider,
     );
@@ -29,15 +31,6 @@ class SettingsScreen extends ConsumerWidget {
           const _SectionHeader('タブバーとクイック操作'),
           _SettingsCard(
             children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.tab_outlined),
-                title: const Text('ターミナルのタブバーを表示'),
-                subtitle: const Text('セッション切り替え、検索、コピーの操作をターミナル上部に表示します。'),
-                value: performance.showSessionTabBar,
-                onChanged: ref
-                    .read(terminalPerformanceSettingsProvider.notifier)
-                    .setShowSessionTabBar,
-              ),
               SwitchListTile(
                 secondary: const Icon(Icons.search),
                 title: const Text('タブバーに検索ボタンを表示'),
@@ -127,8 +120,10 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.keyboard_alt_outlined),
-                title: const Text('キーボードに合わせて端末をリサイズ'),
-                subtitle: const Text('キーボード表示時にPTYを空き領域へ合わせます。全画面TUI向けの設定です。'),
+                title: const Text('キーボード表示時にPTYをリサイズ'),
+                subtitle: const Text(
+                  '操作バーは常にキーボードの上に表示します。有効にすると、リモートPTYも空き領域へ合わせます。全画面TUI向けです。',
+                ),
                 value: performance.resizeForKeyboard,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -277,7 +272,55 @@ class SettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.enhanced_encryption_outlined),
                 title: Text(l10n.settingsCredentialProtection),
-                subtitle: Text(l10n.settingsCredentialProtectionDescription),
+                subtitle: const Text('秘密鍵、保存したパスフレーズとパスワードを端末内で暗号化します。'),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.password_outlined),
+                title: const Text('SSHパスワードを保存'),
+                subtitle: Text(
+                  credentialSettings.saveSshPasswords
+                      ? '接続編集で入力したパスワードを暗号化Vaultへ保存し、SSHとMCP Toolで使用します。'
+                      : 'パスワードは保存せず、SSH接続のたびに入力します。',
+                ),
+                value: credentialSettings.saveSshPasswords,
+                onChanged: ref
+                    .read(credentialSettingsProvider.notifier)
+                    .setSaveSshPasswords,
+              ),
+            ],
+          ),
+          const _SectionHeader('連携と診断'),
+          _SettingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Shizuku連携'),
+                subtitle: const Text('スマホ単体でADBシェルを開き、端末内コマンドを操作します。'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/shizuku'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Logcatキャプチャ'),
+                subtitle: const Text('Shizuku権限でAndroidのシステムログを取得し、端末内で確認します。'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/logcat'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.history_outlined),
+                title: const Text('接続ログ'),
+                subtitle: const Text('SSHの接続状態と失敗理由を確認します。資格情報や端末内容は記録しません。'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/connection-logs'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.hub_outlined),
+                title: const Text('SSH MCPサーバー'),
+                subtitle: const Text(
+                  '保存済みSSH接続先を、認証付きMCP ToolとしてAIクライアントへ公開します。',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/mcp'),
               ),
             ],
           ),
@@ -619,6 +662,7 @@ class SettingsScreen extends ConsumerWidget {
   String _rendererLabel(AppLocalizations l10n, TerminalRendererMode mode) =>
       switch (mode) {
         TerminalRendererMode.webgl => l10n.terminalRendererWebgl,
+        TerminalRendererMode.alacritty => l10n.terminalRendererAlacritty,
         TerminalRendererMode.connectBot => l10n.terminalRendererConnectBot,
         TerminalRendererMode.termux => l10n.terminalRendererTermux,
       };
@@ -661,6 +705,7 @@ class SettingsScreen extends ConsumerWidget {
     TerminalRendererMode mode,
   ) => switch (mode) {
     TerminalRendererMode.webgl => l10n.terminalRendererWebglDescription,
+    TerminalRendererMode.alacritty => l10n.terminalRendererAlacrittyDescription,
     TerminalRendererMode.connectBot =>
       l10n.terminalRendererConnectBotDescription,
     TerminalRendererMode.termux => l10n.terminalRendererTermuxDescription,

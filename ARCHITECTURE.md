@@ -1,8 +1,8 @@
 # Termethis アーキテクチャ
 
-最終更新：2026年8月11日
+最終更新：2026年8月12日
 
-状態：Termethis 0.4.1として、Android最適化と実用的なSSH／SFTP接続を実装済み
+状態：Termethis 0.5.0として、Android最適化と実用的なSSH／SFTP接続を実装済み
 
 ## 1. 対象と設計原則
 

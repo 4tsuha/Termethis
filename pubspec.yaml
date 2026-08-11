@@ -1,7 +1,7 @@
 name: termethis
 description: "日本語入力に対応したAndroid向けSSH・SFTPモバイルターミナル。"
 publish_to: 'none'
-version: 0.4.1+6
+version: 0.5.0+7
 
 environment:
   sdk: ^3.12.2
@@ -14,6 +14,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  flutter_alacritty: ^2.4.0
   flutter_riverpod: ^3.4.2
   flutter_rust_bridge: 2.12.0
   flutter_secure_storage: ^10.3.1
@@ -35,6 +36,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   sqlite3: ^3.5.1
+
+dependency_overrides:
+  # rust_lib_flutter_alacritty 0.2.2のCargokitをGradle 9 APIへ適合させたもの。
+  rust_lib_flutter_alacritty:
+    path: third_party/rust_lib_flutter_alacritty
 
 flutter:
   generate: true
@@ -73,6 +79,7 @@ flutter:
     - assets/licenses/LICENSE-russh-APACHE.txt
     - assets/licenses/LICENSE-russh-sftp.txt
     - assets/licenses/LICENSE-tokio.txt
+    - assets/licenses/LICENSE-Shizuku-API.txt
     - third_party/xterm/LICENSE
     - third_party/termlib/LICENSE
     - third_party/termlib/lib/src/main/cpp/libvterm/LICENSE

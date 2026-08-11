@@ -82,6 +82,26 @@ void main() {
     );
   });
 
+  test('保存パスワードを暗号化して復号する', () async {
+    final vault = EncryptedFileCredentialVault(
+      secureStore,
+      () async => directory,
+    );
+    final handle = await vault.putPassword(
+      const PasswordCredential('do-not-store-in-plain-text'),
+    );
+    final encrypted = await File(
+      '${directory.path}/${handle.value}.vault',
+    ).readAsString();
+
+    expect(encrypted, isNot(contains('do-not-store-in-plain-text')));
+    expect(
+      (await vault.readPassword(handle))?.password,
+      'do-not-store-in-plain-text',
+    );
+    expect(await vault.readPrivateKey(handle), isNull);
+  });
+
   test('パストラバーサルを含む参照を拒否する', () async {
     final vault = EncryptedFileCredentialVault(
       secureStore,

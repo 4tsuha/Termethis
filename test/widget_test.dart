@@ -31,6 +31,7 @@ void main() {
 
     expect(find.text('接続先'), findsOneWidget);
     expect(find.text('接続先がありません'), findsOneWidget);
+    expect(find.text('接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。'), findsNothing);
     expect(find.text('接続先を追加'), findsNothing);
     expect(find.byTooltip('接続先を追加'), findsNothing);
     expect(find.byIcon(Icons.add), findsOneWidget);
@@ -44,8 +45,8 @@ void main() {
 
     final fields = find.byType(TextFormField);
     expect(fields, findsNWidgets(4));
-    await tester.enterText(fields.at(0), '開発サーバー');
-    await tester.enterText(fields.at(1), '192.168.1.20');
+    await tester.enterText(fields.at(0), '192.168.1.20');
+    await tester.enterText(fields.at(1), '開発サーバー');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'developer');
     await _saveConnectionEditor(tester);
@@ -73,8 +74,8 @@ void main() {
 
     await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), '接続テスト');
-    await tester.enterText(fields.at(1), 'localhost');
+    await tester.enterText(fields.at(0), 'localhost');
+    await tester.enterText(fields.at(1), '接続テスト');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'demo');
     await _saveConnectionEditor(tester);
@@ -144,8 +145,8 @@ void main() {
 
     await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), 'IMEテスト');
-    await tester.enterText(fields.at(1), 'localhost');
+    await tester.enterText(fields.at(0), 'localhost');
+    await tester.enterText(fields.at(1), 'IMEテスト');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'demo');
     await _saveConnectionEditor(tester);
@@ -268,8 +269,8 @@ void main() {
 
     await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
-    await tester.enterText(fields.at(0), '鍵サーバー');
-    await tester.enterText(fields.at(1), 'key.example.com');
+    await tester.enterText(fields.at(0), 'key.example.com');
+    await tester.enterText(fields.at(1), '鍵サーバー');
     await tester.enterText(fields.at(2), '22');
     await tester.enterText(fields.at(3), 'key-user');
 
@@ -362,17 +363,24 @@ void main() {
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
 
-    expect(find.text('接続方式を選択'), findsOneWidget);
+    expect(find.text('接続先を追加'), findsOneWidget);
+    expect(find.text('接続方式'), findsOneWidget);
     expect(find.text('SSH'), findsOneWidget);
     expect(find.text('RDP'), findsOneWidget);
     expect(find.text('VNC'), findsOneWidget);
+    expect(find.text('ターミナル接続'), findsOneWidget);
+    expect(find.text('Windowsリモート'), findsOneWidget);
+    expect(find.text('リモート画面'), findsOneWidget);
+    expect(find.text('ホスト名またはIPアドレス'), findsOneWidget);
 
     await tester.tap(find.text('RDP'));
     await tester.pumpAndSettle();
 
-    expect(find.text('RDP接続先を追加'), findsOneWidget);
+    expect(find.text('接続先を追加'), findsOneWidget);
+    expect(find.text('ホスト名またはIPアドレス'), findsOneWidget);
+    expect(find.text('Windowsのリモートデスクトップへアプリ内から接続します。'), findsNothing);
     expect(
-      find.text('パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。'),
+      find.text('パスワードは接続時に入力し、リモートデスクトップ接続にのみ使用します。接続先やログには保存しません。'),
       findsOneWidget,
     );
     final fields = find.byType(TextFormField);
@@ -453,8 +461,6 @@ void main() {
 
 Future<void> _openSshEditor(WidgetTester tester) async {
   await tester.tap(find.byIcon(Icons.add));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('SSH'));
   await tester.pumpAndSettle();
 }
 

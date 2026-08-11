@@ -760,6 +760,12 @@ abstract class AppLocalizations {
   /// **'Termethis内のターミナルで、シェルやTUIを操作します。'**
   String get connectionTypeSshDescription;
 
+  /// No description provided for @connectionTypeSshCompactDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナル接続'**
+  String get connectionTypeSshCompactDescription;
+
   /// No description provided for @connectionTypeRdp.
   ///
   /// In ja, this message translates to:
@@ -769,8 +775,14 @@ abstract class AppLocalizations {
   /// No description provided for @connectionTypeRdpDescription.
   ///
   /// In ja, this message translates to:
-  /// **'IronRDPを使用して、Windowsのリモートデスクトップをアプリ内で開きます。'**
+  /// **'Windowsのリモートデスクトップへアプリ内から接続します。'**
   String get connectionTypeRdpDescription;
+
+  /// No description provided for @connectionTypeRdpCompactDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'Windowsリモート'**
+  String get connectionTypeRdpCompactDescription;
 
   /// No description provided for @connectionTypeVnc.
   ///
@@ -783,6 +795,12 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'VNC対応アプリでリモート画面を開きます。'**
   String get connectionTypeVncDescription;
+
+  /// No description provided for @connectionTypeVncCompactDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'リモート画面'**
+  String get connectionTypeVncCompactDescription;
 
   /// No description provided for @addTypedConnection.
   ///
@@ -811,7 +829,7 @@ abstract class AppLocalizations {
   /// No description provided for @internalRdpAuthenticationNotice.
   ///
   /// In ja, this message translates to:
-  /// **'パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。'**
+  /// **'パスワードは接続時に入力し、リモートデスクトップ接続にのみ使用します。接続先やログには保存しません。'**
   String get internalRdpAuthenticationNotice;
 
   /// No description provided for @remoteClientUnavailableTitle.
@@ -1147,7 +1165,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSelectTerminalRenderer.
   ///
   /// In ja, this message translates to:
-  /// **'描画エンジンを選択'**
+  /// **'ターミナルエミュレータを選択'**
   String get settingsSelectTerminalRenderer;
 
   /// No description provided for @terminalRendererWebgl.
@@ -1161,6 +1179,18 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
+
+  /// No description provided for @terminalRendererAlacritty.
+  ///
+  /// In ja, this message translates to:
+  /// **'Flutter Alacritty'**
+  String get terminalRendererAlacritty;
+
+  /// No description provided for @terminalRendererAlacrittyDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。'**
+  String get terminalRendererAlacrittyDescription;
 
   /// No description provided for @terminalRendererConnectBot.
   ///
@@ -1429,7 +1459,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.4.1'**
+  /// **'0.5.0'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

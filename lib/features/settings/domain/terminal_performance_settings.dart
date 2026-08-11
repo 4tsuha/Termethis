@@ -1,6 +1,6 @@
 enum RefreshRateMode { adaptive, balanced, maximum }
 
-enum TerminalRendererMode { webgl, connectBot, termux }
+enum TerminalRendererMode { webgl, alacritty, connectBot, termux }
 
 enum TerminalFont { cascadiaMono, jetBrainsMono }
 
