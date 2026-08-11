@@ -1429,7 +1429,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.4.0'**
+  /// **'0.4.1'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.
