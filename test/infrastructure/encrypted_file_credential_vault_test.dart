@@ -1,16 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/credential_vault.dart';
-import 'package:ssh_terminal_ja/infrastructure/secure_storage/encrypted_file_credential_vault.dart';
-import 'package:ssh_terminal_ja/infrastructure/secure_storage/secure_value_store.dart';
+import 'package:termethis/features/connections/domain/credential_vault.dart';
+import 'package:termethis/infrastructure/secure_storage/encrypted_file_credential_vault.dart';
+import 'package:termethis/infrastructure/secure_storage/secure_value_store.dart';
 
 void main() {
   late Directory directory;
   late _MemorySecureValueStore secureStore;
 
   setUp(() async {
-    directory = await Directory.systemTemp.createTemp('vbterminal-vault-test-');
+    directory = await Directory.systemTemp.createTemp('termethis-vault-test-');
     secureStore = _MemorySecureValueStore();
   });
 

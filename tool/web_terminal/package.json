@@ -1,5 +1,5 @@
 {
-  "name": "vbterminal-web-terminal",
+  "name": "termethis-web-terminal",
   "private": true,
   "scripts": {
     "build": "esbuild src/terminal.js --bundle --format=iife --minify --legal-comments=eof --outfile=../../assets/web_terminal/terminal.js"

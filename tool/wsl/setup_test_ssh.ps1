@@ -1,6 +1,6 @@
 param(
     [string]$Distro = 'Ubuntu',
-    [string]$TestUser = 'vbterminal-test',
+    [string]$TestUser = 'termethis-test',
     [Parameter(Mandatory = $true)]
     [string]$Password
 )
@@ -37,19 +37,19 @@ $encodedCredential = [Convert]::ToBase64String(
 if ($LASTEXITCODE -ne 0) { throw 'Failed to set the test user password.' }
 
 & wsl.exe -d $Distro -u root -- ssh-keygen -A
-& wsl.exe -d $Distro -u root -- install -m 600 $wslConfigPath /etc/ssh/sshd_config_vbterminal_test
+& wsl.exe -d $Distro -u root -- install -m 600 $wslConfigPath /etc/ssh/sshd_config_termethis_test
 & wsl.exe -d $Distro -u root -- mkdir -p /run/sshd
-& wsl.exe -d $Distro -u root -- /usr/sbin/sshd -t -f /etc/ssh/sshd_config_vbterminal_test
+& wsl.exe -d $Distro -u root -- /usr/sbin/sshd -t -f /etc/ssh/sshd_config_termethis_test
 if ($LASTEXITCODE -ne 0) { throw 'The isolated sshd config is invalid.' }
 
 $previousErrorAction = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-$existingPid = (& wsl.exe -d $Distro -u root -- cat /run/sshd-vbterminal-test.pid 2>$null)
+$existingPid = (& wsl.exe -d $Distro -u root -- cat /run/sshd-termethis-test.pid 2>$null)
 if ($existingPid -match '^\d+$') {
     & wsl.exe -d $Distro -u root -- kill $existingPid 2>$null
 }
 $ErrorActionPreference = $previousErrorAction
-& wsl.exe -d $Distro -u root -- /usr/sbin/sshd -f /etc/ssh/sshd_config_vbterminal_test
+& wsl.exe -d $Distro -u root -- /usr/sbin/sshd -f /etc/ssh/sshd_config_termethis_test
 if ($LASTEXITCODE -ne 0) { throw 'Failed to start the isolated sshd.' }
 
 Write-Output 'WSL SSH test server: 127.0.0.1:22222'

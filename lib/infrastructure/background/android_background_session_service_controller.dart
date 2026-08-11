@@ -6,9 +6,7 @@ class AndroidBackgroundSessionServiceController
     implements BackgroundSessionServiceController {
   const AndroidBackgroundSessionServiceController();
 
-  static const _channel = MethodChannel(
-    'jp.hgzt23678.ssh_terminal_ja/background_session',
-  );
+  static const _channel = MethodChannel('jp.yts.termethis/background_session');
 
   @override
   Future<void> setRunning(bool running) async {

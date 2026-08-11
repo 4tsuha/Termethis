@@ -1,8 +1,8 @@
-# Android向けSSH／FTPモバイルクライアント設計
+# Termethis アーキテクチャ
 
 最終更新：2026年8月11日
 
-状態：0.1.1を基準に、Android最適化と実用的なSSH接続を0.2系で構築中
+状態：Termethis 0.3.0として、Android最適化と実用的なSSH／SFTP接続を実装済み
 
 ## 1. 対象と設計原則
 
@@ -100,7 +100,7 @@ Repositoryの再起動試験では接続先と複数のホスト鍵が復元さ�
 
 ### 3.1 トップレベルナビゲーション
 
-トップレベルは`SSH`、`FTP`、`設定`の三画面で構成する。
+トップレベルは`ホーム`、`FTP`、`設定`の三画面で構成する。SSH、RDP、VNCはホームの接続先として扱い、接続方式ごとのトップレベル画面は増やさない。
 
 幅600dp未満ではボトムナビゲーション、600dp以上では`NavigationRail`へ切り替える。
 
@@ -114,7 +114,9 @@ SSHターミナルや接続先編集のような集中操作はルートNavigato
 
 ### 3.2 接続先一覧
 
-各項目には表示名、`user@host:port`、認証方式、直近の接続結果を表示する。
+各項目には接続方式、表示名、接続先、ユーザー名を表示する。SSHは`user@host:port`、RDPとVNCは`user · host:port`形式を使い、ユーザー名が空なら`host:port`だけを表示する。
+
+追加操作では最初にSSH、RDP、VNCをカードから選ぶ。選択した方式に必要な項目だけを次画面に表示し、既存接続先の方式は編集画面で変更しない。
 
 メニューからWake on LAN、編集、複製、known_hostsの確認、削除を行えるようにする。
 
@@ -122,7 +124,7 @@ SSHターミナルや接続先編集のような集中操作はルートNavigato
 
 ### 3.3 接続先編集
 
-編集画面は基本情報、認証、端末、接続維持、詳細設定の五つに分ける。
+SSH編集画面は基本情報、認証、端末、接続維持、詳細設定の五つに分ける。RDPとVNCでは表示名、ホスト、ポート、ユーザー名、Wake on LANだけを扱う。
 
 基本情報では表示名、ホスト、ポート、ユーザー名を編集する。
 
@@ -134,7 +136,15 @@ SSHターミナルや接続先編集のような集中操作はルートNavigato
 
 詳細設定では接続、ハンドシェイク、認証、PTYのタイムアウトを変更できるが、安全な既定値と範囲制限を設ける。
 
-### 3.4 Wake on LAN
+### 3.4 RDPとVNC
+
+RDPはMicrosoftのRDP URI形式を使用し、`full address`、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
+
+VNCは`vnc://` URIを使用し、ホスト、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
+
+いずれも`ACTION_VIEW`で起動し、対応アプリがない場合は必要なクライアント種別を日本語で案内する。パスワードはURI、SQLite、ログへ渡さず、起動先のクライアントで入力する。
+
+### 3.5 Wake on LAN
 
 接続先編集でMACアドレス、IPv4ブロードキャストアドレス、UDPポートを設定する。
 
@@ -148,7 +158,7 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 保存済みかどうかと、置き換えまたは削除ができることだけを示す。
 
-### 3.4 ホスト鍵確認
+### 3.6 ホスト鍵確認
 
 初めて見るホスト鍵は接続処理を停止した状態で確認画面へ渡す。
 
@@ -158,7 +168,7 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 鍵の変更は接続先のknown_hosts管理画面で既存鍵を削除してから、次の接続で改めて承認する。
 
-### 3.5 ターミナル
+### 3.7 ターミナル
 
 ターミナル画面は上部の接続タブ、中央の端末表示、下部の補助キーバーで構成する。
 
@@ -178,7 +188,7 @@ WebGLモードではDart側のFlutter版端末へSSH出力を常時解析させ�
 
 WebViewアセットの読込失敗、初期化タイムアウト、JavaScriptブリッジ障害では、その画面だけFlutter版`xterm`へ自動的に切り替える。WebGLの設定値は維持し、次の画面生成時に再試行する。
 
-接続タブバーには任意表示の検索と「最後の出力をコピー」を置く。検索は通常のシェル、tmux、zellij、screenから対象を選び、それぞれの検索キー列を端末入力として送る。「最後の出力をコピー」とプロンプト内のタップ移動はOSC 133のコマンド境界を利用し、マーカーがない場合はリモート環境を変更せずセットアップ案内を表示する。
+接続タブバーには任意表示の検索と「直前のコマンド出力をコピー」を置く。検索は通常のシェル、tmux、zellij、screenから対象を選び、それぞれの検索キー列を端末入力として送る。「直前のコマンド出力をコピー」とプロンプト内のタップ移動はOSC 133のコマンド境界を利用し、マーカーがない場合はリモート環境を変更せずセットアップ案内を表示する。
 
 TUIのマウストラッキングは明示的に有効化し、タップを左クリック、長押しを右クリックとしてxterm.jsへ渡す。テキスト選択と競合するため、長押し右クリックはマウス入力を有効にした場合だけ選択できる。
 
@@ -192,7 +202,7 @@ TUIのマウストラッキングは明示的に有効化し、タップを左�
 
 戻る操作は即時切断に割り当てず、接続中のタブを閉じる場合だけ確認する。
 
-### 3.6 FTPマネージャー
+### 3.8 FTPマネージャー
 
 FTP画面はFTP、FTPES、FTPS、SFTPの接続単位のタブ、パンくず、階層式一覧を持つ。
 
@@ -204,7 +214,7 @@ SFTPとターミナルは認証資産を共有するが、transportとタブは�
 
 平文FTPでは認証情報と通信内容が暗号化されないことを接続前と接続中に表示する。
 
-### 3.7 設定
+### 3.9 設定
 
 設定画面は「クイック操作」「入力とジェスチャー」「表示と電源」「描画とパフォーマンス」の順に構成する。検索方式、最後の出力コピー、OSC 133セットアップ、TUIマウス、長押し右クリック、プロンプト内カーソル移動、タブバー表示、画面スリープ抑止、IMEリサイズ、テーマ、日本語フォント、フォントサイズ、リフレッシュレートモード、スクロールバック行数、バックグラウンド接続維持、貼り付け確認、診断ログを置く。
 
@@ -303,7 +313,7 @@ Infrastructure層は`flutter_rust_bridge`経由のRust SSHコア、SQLite、Andr
 
 Rust側のセッションID、認証結果、SFTPエントリーはDart AdapterでDomain型へ変換し、`russh`と`russh-sftp`の型をInfrastructure層から外へ出さない。
 
-SSHパケット処理、鍵交換、認証、PTY、SFTP、受信バッファは`rust/vbterminal_core`が所有する。Flutter側は接続設定、端末表示、入力、タブ状態に集中する。
+SSHパケット処理、鍵交換、認証、PTY、SFTP、受信バッファは`rust/termethis_core`が所有する。Flutter側は接続設定、端末表示、入力、タブ状態に集中する。
 
 ## 5. SSH接続の実行モデル
 
@@ -536,7 +546,7 @@ UIだけで使う小さな設定は`shared_preferences`へ保存してよいが�
 
 | テーブル | 主な列 | 用途 |
 |---|---|---|
-| `connection_profiles` | `id`, `name`, `host_display`, `host_ascii`, `port`, `username`, `auth_plan`, `wake_on_lan_mac`, `wake_on_lan_broadcast`, `wake_on_lan_port`, `terminal_options`, `keepalive_policy`, `reconnect_policy`, `created_at`, `updated_at` | 接続先 |
+| `connection_profiles` | `id`, `connection_type`, `name`, `host_display`, `host_ascii`, `port`, `username`, `auth_plan`, `wake_on_lan_mac`, `wake_on_lan_broadcast`, `wake_on_lan_port`, `terminal_options`, `keepalive_policy`, `reconnect_policy`, `created_at`, `updated_at` | SSH・RDP・VNC接続先 |
 | `known_host_keys` | `host_ascii`, `port`, `algorithm`, `fingerprint_sha256`, `accepted_at` | 承認済みホスト鍵 |
 | `credential_links` | `profile_id`, `kind`, `vault_reference`, `updated_at` | Keystore内の秘密値への参照 |
 | `connection_history` | `profile_id`, `started_at`, `duration_ms`, `stage`, `result_code`, `network_type` | 本文を含まない履歴 |

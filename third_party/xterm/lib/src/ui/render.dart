@@ -153,8 +153,13 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
 
   var _stickToBottom = true;
 
+  var _terminalLayoutPending = false;
+
   void _onScroll() {
-    _stickToBottom = _scrollOffset >= _maxScrollExtent;
+    if (!_terminalLayoutPending) {
+      final distanceFromBottom = _maxScrollExtent - _scrollOffset;
+      _stickToBottom = distanceFromBottom <= max(lineHeight * 0.5, 1.0);
+    }
     markNeedsLayout();
     _notifyEditableRect();
   }
@@ -164,6 +169,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   }
 
   void _onTerminalChange() {
+    _terminalLayoutPending = true;
     markNeedsLayout();
     _notifyEditableRect();
   }
@@ -206,15 +212,17 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
 
   @override
   void performLayout() {
+    final stickToBottom = _stickToBottom;
     size = constraints.biggest;
 
     _updateViewportSize();
 
     _updateScrollOffset();
 
-    if (_stickToBottom) {
+    if (stickToBottom) {
       _offset.correctBy(_maxScrollExtent - _scrollOffset);
     }
+    _terminalLayoutPending = false;
   }
 
   /// Total height of the terminal in pixels. Includes scrollback buffer.

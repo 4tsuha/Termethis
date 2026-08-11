@@ -1,14 +1,14 @@
 Port 22222
 ListenAddress 127.0.0.1
 AddressFamily inet
-PidFile /run/sshd-vbterminal-test.pid
+PidFile /run/sshd-termethis-test.pid
 
 PasswordAuthentication yes
 KbdInteractiveAuthentication no
 PermitEmptyPasswords no
 PermitRootLogin no
 UsePAM yes
-AllowUsers vbterminal-test
+AllowUsers termethis-test
 
 AllowAgentForwarding no
 AllowTcpForwarding no

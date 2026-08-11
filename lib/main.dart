@@ -9,6 +9,8 @@ import 'app/font_licenses.dart';
 import 'features/connections/application/connection_profiles_controller.dart';
 import 'features/connections/domain/connection_profile_repository.dart';
 import 'features/connections/domain/credential_vault.dart';
+import 'features/connections/domain/remote_desktop_launcher.dart';
+import 'features/connections/application/remote_desktop_launcher_provider.dart';
 import 'features/settings/application/app_font_controller.dart';
 import 'features/settings/application/background_session_coordinator.dart';
 import 'features/settings/application/terminal_performance_settings_controller.dart';
@@ -29,6 +31,7 @@ import 'infrastructure/database/app_database.dart';
 import 'infrastructure/database/drift_connection_profile_repository.dart';
 import 'infrastructure/database/drift_host_key_repository.dart';
 import 'infrastructure/display/android_display_performance_controller.dart';
+import 'infrastructure/remote_desktop/android_remote_desktop_launcher.dart';
 import 'infrastructure/secure_storage/encrypted_file_credential_vault.dart';
 import 'infrastructure/settings/shared_preferences_app_font_store.dart';
 import 'infrastructure/settings/shared_preferences_ssh_tab_store.dart';
@@ -58,6 +61,7 @@ Future<void> main() async {
       database: AppDatabase.defaults(),
       credentialVault: EncryptedFileCredentialVault.androidDefaults(),
       wakeOnLanSender: const UdpWakeOnLanSender(),
+      remoteDesktopLauncher: const AndroidRemoteDesktopLauncher(),
       sshTabStore: SharedPreferencesSshTabStore(),
     ),
   );
@@ -79,6 +83,7 @@ class MainApp extends StatefulWidget {
     this.database,
     this.credentialVault,
     this.wakeOnLanSender,
+    this.remoteDesktopLauncher = const UnavailableRemoteDesktopLauncher(),
     this.sshTabStore,
     super.key,
   });
@@ -92,6 +97,7 @@ class MainApp extends StatefulWidget {
   final AppDatabase? database;
   final CredentialVault? credentialVault;
   final WakeOnLanSender? wakeOnLanSender;
+  final RemoteDesktopLauncher remoteDesktopLauncher;
   final SshTabStore? sshTabStore;
 
   @override
@@ -147,10 +153,13 @@ class _MainAppState extends State<MainApp> {
           credentialVaultProvider.overrideWithValue(credentialVault),
         if (widget.wakeOnLanSender case final wakeOnLanSender?)
           wakeOnLanSenderProvider.overrideWithValue(wakeOnLanSender),
+        remoteDesktopLauncherProvider.overrideWithValue(
+          widget.remoteDesktopLauncher,
+        ),
         if (widget.sshTabStore case final sshTabStore?)
           sshTabStoreProvider.overrideWithValue(sshTabStore),
       ],
-      child: const SshTerminalApp(),
+      child: const TermethisApp(),
     );
   }
 }

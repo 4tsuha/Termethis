@@ -33,6 +33,7 @@ migrate_working_dir/
 /build/
 /coverage/
 /tool/web_terminal/node_modules/
+/tool/web_terminal/build/
 
 # Symbolication related
 app.*.symbols

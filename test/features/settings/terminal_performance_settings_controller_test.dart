@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/settings/application/background_session_coordinator.dart';
-import 'package:ssh_terminal_ja/features/settings/application/terminal_performance_settings_controller.dart';
-import 'package:ssh_terminal_ja/features/settings/domain/background_session_service_controller.dart';
-import 'package:ssh_terminal_ja/features/settings/domain/display_performance_controller.dart';
-import 'package:ssh_terminal_ja/features/settings/domain/terminal_performance_settings.dart';
-import 'package:ssh_terminal_ja/features/settings/domain/terminal_performance_settings_store.dart';
+import 'package:termethis/features/settings/application/background_session_coordinator.dart';
+import 'package:termethis/features/settings/application/terminal_performance_settings_controller.dart';
+import 'package:termethis/features/settings/domain/background_session_service_controller.dart';
+import 'package:termethis/features/settings/domain/display_performance_controller.dart';
+import 'package:termethis/features/settings/domain/terminal_performance_settings.dart';
+import 'package:termethis/features/settings/domain/terminal_performance_settings_store.dart';
 
 void main() {
   test('表示モードとスクロールバック行数を適用して保存する', () async {

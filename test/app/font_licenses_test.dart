@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/app/font_licenses.dart';
+import 'package:termethis/app/font_licenses.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

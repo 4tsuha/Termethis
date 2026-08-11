@@ -26,8 +26,8 @@ class SettingsScreen extends ConsumerWidget {
             children: [
               SwitchListTile(
                 secondary: const Icon(Icons.search),
-                title: const Text('検索ボタン'),
-                subtitle: const Text('選んだ検索キーをSSH先へ送るボタンをタブバーに表示します。'),
+                title: const Text('タブバーに検索ボタンを表示'),
+                subtitle: const Text('選択した検索操作を接続先へ送ります。方式は次の項目で選べます。'),
                 value: performance.showSearchButton,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -35,7 +35,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.keyboard_command_key),
-                title: const Text('検索キー'),
+                title: const Text('検索方式'),
                 subtitle: Text(_searchModeDescription(performance.searchMode)),
                 trailing: DropdownButton<TerminalSearchMode>(
                   value: performance.searchMode,
@@ -58,8 +58,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.content_copy_outlined),
-                title: const Text('最後の出力をコピー'),
-                subtitle: const Text('OSC 133で区切られた直前のコマンド出力をコピーします。'),
+                title: const Text('直前のコマンド出力をコピー'),
+                subtitle: const Text('OSC 133で識別した、直前のコマンドの出力だけをコピーします。'),
                 value: performance.showCopyOutputButton,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -67,8 +67,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.integration_instructions_outlined),
-                title: const Text('シェル統合をセットアップ'),
-                subtitle: const Text('確認コマンドをコピーします。リモート設定は変更しません。'),
+                title: const Text('シェル統合を確認'),
+                subtitle: const Text('OSC 133の動作確認コマンドを表示します。接続先の設定は変更しません。'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showShellIntegrationHelp(context),
               ),
@@ -80,7 +80,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.mouse_outlined),
                 title: const Text('TUIアプリでのマウス入力'),
-                subtitle: const Text('タップをTUIの左クリックとして送ります。文字選択より優先します。'),
+                subtitle: const Text('TUIがマウス入力を受け付けている間、タップを左クリックとして送ります。'),
                 value: performance.mouseInput,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -89,7 +89,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.touch_app_outlined),
                 title: const Text('長押しで右クリック'),
-                subtitle: const Text('長押しを右クリックへ変換します。長押しでの文字選択は使えません。'),
+                subtitle: const Text('長押しを右クリックとして送ります。有効中は長押しで文字を選択できません。'),
                 value: performance.longPressRightClick,
                 onChanged: performance.mouseInput
                     ? ref
@@ -100,7 +100,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.edit_location_alt_outlined),
                 title: const Text('対応プロンプトでタップしてカーソル移動'),
-                subtitle: const Text('OSC 133対応の入力行を、タップ位置まで左右キーで移動します。'),
+                subtitle: const Text('OSC 133対応プロンプトで、カーソルをタップした列へ移動します。'),
                 value: performance.tapToMovePromptCursor,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -114,7 +114,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.tab_outlined),
                 title: const Text('ターミナルのタブバーを表示'),
-                subtitle: const Text('セッション切り替えと検索・コピーを表示します。オフでも接続は保持されます。'),
+                subtitle: const Text('セッション切り替え、検索、コピーの操作をターミナル上部に表示します。'),
                 value: performance.showSessionTabBar,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -123,7 +123,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.light_mode_outlined),
                 title: const Text('ターミナルで画面をオンに保つ'),
-                subtitle: const Text('ターミナル表示中のスリープを防ぎます。バッテリー消費が増えます。'),
+                subtitle: const Text('ターミナルを開いている間は画面を消灯しません。消費電力が増えます。'),
                 value: performance.keepScreenAwake,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -132,7 +132,7 @@ class SettingsScreen extends ConsumerWidget {
               SwitchListTile(
                 secondary: const Icon(Icons.keyboard_alt_outlined),
                 title: const Text('キーボードに合わせて端末をリサイズ'),
-                subtitle: const Text('IMEの上に収まる行列数へPTYを調整します。通常はオフ推奨です。'),
+                subtitle: const Text('キーボード表示時にPTYを空き領域へ合わせます。全画面TUI向けの設定です。'),
                 value: performance.resizeForKeyboard,
                 onChanged: ref
                     .read(terminalPerformanceSettingsProvider.notifier)
@@ -141,97 +141,111 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           const _SectionHeader('描画とパフォーマンス'),
-          ListTile(
-            leading: const Icon(Icons.text_fields),
-            title: Text(l10n.settingsTerminalFont),
-            subtitle: Text(l10n.settingsTerminalFontValue),
+          _SettingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.text_fields),
+                title: Text(l10n.settingsTerminalFont),
+                subtitle: Text(l10n.settingsTerminalFontValue),
+              ),
+              ListTile(
+                leading: const Icon(Icons.developer_board_outlined),
+                title: Text(l10n.settingsTerminalRenderer),
+                subtitle: Text(
+                  _rendererDescription(l10n, performance.rendererMode),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    _showRendererPicker(context, ref, performance.rendererMode),
+              ),
+              ListTile(
+                leading: const Icon(Icons.translate),
+                title: Text(l10n.settingsJapaneseFont),
+                subtitle: Text(
+                  '${_fontLabel(l10n, appFont)}\n${l10n.settingsJapaneseFontMessage}',
+                ),
+                isThreeLine: true,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showFontPicker(context, ref, appFont),
+              ),
+              ListTile(
+                leading: const Icon(Icons.speed_outlined),
+                title: Text(l10n.settingsRefreshRate),
+                subtitle: Text(
+                  _refreshRateDescription(l10n, performance.refreshRateMode),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showRefreshRatePicker(
+                  context,
+                  ref,
+                  performance.refreshRateMode,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.format_list_numbered),
+                title: Text(l10n.settingsScrollbackLines),
+                subtitle: Text(
+                  l10n.settingsScrollbackLinesValue(
+                    performance.scrollbackLines,
+                  ),
+                ),
+                trailing: DropdownButton<int>(
+                  value: performance.scrollbackLines,
+                  underline: const SizedBox.shrink(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      ref
+                          .read(terminalPerformanceSettingsProvider.notifier)
+                          .selectScrollbackLines(value);
+                    }
+                  },
+                  items: [
+                    for (final lines
+                        in TerminalPerformanceSettings.supportedScrollbackLines)
+                      DropdownMenuItem(value: lines, child: Text('$lines')),
+                  ],
+                ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: Text(l10n.settingsBackgroundSession),
+                subtitle: Text(l10n.settingsBackgroundSessionDescription),
+                value: performance.keepAliveInBackground,
+                onChanged: ref
+                    .read(terminalPerformanceSettingsProvider.notifier)
+                    .setKeepAliveInBackground,
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.developer_board_outlined),
-            title: Text(l10n.settingsTerminalRenderer),
-            subtitle: Text(
-              _rendererDescription(l10n, performance.rendererMode),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () =>
-                _showRendererPicker(context, ref, performance.rendererMode),
-          ),
-          ListTile(
-            leading: const Icon(Icons.translate),
-            title: Text(l10n.settingsJapaneseFont),
-            subtitle: Text(
-              '${_fontLabel(l10n, appFont)}\n${l10n.settingsJapaneseFontMessage}',
-            ),
-            isThreeLine: true,
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showFontPicker(context, ref, appFont),
-          ),
-          ListTile(
-            leading: const Icon(Icons.speed_outlined),
-            title: Text(l10n.settingsRefreshRate),
-            subtitle: Text(
-              _refreshRateDescription(l10n, performance.refreshRateMode),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showRefreshRatePicker(
-              context,
-              ref,
-              performance.refreshRateMode,
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.format_list_numbered),
-            title: Text(l10n.settingsScrollbackLines),
-            subtitle: Text(
-              l10n.settingsScrollbackLinesValue(performance.scrollbackLines),
-            ),
-            trailing: DropdownButton<int>(
-              value: performance.scrollbackLines,
-              onChanged: (value) {
-                if (value != null) {
-                  ref
-                      .read(terminalPerformanceSettingsProvider.notifier)
-                      .selectScrollbackLines(value);
-                }
-              },
-              items: [
-                for (final lines
-                    in TerminalPerformanceSettings.supportedScrollbackLines)
-                  DropdownMenuItem(value: lines, child: Text('$lines')),
-              ],
-            ),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.notifications_active_outlined),
-            title: Text(l10n.settingsBackgroundSession),
-            subtitle: Text(l10n.settingsBackgroundSessionDescription),
-            value: performance.keepAliveInBackground,
-            onChanged: ref
-                .read(terminalPerformanceSettingsProvider.notifier)
-                .setKeepAliveInBackground,
-          ),
-          const Divider(indent: 56),
           _SectionHeader(l10n.settingsFtpSection),
-          ListTile(
-            leading: const Icon(Icons.security_outlined),
-            title: Text(l10n.settingsFtpSecurity),
-            subtitle: Text(l10n.settingsFtpSecurityMessage),
+          _SettingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.security_outlined),
+                title: Text(l10n.settingsFtpSecurity),
+                subtitle: Text(l10n.settingsFtpSecurityMessage),
+              ),
+            ],
           ),
-          const Divider(indent: 56),
           _SectionHeader(l10n.settingsAboutSection),
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: Text(l10n.settingsVersion),
-            trailing: Text(l10n.settingsVersionValue),
-          ),
-          ListTile(
-            leading: const Icon(Icons.description_outlined),
-            title: Text(l10n.settingsLicenses),
-            onTap: () => showLicensePage(
-              context: context,
-              applicationName: l10n.appTitle,
-              applicationVersion: l10n.settingsVersionValue,
-            ),
+          _SettingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(l10n.settingsVersion),
+                trailing: Text(l10n.settingsVersionValue),
+              ),
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: Text(l10n.settingsLicenses),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showLicensePage(
+                  context: context,
+                  applicationName: l10n.appTitle,
+                  applicationVersion: l10n.settingsVersionValue,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -404,7 +418,7 @@ class SettingsScreen extends ConsumerWidget {
             Text('シェル統合', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             const Text(
-              'starship、fish 3.6以降、またはOSC 133対応のbash/zsh設定を使用してください。まず次のコマンドでマーカー表示を確認できます。',
+              'Termethisがコマンド出力とプロンプト位置を認識するには、OSC 133対応のシェル設定が必要です。starship、fish 3.6以降、または対応するbash/zsh設定で、次のコマンドを実行して確認できます。',
             ),
             const SizedBox(height: 12),
             SelectableText(

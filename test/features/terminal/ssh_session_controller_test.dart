@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
-import 'package:ssh_terminal_ja/features/terminal/application/ssh_session_controller.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
-import 'package:ssh_terminal_ja/infrastructure/terminal/utf8_terminal_codec.dart';
+import 'package:termethis/features/connections/domain/connection_profile.dart';
+import 'package:termethis/features/terminal/application/ssh_session_controller.dart';
+import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
+import 'package:termethis/infrastructure/terminal/utf8_terminal_codec.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
@@ -274,6 +274,116 @@ void main() {
     final replay = controller.webTerminalReplayAfter(0);
     expect(replay.resetRequired, isTrue);
     expect(replay.data, 'serialized');
+    controller.dispose();
+  });
+
+  test('大量出力ではWebGL履歴の定期チェックポイントを要求する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'web-checkpoint',
+        name: 'WebGL長時間出力',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      compactFlutterBuffer: true,
+    );
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('x' * (140 * 1024));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.webTerminalCheckpointNeeded, isTrue);
+    final replay = controller.webTerminalReplay;
+    expect(
+      controller.saveWebTerminalSnapshot('serialized', replay.throughSequence),
+      isTrue,
+    );
+    expect(controller.webTerminalCheckpointNeeded, isFalse);
+    controller.dispose();
+  });
+
+  test('WebGL履歴はチェックポイント前も長い出力を途中で切らない', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'web-long-replay',
+        name: 'WebGL長文保持',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      compactFlutterBuffer: true,
+    );
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    final output = List.generate(
+      5000,
+      (index) => 'line-${index.toString().padLeft(4, '0')}\r\n',
+    ).join();
+    connection.emitStdout(output * 6);
+    await Future<void>.delayed(Duration.zero);
+
+    final replay = controller.webTerminalReplay;
+    expect(replay.resetRequired, isFalse);
+    expect(replay.data.length, output.length * 6);
+    expect(replay.data, startsWith('line-0000'));
+    expect(replay.data, endsWith('line-4999\r\n'));
+    controller.dispose();
+  });
+
+  test('描画と履歴のバックプレッシャーを重ねても受信を再開する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'web-backpressure',
+        name: 'WebGL流量制御',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      compactFlutterBuffer: true,
+    );
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('x' * (1024 * 1024));
+    await Future<void>.delayed(Duration.zero);
+    final checkpoint = controller.webTerminalReplay;
+
+    controller.setOutputBackpressure(true);
+    connection.emitStdout('held-output');
+    expect(
+      controller.saveWebTerminalSnapshot(
+        'serialized',
+        checkpoint.throughSequence,
+      ),
+      isTrue,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(controller.webTerminalReplay.data, isNot(contains('held-output')));
+
+    controller.setOutputBackpressure(false);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(controller.webTerminalReplay.data, contains('held-output'));
     controller.dispose();
   });
 }

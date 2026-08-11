@@ -1,4 +1,4 @@
-package jp.hgzt23678.ssh_terminal_ja
+package jp.yts.termethis
 
 import android.app.Activity
 import android.content.BroadcastReceiver

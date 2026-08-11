@@ -101,8 +101,8 @@ terminal.parser.registerOscHandler(133, (data) => {
 });
 
 function post(message) {
-  if (window.VBTerminal?.postMessage) {
-    window.VBTerminal.postMessage(JSON.stringify(message));
+  if (window.Termethis?.postMessage) {
+    window.Termethis.postMessage(JSON.stringify(message));
   }
 }
 
@@ -132,6 +132,8 @@ function enqueueWrite(value, reset, id) {
     .then(
       () =>
         new Promise((resolve) => {
+          const buffer = terminal.buffer.active;
+          const followOutput = reset || buffer.viewportY >= buffer.baseY;
           if (disposed) {
             post({ type: 'writeAck', id });
             resolve();
@@ -139,6 +141,7 @@ function enqueueWrite(value, reset, id) {
           }
           if (reset) terminal.reset();
           terminal.write(data, () => {
+            if (followOutput) terminal.scrollToBottom();
             post({ type: 'writeAck', id });
             resolve();
           });
@@ -154,7 +157,7 @@ function fit() {
   fitAddon.fit();
 }
 
-window.vbTerminal = {
+window.termethisTerminal = {
   writeBase64(value, reset = false, id = 0) {
     enqueueWrite(value, reset, id);
   },

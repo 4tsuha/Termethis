@@ -96,14 +96,21 @@ class SshSessionController extends ChangeNotifier {
   int _webTerminalSnapshotSequence = 0;
   String _webTerminalSnapshot = '';
   bool _webTerminalDeltaTruncated = false;
+  bool _rendererOutputBackpressured = false;
+  bool _historyOutputBackpressured = false;
+  bool _outputSubscriptionsPaused = false;
 
   static const _visibleWriteInterval = Duration(milliseconds: 16);
   static const _hiddenWriteInterval = Duration(milliseconds: 16);
   static const _maximumBufferedCharacters = 64 * 1024;
-  static const _maximumWebTerminalDeltaCharacters = 256 * 1024;
-  static const _maximumWebTerminalSnapshotCharacters = 2 * 1024 * 1024;
+  static const _webTerminalCheckpointCharacters = 128 * 1024;
+  static const _maximumWebTerminalDeltaCharacters = 1024 * 1024;
+  static const _maximumWebTerminalSnapshotCharacters = 4 * 1024 * 1024;
 
   bool get isConnected => status == SshSessionStatus.connected;
+
+  bool get webTerminalCheckpointNeeded =>
+      _webTerminalDeltaLength >= _webTerminalCheckpointCharacters;
 
   void reportFailure(SshFailure value) {
     failure = value;
@@ -164,6 +171,7 @@ class SshSessionController extends ChangeNotifier {
       _stderrSubscription = _codec
           .decode(connection.stderr.cast<List<int>>())
           .listen(_queueTerminalWrite, onError: _handleStreamError);
+      _applyOutputBackpressure();
       unawaited(
         connection.done.then(
           (_) => _handleRemoteDone(),
@@ -278,6 +286,11 @@ class SshSessionController extends ChangeNotifier {
       _webTerminalDeltaLength -= _webTerminalDelta.removeFirst().data.length;
     }
     _webTerminalDeltaTruncated = false;
+    if (_historyOutputBackpressured &&
+        _webTerminalDeltaLength < _maximumWebTerminalDeltaCharacters) {
+      _historyOutputBackpressured = false;
+      _applyOutputBackpressure();
+    }
     return true;
   }
 
@@ -293,7 +306,17 @@ class SshSessionController extends ChangeNotifier {
 
   void setOutputBackpressure(bool paused) {
     if (_disposed) return;
-    if (paused) {
+    if (_rendererOutputBackpressured == paused) return;
+    _rendererOutputBackpressured = paused;
+    _applyOutputBackpressure();
+  }
+
+  void _applyOutputBackpressure() {
+    final shouldPause =
+        _rendererOutputBackpressured || _historyOutputBackpressured;
+    if (_outputSubscriptionsPaused == shouldPause) return;
+    _outputSubscriptionsPaused = shouldPause;
+    if (shouldPause) {
       _stdoutSubscription?.pause();
       _stderrSubscription?.pause();
     } else {
@@ -305,6 +328,8 @@ class SshSessionController extends ChangeNotifier {
   void enableFlutterTerminalMirror() {
     if (_mirrorToFlutterTerminal || _disposed) return;
     _mirrorToFlutterTerminal = true;
+    _historyOutputBackpressured = false;
+    _applyOutputBackpressure();
     terminal.write('\x1bc${webTerminalReplay.data}');
   }
 
@@ -326,6 +351,7 @@ class SshSessionController extends ChangeNotifier {
     await _stderrSubscription?.cancel();
     _stdoutSubscription = null;
     _stderrSubscription = null;
+    _outputSubscriptionsPaused = false;
     _flushTerminalWrites();
     await connection?.close();
   }
@@ -372,6 +398,17 @@ class SshSessionController extends ChangeNotifier {
 
   void _appendWebTerminalDelta(WebTerminalDataEvent event) {
     var data = event.data;
+    if (!_mirrorToFlutterTerminal) {
+      _webTerminalDelta.addLast(_WebTerminalChunk(event.sequence, data));
+      _webTerminalDeltaLength += data.length;
+      if (_webTerminalDeltaLength >= _maximumWebTerminalDeltaCharacters &&
+          !_historyOutputBackpressured) {
+        _historyOutputBackpressured = true;
+        _applyOutputBackpressure();
+      }
+      return;
+    }
+
     if (data.length > _maximumWebTerminalDeltaCharacters) {
       var start = data.length - _maximumWebTerminalDeltaCharacters;
       if (start > 0 &&

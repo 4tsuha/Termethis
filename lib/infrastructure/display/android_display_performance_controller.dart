@@ -7,9 +7,7 @@ class AndroidDisplayPerformanceController
     implements DisplayPerformanceController {
   const AndroidDisplayPerformanceController();
 
-  static const _channel = MethodChannel(
-    'jp.hgzt23678.ssh_terminal_ja/display_performance',
-  );
+  static const _channel = MethodChannel('jp.yts.termethis/display_performance');
 
   @override
   Future<void> pulseHigh() => _invoke('pulseHigh');

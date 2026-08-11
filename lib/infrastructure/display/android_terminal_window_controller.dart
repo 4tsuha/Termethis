@@ -5,9 +5,7 @@ import 'package:flutter/services.dart';
 class AndroidTerminalWindowController {
   const AndroidTerminalWindowController();
 
-  static const _channel = MethodChannel(
-    'jp.hgzt23678.ssh_terminal_ja/terminal_window',
-  );
+  static const _channel = MethodChannel('jp.yts.termethis/terminal_window');
 
   Future<void> apply({
     required bool keepScreenAwake,

@@ -9,7 +9,7 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get appTitle => 'SSHターミナル';
+  String get appTitle => 'Termethis';
 
   @override
   String get connectionsTitle => '接続先';
@@ -21,7 +21,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get emptyConnectionsTitle => '接続先がありません';
 
   @override
-  String get emptyConnectionsMessage => '右下の追加ボタンからSSHサーバーを登録してください。';
+  String get emptyConnectionsMessage => 'SSH、RDP、VNCの接続先を、右下の追加ボタンから登録できます。';
 
   @override
   String get loadConnectionsFailed => '接続先を読み込めませんでした。';
@@ -121,7 +121,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get wakeOnLanTitle => 'Wake on LAN';
 
   @override
-  String get wakeOnLanDescription => 'SSH接続前にMagic Packetで端末を起動します。';
+  String get wakeOnLanDescription => '接続前にMagic Packetで端末を起動します。';
 
   @override
   String get wakeOnLanMacAddress => 'MACアドレス';
@@ -304,16 +304,85 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nothingToPaste => '貼り付ける文字列がありません。';
 
   @override
-  String get stageOneNotice => '接続先とホスト鍵はこの端末に保存されます。秘密鍵は暗号化し、パスワードは保存しません。';
+  String get stageOneNotice => '接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。';
 
   @override
-  String get navSsh => 'SSH';
+  String get navHome => 'ホーム';
 
   @override
   String get navFtp => 'FTP';
 
   @override
   String get navSettings => '設定';
+
+  @override
+  String get chooseConnectionTypeTitle => '接続方式を選択';
+
+  @override
+  String get chooseConnectionTypeMessage =>
+      '接続先で利用する方式を選んでください。あとから方式を変更する場合は、新しい接続先として登録します。';
+
+  @override
+  String get connectionTypeSsh => 'SSH';
+
+  @override
+  String get connectionTypeSshDescription => 'Termethis内のターミナルで、シェルやTUIを操作します。';
+
+  @override
+  String get connectionTypeRdp => 'RDP';
+
+  @override
+  String get connectionTypeRdpDescription =>
+      '接続先のRDP応答を確認してから、対応アプリでWindowsのリモートデスクトップを開きます。';
+
+  @override
+  String get connectionTypeVnc => 'VNC';
+
+  @override
+  String get connectionTypeVncDescription => 'VNC対応アプリでリモート画面を開きます。';
+
+  @override
+  String addTypedConnection(String type) {
+    return '$type接続先を追加';
+  }
+
+  @override
+  String get connectionMethod => '接続方式';
+
+  @override
+  String get usernameOptional => 'ユーザー名（任意）';
+
+  @override
+  String get externalAuthenticationNotice =>
+      '認証は接続先アプリで行います。Termethisからパスワードは渡しません。';
+
+  @override
+  String get remoteClientUnavailableTitle => '対応アプリが見つかりません';
+
+  @override
+  String get rdpClientUnavailableMessage =>
+      'RDP接続にはRDP URIを開けるリモートデスクトップアプリが必要です。対応アプリをインストールしてから再試行してください。';
+
+  @override
+  String get vncClientUnavailableMessage =>
+      'VNC接続にはvnc URIを開けるVNCクライアントが必要です。対応アプリをインストールしてから再試行してください。';
+
+  @override
+  String get remoteEndpointUnavailableTitle => '接続先に到達できません';
+
+  @override
+  String get rdpEndpointUnavailableMessage =>
+      'RDPサービスへ接続できませんでした。接続先、ポート、ネットワークとWindows側のリモートデスクトップ設定を確認してください。';
+
+  @override
+  String get rdpProtocolMismatchTitle => 'RDPサービスを確認できません';
+
+  @override
+  String get rdpProtocolMismatchMessage =>
+      '接続先からRDPの応答を確認できませんでした。指定したポートがリモートデスクトップ用か確認してください。';
+
+  @override
+  String get close => '閉じる';
 
   @override
   String get ftpTitle => 'FTPマネージャー';
@@ -475,7 +544,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsJapaneseFontMessage =>
-      'アプリUIとターミナルの日本語字形へ反映します。英数字と罫線はCascadia Monoのままです。';
+      'Termethisの画面とターミナルの日本語表示に使います。英数字と罫線にはCascadia Monoを使用します。';
 
   @override
   String get settingsSelectFont => '日本語フォントを選択';
@@ -520,7 +589,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsBackgroundSessionDescription =>
-      'オンにすると接続中だけ常駐通知を表示し、画面消灯中の維持を補助します。OSの省電力制御による切断は防げません。';
+      '接続中はTermethisの常駐通知を表示し、画面消灯中もSSH接続の維持を試みます。OSの省電力制御によって切断される場合があります。';
 
   @override
   String get fontNotoSansJp => 'Noto Sans JP';
@@ -545,13 +614,13 @@ class AppLocalizationsJa extends AppLocalizations {
       '平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。';
 
   @override
-  String get settingsAboutSection => 'アプリについて';
+  String get settingsAboutSection => 'Termethisについて';
 
   @override
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.1.1';
+  String get settingsVersionValue => '0.3.0';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="background_session_channel">SSHバックグラウンド接続</string>
-    <string name="background_session_channel_description">画面消灯中のSSH接続維持を補助します。</string>
-    <string name="background_session_notification_title">SSH接続を維持中</string>
-    <string name="background_session_notification_text">タップしてターミナルへ戻ります。</string>
+    <string name="app_name">Termethis</string>
+    <string name="background_session_channel">Termethis バックグラウンド接続</string>
+    <string name="background_session_channel_description">画面消灯中もTermethisがSSH接続の維持を試みます。</string>
+    <string name="background_session_notification_title">TermethisでSSH接続を維持中</string>
+    <string name="background_session_notification_text">タップしてTermethisへ戻ります。</string>
     <string name="background_session_stop">停止</string>
 </resources>

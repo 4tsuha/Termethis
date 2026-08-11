@@ -712,7 +712,9 @@ class _FtpConnectionSheetState extends ConsumerState<_FtpConnectionSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final profiles = ref.watch(connectionProfilesProvider).value ?? const [];
+    final profiles = (ref.watch(connectionProfilesProvider).value ?? const [])
+        .where((profile) => profile.connectionType == ConnectionType.ssh)
+        .toList(growable: false);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,

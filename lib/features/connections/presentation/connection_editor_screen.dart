@@ -12,9 +12,14 @@ import '../domain/private_key_importer.dart';
 import '../../wake_on_lan/domain/wake_on_lan.dart';
 
 class ConnectionEditorScreen extends ConsumerStatefulWidget {
-  const ConnectionEditorScreen({super.key, this.profileId});
+  const ConnectionEditorScreen({
+    super.key,
+    this.profileId,
+    this.connectionType = ConnectionType.ssh,
+  });
 
   final String? profileId;
+  final ConnectionType connectionType;
 
   @override
   ConsumerState<ConnectionEditorScreen> createState() =>
@@ -34,6 +39,7 @@ class _ConnectionEditorScreenState
   final TextEditingController _keyPassphraseController =
       TextEditingController();
   ConnectionProfile? _existing;
+  late final ConnectionType _connectionType;
   late AuthenticationType _authenticationType;
   ImportedPrivateKey? _selectedPrivateKey;
   bool _saveKeyPassphrase = false;
@@ -52,10 +58,11 @@ class _ConnectionEditorScreenState
         break;
       }
     }
+    _connectionType = _existing?.connectionType ?? widget.connectionType;
     _nameController = TextEditingController(text: _existing?.name ?? '');
     _hostController = TextEditingController(text: _existing?.host ?? '');
     _portController = TextEditingController(
-      text: (_existing?.port ?? 22).toString(),
+      text: (_existing?.port ?? _connectionType.defaultPort).toString(),
     );
     _usernameController = TextEditingController(
       text: _existing?.username ?? '',
@@ -114,7 +121,11 @@ class _ConnectionEditorScreenState
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_existing == null ? l10n.addConnection : l10n.edit),
+          title: Text(
+            _existing == null
+                ? l10n.addTypedConnection(_connectionTypeLabel(l10n))
+                : l10n.edit,
+          ),
         ),
         body: SafeArea(
           child: Form(
@@ -122,6 +133,12 @@ class _ConnectionEditorScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                _ConnectionTypeSummary(
+                  icon: _connectionTypeIcon,
+                  label: _connectionTypeLabel(l10n),
+                  description: _connectionTypeDescription(l10n),
+                ),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
@@ -167,47 +184,63 @@ class _ConnectionEditorScreenState
                 TextFormField(
                   controller: _usernameController,
                   decoration: InputDecoration(
-                    labelText: l10n.username,
+                    labelText: _connectionType == ConnectionType.vnc
+                        ? l10n.usernameOptional
+                        : l10n.username,
                     border: const OutlineInputBorder(),
                   ),
                   textInputAction: _wakeOnLanEnabled
                       ? TextInputAction.next
                       : TextInputAction.done,
                   autocorrect: false,
-                  validator: (value) => _required(value, l10n),
+                  validator: _connectionType == ConnectionType.vnc
+                      ? null
+                      : (value) => _required(value, l10n),
                   onFieldSubmitted: (_) {
                     if (!_wakeOnLanEnabled) {
                       _save();
                     }
                   },
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<AuthenticationType>(
-                  initialValue: _authenticationType,
-                  decoration: InputDecoration(
-                    labelText: l10n.authentication,
-                    border: const OutlineInputBorder(),
+                if (_connectionType == ConnectionType.ssh) ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<AuthenticationType>(
+                    initialValue: _authenticationType,
+                    decoration: InputDecoration(
+                      labelText: l10n.authentication,
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: AuthenticationType.passwordOrInteractive,
+                        child: Text(l10n.passwordAuthentication),
+                      ),
+                      DropdownMenuItem(
+                        value: AuthenticationType.privateKey,
+                        child: Text(l10n.privateKeyAuthentication),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _authenticationType = value;
+                          _dirty = true;
+                        });
+                      }
+                    },
                   ),
-                  items: [
-                    DropdownMenuItem(
-                      value: AuthenticationType.passwordOrInteractive,
-                      child: Text(l10n.passwordAuthentication),
+                ] else ...[
+                  const SizedBox(height: 16),
+                  Card.outlined(
+                    child: ListTile(
+                      leading: const Icon(Icons.verified_user_outlined),
+                      title: Text(l10n.authentication),
+                      subtitle: Text(l10n.externalAuthenticationNotice),
                     ),
-                    DropdownMenuItem(
-                      value: AuthenticationType.privateKey,
-                      child: Text(l10n.privateKeyAuthentication),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _authenticationType = value;
-                        _dirty = true;
-                      });
-                    }
-                  },
-                ),
-                if (_authenticationType == AuthenticationType.privateKey) ...[
+                  ),
+                ],
+                if (_connectionType == ConnectionType.ssh &&
+                    _authenticationType == AuthenticationType.privateKey) ...[
                   const SizedBox(height: 16),
                   _PrivateKeySection(
                     label:
@@ -408,7 +441,8 @@ class _ConnectionEditorScreenState
 
     final l10n = AppLocalizations.of(context);
     final selectedKey = _selectedPrivateKey;
-    if (_authenticationType == AuthenticationType.privateKey &&
+    if (_connectionType == ConnectionType.ssh &&
+        _authenticationType == AuthenticationType.privateKey &&
         selectedKey == null &&
         _existing?.credentialReference == null) {
       ScaffoldMessenger.of(
@@ -420,7 +454,8 @@ class _ConnectionEditorScreenState
     setState(() => _saving = true);
     try {
       PrivateKeyCredential? replacementCredential;
-      if (_authenticationType == AuthenticationType.privateKey &&
+      if (_connectionType == ConnectionType.ssh &&
+          _authenticationType == AuthenticationType.privateKey &&
           selectedKey != null) {
         final passphrase = _keyPassphraseController.text;
         await ref
@@ -442,6 +477,7 @@ class _ConnectionEditorScreenState
       final id =
           _existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
       final keepExistingCredential =
+          _connectionType == ConnectionType.ssh &&
           _authenticationType == AuthenticationType.privateKey &&
           selectedKey == null;
       final wakeOnLan = _wakeOnLanEnabled
@@ -462,6 +498,7 @@ class _ConnectionEditorScreenState
               host: _hostController.text.trim(),
               port: int.parse(_portController.text),
               username: _usernameController.text.trim(),
+              connectionType: _connectionType,
               authenticationType: _authenticationType,
               credentialReference: keepExistingCredential
                   ? _existing?.credentialReference
@@ -497,6 +534,55 @@ class _ConnectionEditorScreenState
         setState(() => _saving = false);
       }
     }
+  }
+
+  String _connectionTypeLabel(AppLocalizations l10n) =>
+      switch (_connectionType) {
+        ConnectionType.ssh => l10n.connectionTypeSsh,
+        ConnectionType.rdp => l10n.connectionTypeRdp,
+        ConnectionType.vnc => l10n.connectionTypeVnc,
+      };
+
+  String _connectionTypeDescription(AppLocalizations l10n) =>
+      switch (_connectionType) {
+        ConnectionType.ssh => l10n.connectionTypeSshDescription,
+        ConnectionType.rdp => l10n.connectionTypeRdpDescription,
+        ConnectionType.vnc => l10n.connectionTypeVncDescription,
+      };
+
+  IconData get _connectionTypeIcon => switch (_connectionType) {
+    ConnectionType.ssh => Icons.terminal,
+    ConnectionType.rdp => Icons.desktop_windows_outlined,
+    ConnectionType.vnc => Icons.monitor_outlined,
+  };
+}
+
+class _ConnectionTypeSummary extends StatelessWidget {
+  const _ConnectionTypeSummary({
+    required this.icon,
+    required this.label,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card.filled(
+      color: colors.secondaryContainer,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: colors.secondary,
+          foregroundColor: colors.onSecondary,
+          child: Icon(icon),
+        ),
+        title: Text(label, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(description),
+      ),
+    );
   }
 }
 

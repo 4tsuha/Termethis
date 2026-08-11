@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/wake_on_lan/domain/wake_on_lan.dart';
-import 'package:ssh_terminal_ja/infrastructure/wake_on_lan/udp_wake_on_lan_sender.dart';
+import 'package:termethis/features/wake_on_lan/domain/wake_on_lan.dart';
+import 'package:termethis/infrastructure/wake_on_lan/udp_wake_on_lan_sender.dart';
 
 void main() {
   test('MACアドレスを正規化してMagic Packetを生成する', () {

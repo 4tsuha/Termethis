@@ -56,6 +56,18 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _connectionTypeMeta = const VerificationMeta(
+    'connectionType',
+  );
+  @override
+  late final GeneratedColumn<String> connectionType = GeneratedColumn<String>(
+    'connection_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ssh'),
+  );
   static const VerificationMeta _authenticationTypeMeta =
       const VerificationMeta('authenticationType');
   @override
@@ -151,6 +163,7 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
     host,
     port,
     username,
+    connectionType,
     authenticationType,
     credentialReference,
     privateKeyLabel,
@@ -208,6 +221,15 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
       );
     } else if (isInserting) {
       context.missing(_usernameMeta);
+    }
+    if (data.containsKey('connection_type')) {
+      context.handle(
+        _connectionTypeMeta,
+        connectionType.isAcceptableOrUnknown(
+          data['connection_type']!,
+          _connectionTypeMeta,
+        ),
+      );
     }
     if (data.containsKey('authentication_type')) {
       context.handle(
@@ -313,6 +335,10 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
         DriftSqlType.string,
         data['${effectivePrefix}username'],
       )!,
+      connectionType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}connection_type'],
+      )!,
       authenticationType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}authentication_type'],
@@ -361,6 +387,7 @@ class ConnectionProfileRecord extends DataClass
   final String host;
   final int port;
   final String username;
+  final String connectionType;
   final String authenticationType;
   final String? credentialReference;
   final String? privateKeyLabel;
@@ -375,6 +402,7 @@ class ConnectionProfileRecord extends DataClass
     required this.host,
     required this.port,
     required this.username,
+    required this.connectionType,
     required this.authenticationType,
     this.credentialReference,
     this.privateKeyLabel,
@@ -392,6 +420,7 @@ class ConnectionProfileRecord extends DataClass
     map['host'] = Variable<String>(host);
     map['port'] = Variable<int>(port);
     map['username'] = Variable<String>(username);
+    map['connection_type'] = Variable<String>(connectionType);
     map['authentication_type'] = Variable<String>(authenticationType);
     if (!nullToAbsent || credentialReference != null) {
       map['credential_reference'] = Variable<String>(credentialReference);
@@ -422,6 +451,7 @@ class ConnectionProfileRecord extends DataClass
       host: Value(host),
       port: Value(port),
       username: Value(username),
+      connectionType: Value(connectionType),
       authenticationType: Value(authenticationType),
       credentialReference: credentialReference == null && nullToAbsent
           ? const Value.absent()
@@ -455,6 +485,7 @@ class ConnectionProfileRecord extends DataClass
       host: serializer.fromJson<String>(json['host']),
       port: serializer.fromJson<int>(json['port']),
       username: serializer.fromJson<String>(json['username']),
+      connectionType: serializer.fromJson<String>(json['connectionType']),
       authenticationType: serializer.fromJson<String>(
         json['authenticationType'],
       ),
@@ -482,6 +513,7 @@ class ConnectionProfileRecord extends DataClass
       'host': serializer.toJson<String>(host),
       'port': serializer.toJson<int>(port),
       'username': serializer.toJson<String>(username),
+      'connectionType': serializer.toJson<String>(connectionType),
       'authenticationType': serializer.toJson<String>(authenticationType),
       'credentialReference': serializer.toJson<String?>(credentialReference),
       'privateKeyLabel': serializer.toJson<String?>(privateKeyLabel),
@@ -501,6 +533,7 @@ class ConnectionProfileRecord extends DataClass
     String? host,
     int? port,
     String? username,
+    String? connectionType,
     String? authenticationType,
     Value<String?> credentialReference = const Value.absent(),
     Value<String?> privateKeyLabel = const Value.absent(),
@@ -515,6 +548,7 @@ class ConnectionProfileRecord extends DataClass
     host: host ?? this.host,
     port: port ?? this.port,
     username: username ?? this.username,
+    connectionType: connectionType ?? this.connectionType,
     authenticationType: authenticationType ?? this.authenticationType,
     credentialReference: credentialReference.present
         ? credentialReference.value
@@ -543,6 +577,9 @@ class ConnectionProfileRecord extends DataClass
       host: data.host.present ? data.host.value : this.host,
       port: data.port.present ? data.port.value : this.port,
       username: data.username.present ? data.username.value : this.username,
+      connectionType: data.connectionType.present
+          ? data.connectionType.value
+          : this.connectionType,
       authenticationType: data.authenticationType.present
           ? data.authenticationType.value
           : this.authenticationType,
@@ -574,6 +611,7 @@ class ConnectionProfileRecord extends DataClass
           ..write('host: $host, ')
           ..write('port: $port, ')
           ..write('username: $username, ')
+          ..write('connectionType: $connectionType, ')
           ..write('authenticationType: $authenticationType, ')
           ..write('credentialReference: $credentialReference, ')
           ..write('privateKeyLabel: $privateKeyLabel, ')
@@ -593,6 +631,7 @@ class ConnectionProfileRecord extends DataClass
     host,
     port,
     username,
+    connectionType,
     authenticationType,
     credentialReference,
     privateKeyLabel,
@@ -611,6 +650,7 @@ class ConnectionProfileRecord extends DataClass
           other.host == this.host &&
           other.port == this.port &&
           other.username == this.username &&
+          other.connectionType == this.connectionType &&
           other.authenticationType == this.authenticationType &&
           other.credentialReference == this.credentialReference &&
           other.privateKeyLabel == this.privateKeyLabel &&
@@ -628,6 +668,7 @@ class ConnectionProfileRowsCompanion
   final Value<String> host;
   final Value<int> port;
   final Value<String> username;
+  final Value<String> connectionType;
   final Value<String> authenticationType;
   final Value<String?> credentialReference;
   final Value<String?> privateKeyLabel;
@@ -643,6 +684,7 @@ class ConnectionProfileRowsCompanion
     this.host = const Value.absent(),
     this.port = const Value.absent(),
     this.username = const Value.absent(),
+    this.connectionType = const Value.absent(),
     this.authenticationType = const Value.absent(),
     this.credentialReference = const Value.absent(),
     this.privateKeyLabel = const Value.absent(),
@@ -659,6 +701,7 @@ class ConnectionProfileRowsCompanion
     required String host,
     required int port,
     required String username,
+    this.connectionType = const Value.absent(),
     required String authenticationType,
     this.credentialReference = const Value.absent(),
     this.privateKeyLabel = const Value.absent(),
@@ -682,6 +725,7 @@ class ConnectionProfileRowsCompanion
     Expression<String>? host,
     Expression<int>? port,
     Expression<String>? username,
+    Expression<String>? connectionType,
     Expression<String>? authenticationType,
     Expression<String>? credentialReference,
     Expression<String>? privateKeyLabel,
@@ -698,6 +742,7 @@ class ConnectionProfileRowsCompanion
       if (host != null) 'host': host,
       if (port != null) 'port': port,
       if (username != null) 'username': username,
+      if (connectionType != null) 'connection_type': connectionType,
       if (authenticationType != null) 'authentication_type': authenticationType,
       if (credentialReference != null)
         'credential_reference': credentialReference,
@@ -719,6 +764,7 @@ class ConnectionProfileRowsCompanion
     Value<String>? host,
     Value<int>? port,
     Value<String>? username,
+    Value<String>? connectionType,
     Value<String>? authenticationType,
     Value<String?>? credentialReference,
     Value<String?>? privateKeyLabel,
@@ -735,6 +781,7 @@ class ConnectionProfileRowsCompanion
       host: host ?? this.host,
       port: port ?? this.port,
       username: username ?? this.username,
+      connectionType: connectionType ?? this.connectionType,
       authenticationType: authenticationType ?? this.authenticationType,
       credentialReference: credentialReference ?? this.credentialReference,
       privateKeyLabel: privateKeyLabel ?? this.privateKeyLabel,
@@ -765,6 +812,9 @@ class ConnectionProfileRowsCompanion
     }
     if (username.present) {
       map['username'] = Variable<String>(username.value);
+    }
+    if (connectionType.present) {
+      map['connection_type'] = Variable<String>(connectionType.value);
     }
     if (authenticationType.present) {
       map['authentication_type'] = Variable<String>(authenticationType.value);
@@ -808,6 +858,7 @@ class ConnectionProfileRowsCompanion
           ..write('host: $host, ')
           ..write('port: $port, ')
           ..write('username: $username, ')
+          ..write('connectionType: $connectionType, ')
           ..write('authenticationType: $authenticationType, ')
           ..write('credentialReference: $credentialReference, ')
           ..write('privateKeyLabel: $privateKeyLabel, ')
@@ -1224,6 +1275,7 @@ typedef $$ConnectionProfileRowsTableCreateCompanionBuilder =
       required String host,
       required int port,
       required String username,
+      Value<String> connectionType,
       required String authenticationType,
       Value<String?> credentialReference,
       Value<String?> privateKeyLabel,
@@ -1241,6 +1293,7 @@ typedef $$ConnectionProfileRowsTableUpdateCompanionBuilder =
       Value<String> host,
       Value<int> port,
       Value<String> username,
+      Value<String> connectionType,
       Value<String> authenticationType,
       Value<String?> credentialReference,
       Value<String?> privateKeyLabel,
@@ -1283,6 +1336,11 @@ class $$ConnectionProfileRowsTableFilterComposer
 
   ColumnFilters<String> get username => $composableBuilder(
     column: $table.username,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1361,6 +1419,11 @@ class $$ConnectionProfileRowsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get authenticationType => $composableBuilder(
     column: $table.authenticationType,
     builder: (column) => ColumnOrderings(column),
@@ -1425,6 +1488,11 @@ class $$ConnectionProfileRowsTableAnnotationComposer
 
   GeneratedColumn<String> get username =>
       $composableBuilder(column: $table.username, builder: (column) => column);
+
+  GeneratedColumn<String> get connectionType => $composableBuilder(
+    column: $table.connectionType,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get authenticationType => $composableBuilder(
     column: $table.authenticationType,
@@ -1514,6 +1582,7 @@ class $$ConnectionProfileRowsTableTableManager
                 Value<String> host = const Value.absent(),
                 Value<int> port = const Value.absent(),
                 Value<String> username = const Value.absent(),
+                Value<String> connectionType = const Value.absent(),
                 Value<String> authenticationType = const Value.absent(),
                 Value<String?> credentialReference = const Value.absent(),
                 Value<String?> privateKeyLabel = const Value.absent(),
@@ -1529,6 +1598,7 @@ class $$ConnectionProfileRowsTableTableManager
                 host: host,
                 port: port,
                 username: username,
+                connectionType: connectionType,
                 authenticationType: authenticationType,
                 credentialReference: credentialReference,
                 privateKeyLabel: privateKeyLabel,
@@ -1546,6 +1616,7 @@ class $$ConnectionProfileRowsTableTableManager
                 required String host,
                 required int port,
                 required String username,
+                Value<String> connectionType = const Value.absent(),
                 required String authenticationType,
                 Value<String?> credentialReference = const Value.absent(),
                 Value<String?> privateKeyLabel = const Value.absent(),
@@ -1561,6 +1632,7 @@ class $$ConnectionProfileRowsTableTableManager
                 host: host,
                 port: port,
                 username: username,
+                connectionType: connectionType,
                 authenticationType: authenticationType,
                 credentialReference: credentialReference,
                 privateKeyLabel: privateKeyLabel,

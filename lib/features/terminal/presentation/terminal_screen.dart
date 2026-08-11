@@ -58,7 +58,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     _profile = ref
         .read(connectionProfilesProvider.notifier)
         .findById(widget.profileId);
-    if (_profile case final profile?) {
+    if (_profile case final profile?
+        when profile.connectionType == ConnectionType.ssh) {
       _sessionRegistry = ref.read(sessionRegistryProvider);
       _session = _sessionRegistry!.open(_activeTabId, profile);
       if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
@@ -208,7 +209,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
               ],
               bottom: performance.showSessionTabBar
                   ? PreferredSize(
-                      preferredSize: const Size.fromHeight(60),
+                      preferredSize: const Size.fromHeight(48),
                       child: _TerminalSessionBar(
                         tabs: tabs,
                         currentTabId: _activeTabId,
@@ -457,7 +458,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     if (mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('最後のコマンド出力をコピーしました。')));
+      ).showSnackBar(const SnackBar(content: Text('直前のコマンド出力をコピーしました。')));
     }
   }
 
@@ -479,7 +480,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
             ),
             const SizedBox(height: 12),
             const Text(
-              '最後の出力コピーとプロンプト内カーソル移動にはOSC 133マーカーが必要です。starship、fish 3.6以降、または対応するbash/zsh設定を使用してください。',
+              'Termethisが直前の出力とプロンプト位置を認識するには、OSC 133対応のシェル設定が必要です。starship、fish 3.6以降、または対応するbash/zsh設定を使用してください。',
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -988,19 +989,18 @@ class _TerminalSessionBar extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
+        color: colors.surfaceContainer,
+        border: const Border(bottom: BorderSide(color: Colors.black)),
       ),
       child: SizedBox(
-        height: 60,
+        height: 48,
         child: Row(
           children: [
             Expanded(
-              child: ListView.separated(
+              child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(8, 5, 4, 5),
+                padding: const EdgeInsets.only(left: 4, top: 4),
                 itemCount: tabs.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 4),
                 itemBuilder: (context, index) {
                   final tab = tabs[index];
                   return _SessionTabButton(
@@ -1013,43 +1013,26 @@ class _TerminalSessionBar extends StatelessWidget {
               ),
             ),
             if (showSearch || showCopy)
-              Container(
-                margin: const EdgeInsets.fromLTRB(4, 6, 8, 6),
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colors.outlineVariant),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showSearch)
-                      IconButton(
-                        tooltip: '検索',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onSearch,
-                        icon: const Icon(Icons.search),
-                      ),
-                    if (showSearch && showCopy)
-                      SizedBox(
-                        height: 24,
-                        child: VerticalDivider(
-                          width: 1,
-                          thickness: 1,
-                          color: colors.outlineVariant,
-                        ),
-                      ),
-                    if (showCopy)
-                      IconButton(
-                        tooltip: '最後の出力をコピー',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: onCopy,
-                        icon: const Icon(Icons.content_copy_outlined),
-                      ),
-                  ],
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showSearch)
+                    IconButton(
+                      tooltip: '検索',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onSearch,
+                      icon: const Icon(Icons.search),
+                    ),
+                  if (showCopy)
+                    IconButton(
+                      tooltip: '直前のコマンド出力をコピー',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onCopy,
+                      icon: const Icon(Icons.content_copy_outlined),
+                    ),
+                ],
               ),
+            const SizedBox(width: 4),
           ],
         ),
       ),
@@ -1091,68 +1074,45 @@ class _SessionTabButton extends StatelessWidget {
       selected: selected,
       label: '${tab.title}、$statusLabel',
       child: Material(
-        color: selected ? colors.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            key: ValueKey('terminal-tab-${tab.id}'),
+            duration: const Duration(milliseconds: 140),
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minWidth: 132, maxWidth: 184),
-            padding: const EdgeInsets.fromLTRB(10, 5, 12, 5),
+            constraints: const BoxConstraints(minWidth: 112, maxWidth: 176),
+            margin: const EdgeInsets.only(right: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? colors.primary : colors.outlineVariant,
+              color: selected ? Colors.black : colors.surfaceContainerHighest,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 30,
-                  height: 30,
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: _sessionStatusColor(
-                      colors,
-                      effectiveStatus,
-                    ).withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    _sessionStatusIcon(effectiveStatus, restored: tab.restored),
-                    size: 17,
                     color: _sessionStatusColor(colors, effectiveStatus),
+                    shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tab.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: selected
-                              ? FontWeight.w700
-                              : FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        statusLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: _sessionStatusColor(colors, effectiveStatus),
-                          height: 1,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    tab.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: selected ? Colors.white : colors.onSurface,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
                   ),
                 ),
               ],

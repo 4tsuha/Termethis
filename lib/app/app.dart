@@ -6,8 +6,8 @@ import '../features/settings/application/app_font_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 
-class SshTerminalApp extends ConsumerWidget {
-  const SshTerminalApp({super.key});
+class TermethisApp extends ConsumerWidget {
+  const TermethisApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

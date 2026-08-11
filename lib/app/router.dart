@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/ftp/presentation/ftp_manager_screen.dart';
 import '../features/connections/presentation/connection_editor_screen.dart';
 import '../features/connections/presentation/connection_list_screen.dart';
+import '../features/connections/domain/connection_profile.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/terminal/presentation/terminal_screen.dart';
 import 'app_shell.dart';
@@ -49,7 +50,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/connections/new',
-        builder: (context, state) => const ConnectionEditorScreen(),
+        builder: (context, state) => ConnectionEditorScreen(
+          connectionType: ConnectionType.values.firstWhere(
+            (type) => type.name == state.uri.queryParameters['type'],
+            orElse: () => ConnectionType.ssh,
+          ),
+        ),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

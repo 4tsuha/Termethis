@@ -1,13 +1,42 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
-import 'package:ssh_terminal_ja/features/terminal/application/session_registry.dart';
-import 'package:ssh_terminal_ja/features/terminal/application/ssh_tabs_controller.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_tab.dart';
-import 'package:ssh_terminal_ja/infrastructure/terminal/utf8_terminal_codec.dart';
+import 'package:termethis/features/connections/domain/connection_profile.dart';
+import 'package:termethis/features/terminal/application/session_registry.dart';
+import 'package:termethis/features/terminal/application/ssh_tabs_controller.dart';
+import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
+import 'package:termethis/features/terminal/domain/ssh_tab.dart';
+import 'package:termethis/infrastructure/terminal/utf8_terminal_codec.dart';
 
 void main() {
+  test('初期化中に複数のSSHタブを開いてもすべて保持する', () async {
+    final store = _GateLoadSshTabStore();
+    const profile = ConnectionProfile(
+      id: 'server',
+      name: '開発サーバー',
+      host: 'server.example.com',
+      port: 22,
+      username: 'developer',
+    );
+    final container = ProviderContainer(
+      overrides: [sshTabStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(container.dispose);
+
+    final initialLoad = container.read(sshTabsProvider.future);
+    await store.loadStarted.future;
+    final notifier = container.read(sshTabsProvider.notifier);
+    final opens = [notifier.open(profile), notifier.open(profile)];
+    store.completeLoad();
+
+    await initialLoad;
+    final ids = await Future.wait(opens);
+    expect(ids.toSet(), hasLength(2));
+    expect(container.read(sshTabsProvider).value, hasLength(2));
+    expect(store.savedTabs, hasLength(2));
+  });
+
   test('同じ接続先から複数タブを開き、再起動後は切断済みとして復元する', () async {
     final store = EphemeralSshTabStore();
     const profile = ConnectionProfile(
@@ -89,6 +118,25 @@ void main() {
     expect(large.terminal.maxLines, 10000);
     registry.dispose();
   });
+}
+
+class _GateLoadSshTabStore implements SshTabStore {
+  final loadStarted = Completer<void>();
+  final _loadResult = Completer<List<SshTab>>();
+  List<SshTab> savedTabs = const [];
+
+  @override
+  Future<List<SshTab>> load() {
+    if (!loadStarted.isCompleted) loadStarted.complete();
+    return _loadResult.future;
+  }
+
+  @override
+  Future<void> save(List<SshTab> tabs) async {
+    savedTabs = List.unmodifiable(tabs);
+  }
+
+  void completeLoad() => _loadResult.complete(const []);
 }
 
 class _UnusedSshGateway implements SshGateway {

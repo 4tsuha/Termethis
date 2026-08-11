@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/connections/application/connection_profiles_controller.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile_repository.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/credential_vault.dart';
+import 'package:termethis/features/connections/application/connection_profiles_controller.dart';
+import 'package:termethis/features/connections/domain/connection_profile.dart';
+import 'package:termethis/features/connections/domain/connection_profile_repository.dart';
+import 'package:termethis/features/connections/domain/credential_vault.dart';
 
 void main() {
   test('秘密鍵の置き換えと接続先削除で古いVaultデータを削除する', () async {

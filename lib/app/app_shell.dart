@@ -15,7 +15,7 @@ class AppShell extends StatelessWidget {
       NavigationDestination(
         icon: const Icon(Icons.terminal_outlined),
         selectedIcon: const Icon(Icons.terminal),
-        label: l10n.navSsh,
+        label: l10n.navHome,
       ),
       NavigationDestination(
         icon: const Icon(Icons.folder_copy_outlined),

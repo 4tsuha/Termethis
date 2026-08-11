@@ -2,12 +2,12 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
-import 'package:ssh_terminal_ja/features/wake_on_lan/domain/wake_on_lan.dart';
-import 'package:ssh_terminal_ja/infrastructure/database/app_database.dart';
-import 'package:ssh_terminal_ja/infrastructure/database/drift_connection_profile_repository.dart';
-import 'package:ssh_terminal_ja/infrastructure/database/drift_host_key_repository.dart';
+import 'package:termethis/features/connections/domain/connection_profile.dart';
+import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
+import 'package:termethis/features/wake_on_lan/domain/wake_on_lan.dart';
+import 'package:termethis/infrastructure/database/app_database.dart';
+import 'package:termethis/infrastructure/database/drift_connection_profile_repository.dart';
+import 'package:termethis/infrastructure/database/drift_host_key_repository.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
@@ -16,9 +16,9 @@ void main() {
 
   setUp(() async {
     temporaryDirectory = await Directory.systemTemp.createTemp(
-      'vbterminal-drift-test-',
+      'termethis-drift-test-',
     );
-    databaseFile = File('${temporaryDirectory.path}/vbterminal.sqlite');
+    databaseFile = File('${temporaryDirectory.path}/termethis.sqlite');
   });
 
   tearDown(() async {
@@ -54,6 +54,36 @@ void main() {
 
     await repository.delete(profile.id);
     expect(await repository.findById(profile.id), isNull);
+    await database.close();
+  });
+
+  test('RDPとVNCの接続方式を保存して復元する', () async {
+    final database = AppDatabase(NativeDatabase(databaseFile));
+    final repository = DriftConnectionProfileRepository(database);
+    const profiles = [
+      ConnectionProfile(
+        id: 'rdp',
+        name: 'Windowsサーバー',
+        host: 'rdp.example.com',
+        port: 3389,
+        username: 'operator',
+        connectionType: ConnectionType.rdp,
+      ),
+      ConnectionProfile(
+        id: 'vnc',
+        name: 'VNCサーバー',
+        host: 'vnc.example.com',
+        port: 5900,
+        username: '',
+        connectionType: ConnectionType.vnc,
+      ),
+    ];
+
+    for (final profile in profiles) {
+      await repository.save(profile);
+    }
+
+    expect(await repository.watchAll().first, profiles);
     await database.close();
   });
 
@@ -108,7 +138,7 @@ void main() {
     await database.close();
   });
 
-  test('スキーマ1の接続先をスキーマ3へ移行する', () async {
+  test('スキーマ1の接続先をスキーマ5へ移行する', () async {
     final legacy = sqlite.sqlite3.open(databaseFile.path);
     legacy.execute('''
       CREATE TABLE connection_profile_rows (
@@ -144,11 +174,12 @@ void main() {
     final repository = DriftConnectionProfileRepository(database);
     final restored = await repository.findById('legacy');
 
-    expect(database.schemaVersion, 3);
+    expect(database.schemaVersion, 5);
     expect(restored?.name, '旧接続先');
     expect(restored?.credentialReference, isNull);
     expect(restored?.privateKeyLabel, isNull);
     expect(restored?.wakeOnLan, isNull);
+    expect(restored?.connectionType, ConnectionType.ssh);
 
     await repository.save(
       const ConnectionProfile(
@@ -177,6 +208,39 @@ void main() {
         broadcastAddress: '10.0.0.255',
         port: 7,
       ),
+    );
+    await database.close();
+  });
+
+  test('旧接続方式名をRDPへ移行する', () async {
+    var database = AppDatabase(NativeDatabase(databaseFile));
+    var repository = DriftConnectionProfileRepository(database);
+    await repository.save(
+      const ConnectionProfile(
+        id: 'windows-server',
+        name: 'Windowsサーバー',
+        host: 'rdp.example.com',
+        port: 3389,
+        username: 'operator',
+        connectionType: ConnectionType.rdp,
+      ),
+    );
+    await database.close();
+
+    final previousDatabase = sqlite.sqlite3.open(databaseFile.path);
+    previousDatabase.execute(
+      "UPDATE connection_profile_rows SET connection_type = 'rds' "
+      "WHERE id = 'windows-server'",
+    );
+    previousDatabase.userVersion = 4;
+    previousDatabase.close();
+
+    database = AppDatabase(NativeDatabase(databaseFile));
+    repository = DriftConnectionProfileRepository(database);
+
+    expect(
+      (await repository.findById('windows-server'))?.connectionType,
+      ConnectionType.rdp,
     );
     await database.close();
   });

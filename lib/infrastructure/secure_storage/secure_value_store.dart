@@ -11,7 +11,7 @@ abstract interface class SecureValueStore {
 class FlutterSecureValueStore implements SecureValueStore {
   const FlutterSecureValueStore([
     this._storage = const FlutterSecureStorage(
-      aOptions: AndroidOptions(storageNamespace: 'vbterminal_credentials'),
+      aOptions: AndroidOptions(storageNamespace: 'termethis_credentials'),
     ),
   ]);
 

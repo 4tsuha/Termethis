@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In ja, this message translates to:
-  /// **'SSHターミナル'**
+  /// **'Termethis'**
   String get appTitle;
 
   /// No description provided for @connectionsTitle.
@@ -121,7 +121,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyConnectionsMessage.
   ///
   /// In ja, this message translates to:
-  /// **'右下の追加ボタンからSSHサーバーを登録してください。'**
+  /// **'SSH、RDP、VNCの接続先を、右下の追加ボタンから登録できます。'**
   String get emptyConnectionsMessage;
 
   /// No description provided for @loadConnectionsFailed.
@@ -313,7 +313,7 @@ abstract class AppLocalizations {
   /// No description provided for @wakeOnLanDescription.
   ///
   /// In ja, this message translates to:
-  /// **'SSH接続前にMagic Packetで端末を起動します。'**
+  /// **'接続前にMagic Packetで端末を起動します。'**
   String get wakeOnLanDescription;
 
   /// No description provided for @wakeOnLanMacAddress.
@@ -661,14 +661,14 @@ abstract class AppLocalizations {
   /// No description provided for @stageOneNotice.
   ///
   /// In ja, this message translates to:
-  /// **'接続先とホスト鍵はこの端末に保存されます。秘密鍵は暗号化し、パスワードは保存しません。'**
+  /// **'接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。'**
   String get stageOneNotice;
 
-  /// No description provided for @navSsh.
+  /// No description provided for @navHome.
   ///
   /// In ja, this message translates to:
-  /// **'SSH'**
-  String get navSsh;
+  /// **'ホーム'**
+  String get navHome;
 
   /// No description provided for @navFtp.
   ///
@@ -681,6 +681,126 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'設定'**
   String get navSettings;
+
+  /// No description provided for @chooseConnectionTypeTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続方式を選択'**
+  String get chooseConnectionTypeTitle;
+
+  /// No description provided for @chooseConnectionTypeMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先で利用する方式を選んでください。あとから方式を変更する場合は、新しい接続先として登録します。'**
+  String get chooseConnectionTypeMessage;
+
+  /// No description provided for @connectionTypeSsh.
+  ///
+  /// In ja, this message translates to:
+  /// **'SSH'**
+  String get connectionTypeSsh;
+
+  /// No description provided for @connectionTypeSshDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'Termethis内のターミナルで、シェルやTUIを操作します。'**
+  String get connectionTypeSshDescription;
+
+  /// No description provided for @connectionTypeRdp.
+  ///
+  /// In ja, this message translates to:
+  /// **'RDP'**
+  String get connectionTypeRdp;
+
+  /// No description provided for @connectionTypeRdpDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先のRDP応答を確認してから、対応アプリでWindowsのリモートデスクトップを開きます。'**
+  String get connectionTypeRdpDescription;
+
+  /// No description provided for @connectionTypeVnc.
+  ///
+  /// In ja, this message translates to:
+  /// **'VNC'**
+  String get connectionTypeVnc;
+
+  /// No description provided for @connectionTypeVncDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'VNC対応アプリでリモート画面を開きます。'**
+  String get connectionTypeVncDescription;
+
+  /// No description provided for @addTypedConnection.
+  ///
+  /// In ja, this message translates to:
+  /// **'{type}接続先を追加'**
+  String addTypedConnection(String type);
+
+  /// No description provided for @connectionMethod.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続方式'**
+  String get connectionMethod;
+
+  /// No description provided for @usernameOptional.
+  ///
+  /// In ja, this message translates to:
+  /// **'ユーザー名（任意）'**
+  String get usernameOptional;
+
+  /// No description provided for @externalAuthenticationNotice.
+  ///
+  /// In ja, this message translates to:
+  /// **'認証は接続先アプリで行います。Termethisからパスワードは渡しません。'**
+  String get externalAuthenticationNotice;
+
+  /// No description provided for @remoteClientUnavailableTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'対応アプリが見つかりません'**
+  String get remoteClientUnavailableTitle;
+
+  /// No description provided for @rdpClientUnavailableMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'RDP接続にはRDP URIを開けるリモートデスクトップアプリが必要です。対応アプリをインストールしてから再試行してください。'**
+  String get rdpClientUnavailableMessage;
+
+  /// No description provided for @vncClientUnavailableMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'VNC接続にはvnc URIを開けるVNCクライアントが必要です。対応アプリをインストールしてから再試行してください。'**
+  String get vncClientUnavailableMessage;
+
+  /// No description provided for @remoteEndpointUnavailableTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先に到達できません'**
+  String get remoteEndpointUnavailableTitle;
+
+  /// No description provided for @rdpEndpointUnavailableMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'RDPサービスへ接続できませんでした。接続先、ポート、ネットワークとWindows側のリモートデスクトップ設定を確認してください。'**
+  String get rdpEndpointUnavailableMessage;
+
+  /// No description provided for @rdpProtocolMismatchTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'RDPサービスを確認できません'**
+  String get rdpProtocolMismatchTitle;
+
+  /// No description provided for @rdpProtocolMismatchMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続先からRDPの応答を確認できませんでした。指定したポートがリモートデスクトップ用か確認してください。'**
+  String get rdpProtocolMismatchMessage;
+
+  /// No description provided for @close.
+  ///
+  /// In ja, this message translates to:
+  /// **'閉じる'**
+  String get close;
 
   /// No description provided for @ftpTitle.
   ///
@@ -985,7 +1105,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsJapaneseFontMessage.
   ///
   /// In ja, this message translates to:
-  /// **'アプリUIとターミナルの日本語字形へ反映します。英数字と罫線はCascadia Monoのままです。'**
+  /// **'Termethisの画面とターミナルの日本語表示に使います。英数字と罫線にはCascadia Monoを使用します。'**
   String get settingsJapaneseFontMessage;
 
   /// No description provided for @settingsSelectFont.
@@ -1063,7 +1183,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsBackgroundSessionDescription.
   ///
   /// In ja, this message translates to:
-  /// **'オンにすると接続中だけ常駐通知を表示し、画面消灯中の維持を補助します。OSの省電力制御による切断は防げません。'**
+  /// **'接続中はTermethisの常駐通知を表示し、画面消灯中もSSH接続の維持を試みます。OSの省電力制御によって切断される場合があります。'**
   String get settingsBackgroundSessionDescription;
 
   /// No description provided for @fontNotoSansJp.
@@ -1111,7 +1231,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAboutSection.
   ///
   /// In ja, this message translates to:
-  /// **'アプリについて'**
+  /// **'Termethisについて'**
   String get settingsAboutSection;
 
   /// No description provided for @settingsVersion.
@@ -1123,7 +1243,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.1.1'**
+  /// **'0.3.0'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

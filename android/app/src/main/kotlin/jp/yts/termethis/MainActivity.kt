@@ -1,9 +1,11 @@
-package jp.hgzt23678.ssh_terminal_ja
+package jp.yts.termethis
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.content.res.Configuration
 import android.content.pm.PackageManager
@@ -18,15 +20,17 @@ import java.io.ByteArrayOutputStream
 class MainActivity : FlutterActivity() {
     companion object {
         private const val PRIVATE_KEY_CHANNEL =
-            "jp.hgzt23678.ssh_terminal_ja/private_key_picker"
+            "jp.yts.termethis/private_key_picker"
         private const val PRIVATE_KEY_REQUEST_CODE = 4107
         private const val MAXIMUM_PRIVATE_KEY_BYTES = 1024 * 1024
         private const val DISPLAY_PERFORMANCE_CHANNEL =
-            "jp.hgzt23678.ssh_terminal_ja/display_performance"
+            "jp.yts.termethis/display_performance"
         private const val BACKGROUND_SESSION_CHANNEL =
-            "jp.hgzt23678.ssh_terminal_ja/background_session"
+            "jp.yts.termethis/background_session"
         private const val TERMINAL_WINDOW_CHANNEL =
-            "jp.hgzt23678.ssh_terminal_ja/terminal_window"
+            "jp.yts.termethis/terminal_window"
+        private const val REMOTE_DESKTOP_CHANNEL =
+            "jp.yts.termethis/remote_desktop"
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 4109
     }
 
@@ -111,6 +115,56 @@ class MainActivity : FlutterActivity() {
                 },
             )
             result.success(null)
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            REMOTE_DESKTOP_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "launch") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val type = call.argument<String>("type")
+            val host = call.argument<String>("host")?.trim().orEmpty()
+            val port = call.argument<Int>("port") ?: 0
+            val username = call.argument<String>("username")?.trim().orEmpty()
+            if (host.isEmpty() || port !in 1..65535) {
+                result.error("invalid_request", "Invalid remote desktop endpoint", null)
+                return@setMethodCallHandler
+            }
+            val uri = when (type) {
+                "rdp" -> buildRdpUri(host, port, username)
+                "vnc" -> buildVncUri(host, port, username)
+                else -> {
+                    result.error("invalid_request", "Unsupported connection type", null)
+                    return@setMethodCallHandler
+                }
+            }
+            if (type == "rdp") {
+                Thread(
+                    {
+                        val probeResult = RdpConnectivityProbe.check(host, port)
+                        runOnUiThread {
+                            when (probeResult) {
+                                RdpProbeResult.AVAILABLE -> launchRemoteDesktop(uri, result)
+                                RdpProbeResult.UNREACHABLE -> result.error(
+                                    "endpoint_unreachable",
+                                    "The RDP endpoint is unreachable",
+                                    null,
+                                )
+                                RdpProbeResult.PROTOCOL_MISMATCH -> result.error(
+                                    "rdp_protocol_mismatch",
+                                    "The endpoint did not return an RDP negotiation response",
+                                    null,
+                                )
+                            }
+                        }
+                    },
+                    "rdp-connectivity-probe",
+                ).start()
+            } else {
+                launchRemoteDesktop(uri, result)
+            }
         }
     }
 
@@ -248,5 +302,47 @@ class MainActivity : FlutterActivity() {
             }
         }
         return uri.lastPathSegment ?: "private_key"
+    }
+
+    private fun buildRdpUri(host: String, port: Int, username: String): Uri {
+        val endpoint = formatEndpoint(host, port)
+        val attributes = mutableListOf(
+            "full%20address=s:${Uri.encode(endpoint, "[]:")}",
+        )
+        if (username.isNotEmpty()) {
+            attributes += "username=s:${Uri.encode(username)}"
+        }
+        return Uri.parse("rdp://${attributes.joinToString("&")}")
+    }
+
+    private fun launchRemoteDesktop(uri: Uri, result: MethodChannel.Result) {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, uri).apply {
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                },
+            )
+            result.success(null)
+        } catch (_: ActivityNotFoundException) {
+            result.error(
+                "no_compatible_app",
+                "No compatible remote desktop client is installed",
+                null,
+            )
+        }
+    }
+
+    private fun buildVncUri(host: String, port: Int, username: String): Uri {
+        val userInfo = if (username.isEmpty()) "" else "${Uri.encode(username)}@"
+        return Uri.parse("vnc://$userInfo${formatEndpoint(host, port)}")
+    }
+
+    private fun formatEndpoint(host: String, port: Int): String {
+        val formattedHost = if (host.contains(':') && !host.startsWith('[')) {
+            "[$host]"
+        } else {
+            host
+        }
+        return "$formattedHost:$port"
     }
 }

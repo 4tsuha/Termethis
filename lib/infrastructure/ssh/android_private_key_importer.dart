@@ -7,9 +7,7 @@ import '../../src/rust/api/core.dart' as rust;
 
 class AndroidPrivateKeyImporter implements PrivateKeyImporter {
   const AndroidPrivateKeyImporter([
-    this._channel = const MethodChannel(
-      'jp.hgzt23678.ssh_terminal_ja/private_key_picker',
-    ),
+    this._channel = const MethodChannel('jp.yts.termethis/private_key_picker'),
   ]);
 
   final MethodChannel _channel;

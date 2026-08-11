@@ -52,6 +52,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   Timer? _readyTimer;
   Future<void>? _drainFuture;
   Future<void>? _suspendFuture;
+  Future<bool>? _checkpointFuture;
   var _pendingOutputCharacters = 0;
   var _lastQueuedSequence = 0;
   var _lastSentSequence = 0;
@@ -94,7 +95,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         ),
       )
       ..addJavaScriptChannel(
-        'VBTerminal',
+        'Termethis',
         onMessageReceived: _handleJavaScriptMessage,
       )
       ..loadFlutterAsset('assets/web_terminal/index.html');
@@ -153,7 +154,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     _pendingScripts.clear();
     unawaited(
       _controller
-          .runJavaScript('window.vbTerminal?.dispose();')
+          .runJavaScript('window.termethisTerminal?.dispose();')
           .catchError((_) {}),
     );
     super.dispose();
@@ -169,21 +170,21 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
 
   void focus() {
     if (_ready && _active) {
-      _enqueueScript('window.vbTerminal.focus();');
+      _enqueueScript('window.termethisTerminal.focus();');
     }
   }
 
   void paste(String text) {
     if (!_ready || !_active || text.isEmpty) return;
     final encoded = base64Encode(utf8.encode(text));
-    _enqueueScript("window.vbTerminal.pasteBase64('$encoded');");
+    _enqueueScript("window.termethisTerminal.pasteBase64('$encoded');");
   }
 
   Future<String?> copyLastCommandOutput() async {
     if (!_ready || !_active || _disposed) return null;
     await _waitForDrain();
     final result = await _controller.runJavaScriptReturningResult(
-      'window.vbTerminal.copyLastOutputBase64();',
+      'window.termethisTerminal.copyLastOutputBase64();',
     );
     var encoded = result.toString();
     if (encoded.startsWith('"') && encoded.endsWith('"')) {
@@ -227,7 +228,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         _attachSessionListener();
         return;
       }
-      _enqueueScript('window.vbTerminal.setActive(false);');
+      _enqueueScript('window.termethisTerminal.setActive(false);');
       await _waitForDrain();
     }
     _active = false;
@@ -252,7 +253,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     }
     _active = true;
     if (_ready) {
-      _enqueueScript('window.vbTerminal.setActive(true);');
+      _enqueueScript('window.termethisTerminal.setActive(true);');
     }
     _synchronizeFromSession(reset: _resetOnResume);
     _resetOnResume = false;
@@ -275,6 +276,52 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   void _handleTerminalData(WebTerminalDataEvent event) {
     if (_disposed || !_active || event.sequence <= _lastQueuedSequence) return;
     _queueOutput(event.data, event.sequence);
+    _scheduleCheckpoint();
+  }
+
+  void _scheduleCheckpoint() {
+    if (_disposed ||
+        !_ready ||
+        !_active ||
+        !widget.session.webTerminalCheckpointNeeded ||
+        _checkpointFuture != null) {
+      return;
+    }
+
+    final session = widget.session;
+    final operation = _checkpointAfterDrain(session);
+    _checkpointFuture = operation;
+    unawaited(
+      operation.then((saved) {
+        if (identical(_checkpointFuture, operation)) {
+          _checkpointFuture = null;
+        }
+        if (saved && identical(widget.session, session)) {
+          _scheduleCheckpoint();
+        }
+      }),
+    );
+  }
+
+  Future<bool> _checkpointAfterDrain(SshSessionController session) async {
+    try {
+      await _waitForDrain();
+      if (_disposed ||
+          !_ready ||
+          !_active ||
+          !identical(widget.session, session) ||
+          !session.webTerminalCheckpointNeeded) {
+        return false;
+      }
+
+      final snapshot = await _requestSnapshot();
+      return session.saveWebTerminalSnapshot(
+        snapshot.data,
+        snapshot.throughSequence,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   void _synchronizeFromSession({required bool reset}) {
@@ -286,6 +333,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       replay.throughSequence,
       reset: reset || replay.resetRequired,
     );
+    _scheduleCheckpoint();
   }
 
   void _queueOutput(String data, int throughSequence, {bool reset = false}) {
@@ -362,8 +410,9 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         _readyTimer?.cancel();
         _ready = true;
         _configure();
-        _enqueueScript('window.vbTerminal.setActive($_active);');
+        _enqueueScript('window.termethisTerminal.setActive($_active);');
         _scheduleDrain();
+        _scheduleCheckpoint();
         widget.onRendererChanged?.call(decoded['renderer'] as String? ?? 'dom');
       case 'renderer':
         widget.onRendererChanged?.call(decoded['renderer'] as String? ?? 'dom');
@@ -426,7 +475,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       'longPressRightClick': widget.longPressRightClick,
       'tapToMovePromptCursor': widget.tapToMovePromptCursor,
     });
-    _enqueueScript('window.vbTerminal.setOptions($options);');
+    _enqueueScript('window.termethisTerminal.setOptions($options);');
   }
 
   Future<_SnapshotResult> _requestSnapshot() async {
@@ -434,7 +483,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
     final completer = Completer<_SnapshotResult>();
     _snapshotRequests[id] = completer;
     _enqueueScript(
-      'window.vbTerminal.requestSnapshot('
+      'window.termethisTerminal.requestSnapshot('
       '$id, $_lastSentSequence, ${widget.scrollbackLines});',
     );
     await _waitForDrain();
@@ -483,7 +532,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         _writeAckRequests[requestId] = acknowledgement;
         final encoded = base64Encode(utf8.encode(output.data));
         script =
-            "window.vbTerminal.writeBase64("
+            "window.termethisTerminal.writeBase64("
             "'$encoded', ${output.reset}, $requestId);";
 
         try {

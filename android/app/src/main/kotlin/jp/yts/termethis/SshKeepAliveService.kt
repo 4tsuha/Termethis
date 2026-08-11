@@ -1,4 +1,4 @@
-package jp.hgzt23678.ssh_terminal_ja
+package jp.yts.termethis
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -12,7 +12,7 @@ import android.os.IBinder
 
 class SshKeepAliveService : Service() {
     companion object {
-        const val ACTION_STOP = "jp.hgzt23678.ssh_terminal_ja.STOP_KEEP_ALIVE"
+        const val ACTION_STOP = "jp.yts.termethis.STOP_KEEP_ALIVE"
         private const val CHANNEL_ID = "ssh_background_session"
         private const val NOTIFICATION_ID = 4108
     }

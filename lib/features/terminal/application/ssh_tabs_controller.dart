@@ -13,6 +13,8 @@ final sshTabsProvider = AsyncNotifierProvider<SshTabsController, List<SshTab>>(
 
 class SshTabsController extends AsyncNotifier<List<SshTab>> {
   late SshTabStore _store;
+  Future<void> _mutationTail = Future<void>.value();
+  int _tabIdSequence = 0;
 
   @override
   Future<List<SshTab>> build() async {
@@ -21,32 +23,47 @@ class SshTabsController extends AsyncNotifier<List<SshTab>> {
   }
 
   Future<String> open(ConnectionProfile profile) async {
-    final tabs = await future;
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final updated = [
-      ...tabs,
-      SshTab(id: id, profileId: profile.id, title: profile.name),
-    ];
-    state = AsyncData(updated);
-    await _store.save(updated);
-    return id;
+    if (profile.connectionType != ConnectionType.ssh) {
+      throw ArgumentError.value(
+        profile.connectionType,
+        'profile.connectionType',
+        'SSHタブにはSSH接続先だけを指定できます。',
+      );
+    }
+    return _enqueueMutation(() async {
+      final tabs = state.value ?? await future;
+      final id = _nextTabId();
+      final updated = [
+        ...tabs,
+        SshTab(id: id, profileId: profile.id, title: profile.name),
+      ];
+      state = AsyncData(updated);
+      await _store.save(updated);
+      return id;
+    });
   }
 
   Future<void> close(String id) async {
-    final updated = [
-      for (final tab in await future)
-        if (tab.id != id) tab,
-    ];
-    state = AsyncData(updated);
-    await _store.save(updated);
+    await _enqueueMutation(() async {
+      final tabs = state.value ?? await future;
+      final updated = [
+        for (final tab in tabs)
+          if (tab.id != id) tab,
+      ];
+      state = AsyncData(updated);
+      await _store.save(updated);
+    });
   }
 
   Future<void> markActive(String id) async {
-    final updated = [
-      for (final tab in await future)
-        if (tab.id == id) tab.copyWith(restored: false) else tab,
-    ];
-    state = AsyncData(updated);
+    await _enqueueMutation(() async {
+      final tabs = state.value ?? await future;
+      final updated = [
+        for (final tab in tabs)
+          if (tab.id == id) tab.copyWith(restored: false) else tab,
+      ];
+      state = AsyncData(updated);
+    });
   }
 
   SshTab? find(String id) {
@@ -54,5 +71,19 @@ class SshTabsController extends AsyncNotifier<List<SshTab>> {
       if (tab.id == id) return tab;
     }
     return null;
+  }
+
+  Future<T> _enqueueMutation<T>(Future<T> Function() mutation) {
+    final result = _mutationTail.then((_) => mutation());
+    _mutationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  String _nextTabId() {
+    _tabIdSequence += 1;
+    return '${DateTime.now().microsecondsSinceEpoch}-$_tabIdSequence';
   }
 }

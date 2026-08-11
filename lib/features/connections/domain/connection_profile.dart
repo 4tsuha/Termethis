@@ -2,6 +2,16 @@ import '../../wake_on_lan/domain/wake_on_lan.dart';
 
 enum AuthenticationType { passwordOrInteractive, privateKey }
 
+enum ConnectionType {
+  ssh(defaultPort: 22),
+  rdp(defaultPort: 3389),
+  vnc(defaultPort: 5900);
+
+  const ConnectionType({required this.defaultPort});
+
+  final int defaultPort;
+}
+
 class ConnectionProfile {
   const ConnectionProfile({
     required this.id,
@@ -9,6 +19,7 @@ class ConnectionProfile {
     required this.host,
     required this.port,
     required this.username,
+    this.connectionType = ConnectionType.ssh,
     this.authenticationType = AuthenticationType.passwordOrInteractive,
     this.credentialReference,
     this.privateKeyLabel,
@@ -20,12 +31,19 @@ class ConnectionProfile {
   final String host;
   final int port;
   final String username;
+  final ConnectionType connectionType;
   final AuthenticationType authenticationType;
   final String? credentialReference;
   final String? privateKeyLabel;
   final WakeOnLanConfiguration? wakeOnLan;
 
-  String get target => '$username@$host:$port';
+  String get target {
+    final endpoint = '$host:$port';
+    if (username.isEmpty) return endpoint;
+    return connectionType == ConnectionType.ssh
+        ? '$username@$endpoint'
+        : '$username · $endpoint';
+  }
 
   ConnectionProfile withCredential({
     required String? credentialReference,
@@ -37,6 +55,7 @@ class ConnectionProfile {
       host: host,
       port: port,
       username: username,
+      connectionType: connectionType,
       authenticationType: authenticationType,
       credentialReference: credentialReference,
       privateKeyLabel: privateKeyLabel,
@@ -52,6 +71,7 @@ class ConnectionProfile {
         other.host == host &&
         other.port == port &&
         other.username == username &&
+        other.connectionType == connectionType &&
         other.authenticationType == authenticationType &&
         other.credentialReference == credentialReference &&
         other.privateKeyLabel == privateKeyLabel &&
@@ -65,6 +85,7 @@ class ConnectionProfile {
     host,
     port,
     username,
+    connectionType,
     authenticationType,
     credentialReference,
     privateKeyLabel,

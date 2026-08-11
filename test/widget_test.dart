@@ -5,21 +5,23 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/app/app.dart';
-import 'package:ssh_terminal_ja/features/connections/application/connection_profiles_controller.dart';
-import 'package:ssh_terminal_ja/features/connections/application/private_key_providers.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/connection_profile_repository.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/credential_vault.dart';
-import 'package:ssh_terminal_ja/features/connections/domain/private_key_importer.dart';
-import 'package:ssh_terminal_ja/features/settings/application/app_font_controller.dart';
-import 'package:ssh_terminal_ja/features/settings/domain/app_font.dart';
-import 'package:ssh_terminal_ja/features/terminal/application/session_registry.dart';
-import 'package:ssh_terminal_ja/features/terminal/application/ssh_tabs_controller.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
-import 'package:ssh_terminal_ja/features/wake_on_lan/application/wake_on_lan_provider.dart';
-import 'package:ssh_terminal_ja/features/wake_on_lan/domain/wake_on_lan.dart';
-import 'package:ssh_terminal_ja/main.dart';
+import 'package:termethis/app/app.dart';
+import 'package:termethis/features/connections/application/connection_profiles_controller.dart';
+import 'package:termethis/features/connections/application/private_key_providers.dart';
+import 'package:termethis/features/connections/application/remote_desktop_launcher_provider.dart';
+import 'package:termethis/features/connections/domain/connection_profile.dart';
+import 'package:termethis/features/connections/domain/connection_profile_repository.dart';
+import 'package:termethis/features/connections/domain/credential_vault.dart';
+import 'package:termethis/features/connections/domain/private_key_importer.dart';
+import 'package:termethis/features/connections/domain/remote_desktop_launcher.dart';
+import 'package:termethis/features/settings/application/app_font_controller.dart';
+import 'package:termethis/features/settings/domain/app_font.dart';
+import 'package:termethis/features/terminal/application/session_registry.dart';
+import 'package:termethis/features/terminal/application/ssh_tabs_controller.dart';
+import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
+import 'package:termethis/features/wake_on_lan/application/wake_on_lan_provider.dart';
+import 'package:termethis/features/wake_on_lan/domain/wake_on_lan.dart';
+import 'package:termethis/main.dart';
 import 'package:xterm/xterm.dart';
 
 void main() {
@@ -29,15 +31,16 @@ void main() {
 
     expect(find.text('接続先'), findsOneWidget);
     expect(find.text('接続先がありません'), findsOneWidget);
-    expect(find.text('接続先を追加'), findsOneWidget);
+    expect(find.text('接続先を追加'), findsNothing);
+    expect(find.byTooltip('接続先を追加'), findsNothing);
+    expect(find.byIcon(Icons.add), findsOneWidget);
   });
 
   testWidgets('接続先を登録して一覧に表示する', (tester) async {
     await tester.pumpWidget(const MainApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接続先を追加'));
-    await tester.pumpAndSettle();
+    await _openSshEditor(tester);
 
     final fields = find.byType(TextFormField);
     expect(fields, findsNWidgets(4));
@@ -45,11 +48,17 @@ void main() {
     await tester.enterText(fields.at(1), '192.168.1.20');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'developer');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await _saveConnectionEditor(tester);
 
     expect(find.text('開発サーバー'), findsOneWidget);
     expect(find.text('developer@192.168.1.20:2222'), findsOneWidget);
+    expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('未接続'), findsOneWidget);
+    expect(find.byTooltip('接続'), findsOneWidget);
+    final card = tester.widget<Card>(find.byType(Card));
+    final cardShape = card.shape! as RoundedRectangleBorder;
+    expect(card.elevation, 0);
+    expect(cardShape.borderRadius, BorderRadius.circular(20));
   });
 
   testWidgets('パスワード確定後にダイアログを安全に破棄して接続する', (tester) async {
@@ -57,20 +66,18 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [sshGatewayProvider.overrideWithValue(gateway)],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接続先を追加'));
-    await tester.pumpAndSettle();
+    await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), '接続テスト');
     await tester.enterText(fields.at(1), 'localhost');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'demo');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await _saveConnectionEditor(tester);
 
     await tester.tap(find.text('接続テスト'));
     await tester.pumpAndSettle();
@@ -85,6 +92,15 @@ void main() {
       tester.element(find.byType(MaterialApp)),
     );
     final tab = (await container.read(sshTabsProvider.future)).single;
+    final terminalTab = tester.widget<AnimatedContainer>(
+      find.byKey(ValueKey('terminal-tab-${tab.id}')),
+    );
+    final terminalTabDecoration = terminalTab.decoration! as BoxDecoration;
+    expect(terminalTabDecoration.color, Colors.black);
+    expect(
+      terminalTabDecoration.borderRadius,
+      const BorderRadius.vertical(top: Radius.circular(8)),
+    );
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
@@ -92,6 +108,17 @@ void main() {
     expect(
       container.read(sessionRegistryProvider).find(tab.id)?.isConnected,
       isTrue,
+    );
+    final connectedCard = tester.widget<Card>(
+      find.byKey(ValueKey('connection-card-${tab.profileId}')),
+    );
+    final connectedShape = connectedCard.shape! as RoundedRectangleBorder;
+    final cardContext = tester.element(
+      find.byKey(ValueKey('connection-card-${tab.profileId}')),
+    );
+    expect(
+      connectedShape.side.color,
+      Theme.of(cardContext).colorScheme.primary,
     );
   });
 
@@ -104,7 +131,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [sshGatewayProvider.overrideWithValue(gateway)],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();
@@ -115,15 +142,13 @@ void main() {
     container.read(appFontProvider.notifier).select(AppFont.mejiro);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接続先を追加'));
-    await tester.pumpAndSettle();
+    await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), 'IMEテスト');
     await tester.enterText(fields.at(1), 'localhost');
     await tester.enterText(fields.at(2), '2222');
     await tester.enterText(fields.at(3), 'demo');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await _saveConnectionEditor(tester);
     await tester.tap(find.text('IMEテスト'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'password');
@@ -171,8 +196,7 @@ void main() {
     await tester.pumpWidget(const MainApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接続先を追加'));
-    await tester.pumpAndSettle();
+    await _openSshEditor(tester);
     await tester.enterText(find.byType(TextFormField).first, '編集中');
     await tester.pump();
     await tester.binding.handlePopRoute();
@@ -214,8 +238,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('検索ボタン'), findsOneWidget);
-    expect(find.text('最後の出力をコピー'), findsOneWidget);
+    expect(find.text('タブバーに検索ボタンを表示'), findsOneWidget);
+    expect(find.text('直前のコマンド出力をコピー'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -237,13 +261,12 @@ void main() {
             const _AcceptingPrivateKeyValidator(),
           ),
         ],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('接続先を追加'));
-    await tester.pumpAndSettle();
+    await _openSshEditor(tester);
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), '鍵サーバー');
     await tester.enterText(fields.at(1), 'key.example.com');
@@ -273,6 +296,7 @@ void main() {
     expect(profile.credentialReference, isNotNull);
     expect(profile.privateKeyLabel, 'id_ed25519');
     expect(profile.credentialReference, isNot(contains('test-private-key')));
+    expect(find.byIcon(Icons.key_outlined), findsOneWidget);
 
     final credential = await container
         .read(credentialVaultProvider)
@@ -316,11 +340,12 @@ void main() {
           connectionProfileRepositoryProvider.overrideWithValue(repository),
           wakeOnLanSenderProvider.overrideWithValue(sender),
         ],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();
 
+    expect(find.byTooltip('Wake on LAN'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Wake on LANを送信'));
@@ -329,6 +354,112 @@ void main() {
     expect(sender.lastConfiguration?.macAddress, '00:11:22:33:44:55');
     expect(find.text('自宅サーバーへMagic Packetを送信しました。'), findsOneWidget);
   });
+
+  testWidgets('追加時にSSH・RDP・VNCを選択できる', (tester) async {
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接続方式を選択'), findsOneWidget);
+    expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('RDP'), findsOneWidget);
+    expect(find.text('VNC'), findsOneWidget);
+
+    await tester.tap(find.text('RDP'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RDP接続先を追加'), findsOneWidget);
+    expect(find.text('認証は接続先アプリで行います。Termethisからパスワードは渡しません。'), findsOneWidget);
+    final fields = find.byType(TextFormField);
+    expect(tester.widget<TextFormField>(fields.at(2)).controller?.text, '3389');
+  });
+
+  testWidgets('RDP接続先を対応アプリへ渡す', (tester) async {
+    final launcher = _RecordingRemoteDesktopLauncher();
+    final repository = EphemeralConnectionProfileRepository(
+      initialProfiles: const [
+        ConnectionProfile(
+          id: 'rdp-server',
+          name: 'Windowsサーバー',
+          host: 'rdp.example.com',
+          port: 3389,
+          username: 'operator',
+          connectionType: ConnectionType.rdp,
+        ),
+      ],
+    );
+    addTearDown(repository.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          connectionProfileRepositoryProvider.overrideWithValue(repository),
+          remoteDesktopLauncherProvider.overrideWithValue(launcher),
+        ],
+        child: const TermethisApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Windowsサーバー'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.lastProfile?.connectionType, ConnectionType.rdp);
+    expect(launcher.lastProfile?.host, 'rdp.example.com');
+  });
+
+  testWidgets('VNC接続先を対応アプリへ渡す', (tester) async {
+    final launcher = _RecordingRemoteDesktopLauncher();
+    final repository = EphemeralConnectionProfileRepository(
+      initialProfiles: const [
+        ConnectionProfile(
+          id: 'vnc-server',
+          name: 'Linuxデスクトップ',
+          host: 'vnc.example.com',
+          port: 5901,
+          username: 'operator',
+          connectionType: ConnectionType.vnc,
+        ),
+      ],
+    );
+    addTearDown(repository.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          connectionProfileRepositoryProvider.overrideWithValue(repository),
+          remoteDesktopLauncherProvider.overrideWithValue(launcher),
+        ],
+        child: const TermethisApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Linuxデスクトップ'));
+    await tester.pumpAndSettle();
+
+    expect(launcher.lastProfile?.connectionType, ConnectionType.vnc);
+    expect(launcher.lastProfile?.host, 'vnc.example.com');
+    expect(launcher.lastProfile?.port, 5901);
+    expect(launcher.lastProfile?.username, 'operator');
+  });
+}
+
+Future<void> _openSshEditor(WidgetTester tester) async {
+  await tester.tap(find.byIcon(Icons.add));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('SSH'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _saveConnectionEditor(WidgetTester tester) async {
+  final button = find.widgetWithText(FilledButton, '保存', skipOffstage: false);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
 }
 
 class _PrivateKeyImporter implements PrivateKeyImporter {
@@ -345,6 +476,15 @@ class _AcceptingPrivateKeyValidator implements PrivateKeyValidator {
 
   @override
   Future<void> validate(ImportedPrivateKey key, {String? passphrase}) async {}
+}
+
+class _RecordingRemoteDesktopLauncher implements RemoteDesktopLauncher {
+  ConnectionProfile? lastProfile;
+
+  @override
+  Future<void> launch(ConnectionProfile profile) async {
+    lastProfile = profile;
+  }
 }
 
 class _WidgetTestGateway implements SshGateway {

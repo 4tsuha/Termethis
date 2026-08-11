@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/app/app.dart';
-import 'package:ssh_terminal_ja/features/ftp/application/ftp_tabs_controller.dart';
-import 'package:ssh_terminal_ja/features/ftp/domain/ftp_gateway.dart';
+import 'package:termethis/app/app.dart';
+import 'package:termethis/features/ftp/application/ftp_tabs_controller.dart';
+import 'package:termethis/features/ftp/domain/ftp_gateway.dart';
 
 void main() {
-  testWidgets('ボトムナビでSSH・FTP・設定を切り替える', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: SshTerminalApp()));
+  testWidgets('ボトムナビでホーム・FTP・設定を切り替える', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
     await tester.pumpAndSettle();
 
-    expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('ホーム'), findsOneWidget);
     expect(find.text('FTP'), findsOneWidget);
     expect(find.text('設定'), findsOneWidget);
 
@@ -21,7 +21,7 @@ void main() {
 
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
-    expect(find.text('検索ボタン'), findsOneWidget);
+    expect(find.text('タブバーに検索ボタンを表示'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('日本語フォント'), 500);
     await tester.pumpAndSettle();
     await tester.tap(find.text('日本語フォント'));
@@ -49,7 +49,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [ftpGatewayProvider.overrideWithValue(gateway)],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();
@@ -95,7 +95,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [ftpGatewayProvider.overrideWithValue(gateway)],
-        child: const SshTerminalApp(),
+        child: const TermethisApp(),
       ),
     );
     await tester.pumpAndSettle();

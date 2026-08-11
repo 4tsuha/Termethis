@@ -44,6 +44,7 @@ class DriftConnectionProfileRepository implements ConnectionProfileRepository {
             host: profile.host,
             port: profile.port,
             username: profile.username,
+            connectionType: Value(profile.connectionType.name),
             authenticationType: profile.authenticationType.name,
             credentialReference: Value(profile.credentialReference),
             privateKeyLabel: Value(profile.privateKeyLabel),
@@ -72,6 +73,7 @@ class DriftConnectionProfileRepository implements ConnectionProfileRepository {
       host: row.host,
       port: row.port,
       username: row.username,
+      connectionType: _connectionType(row.connectionType),
       authenticationType: _authenticationType(row.authenticationType),
       credentialReference: row.credentialReference,
       privateKeyLabel: row.privateKeyLabel,
@@ -83,6 +85,13 @@ class DriftConnectionProfileRepository implements ConnectionProfileRepository {
     return AuthenticationType.values.firstWhere(
       (type) => type.name == value,
       orElse: () => AuthenticationType.passwordOrInteractive,
+    );
+  }
+
+  ConnectionType _connectionType(String value) {
+    return ConnectionType.values.firstWhere(
+      (type) => type.name == value,
+      orElse: () => ConnectionType.ssh,
     );
   }
 

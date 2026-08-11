@@ -1,7 +1,7 @@
-name: ssh_terminal_ja
-description: "完全日本語対応のAndroid向けSSHモバイルターミナル。"
+name: termethis
+description: "日本語入力に対応したAndroid向けSSH・SFTPモバイルターミナル。"
 publish_to: 'none'
-version: 0.2.0+3
+version: 0.3.0+4
 
 environment:
   sdk: ^3.12.2
@@ -22,7 +22,7 @@ dependencies:
   intl: ^0.20.2
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
-  vbterminal_core:
+  termethis_core:
     path: rust_builder
   webview_flutter: ^4.14.1
   xterm:

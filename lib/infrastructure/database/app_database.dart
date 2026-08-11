@@ -15,6 +15,8 @@ class ConnectionProfileRows extends Table {
 
   TextColumn get username => text()();
 
+  TextColumn get connectionType => text().withDefault(const Constant('ssh'))();
+
   TextColumn get authenticationType => text()();
 
   TextColumn get credentialReference => text().nullable()();
@@ -60,10 +62,10 @@ class KnownHostRecords extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
-  AppDatabase.defaults() : super(driftDatabase(name: 'vbterminal'));
+  AppDatabase.defaults() : super(driftDatabase(name: 'termethis'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -91,6 +93,18 @@ class AppDatabase extends _$AppDatabase {
         await migrator.addColumn(
           connectionProfileRows,
           connectionProfileRows.wakeOnLanPort,
+        );
+      }
+      if (from < 4) {
+        await migrator.addColumn(
+          connectionProfileRows,
+          connectionProfileRows.connectionType,
+        );
+      }
+      if (from < 5) {
+        await customStatement(
+          "UPDATE connection_profile_rows SET connection_type = 'rdp' "
+          "WHERE connection_type = 'rds'",
         );
       }
     },

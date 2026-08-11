@@ -1,8 +1,10 @@
-# VBTerminal
+# Termethis
 
-完全日本語対応のAndroid向けSSH・FTPクライアントです。
+<img src="assets/branding/termethis-icon-source.png" alt="Termethis app icon" width="128">
 
-[![Android CI](https://github.com/hgzt23678/VBTerminal/actions/workflows/android.yml/badge.svg)](https://github.com/hgzt23678/VBTerminal/actions/workflows/android.yml)
+完全日本語対応のAndroid向けSSH・RDP・VNC・FTPクライアントです。
+
+[Android CI](.github/workflows/android.yml)
 
 ## 主な機能
 
@@ -21,8 +23,10 @@
 - Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
 - RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
 - RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
+- ホームの接続先としてSSH・RDP・VNCを一元管理
+- Androidの対応アプリへRDP URIまたはVNC URIを渡すリモートデスクトップ連携
 - 接続先ごとのWake on LAN設定とMagic Packet送信
-- SSH、FTP、設定を切り替えるボトムナビゲーション
+- ホーム、FTP、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
 - パンくずによる階層移動、フォルダー優先の一覧表示
 - フォルダー作成、名前変更、ファイルと空フォルダーの削除
@@ -34,6 +38,8 @@
 平文FTPでは認証情報と通信内容が暗号化されません。可能な接続先ではSFTP、FTPES、FTPSのいずれかを使用してください。
 
 SSHセッションの保存対象はタブID、接続先ID、表示名だけです。SSH通信、端末の表示内容、パスワード、秘密鍵は保存せず、アプリのプロセス再生成後は切断状態から利用者が再接続します。
+
+RDPとVNCはAndroidにインストールされた対応クライアントを起動します。Termethisは接続先とユーザー名だけを渡し、リモートデスクトップのパスワードは保存・転送しません。
 
 ## 開発
 
@@ -67,7 +73,7 @@ npm run build
 adb -s emulator-5554 reverse tcp:22222 tcp:22222
 ```
 
-VBTerminalの接続先は`vbterminal-test@127.0.0.1:22222`にします。終了時は`.\tool\wsl\stop_test_ssh.ps1`を実行します。
+Termethisの接続先は`termethis-test@127.0.0.1:22222`にします。終了時は`.\tool\wsl\stop_test_ssh.ps1`を実行します。
 
 ヘッドレスAVDでWebGLを検証する場合は`-gpu host`を使用してください。環境別の既知事項は[TESTING.md](TESTING.md)にまとめています。
 

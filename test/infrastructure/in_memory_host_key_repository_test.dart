@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
-import 'package:ssh_terminal_ja/infrastructure/ssh/in_memory_host_key_repository.dart';
+import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
+import 'package:termethis/infrastructure/ssh/in_memory_host_key_repository.dart';
 
 void main() {
   test('ホスト名の大文字小文字を区別せずポートごとに鍵を保持する', () async {

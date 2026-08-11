@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "jp.hgzt23678.ssh_terminal_ja"
+    namespace = "jp.yts.termethis"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "jp.hgzt23678.ssh_terminal_ja"
+        applicationId = "jp.yts.termethis"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
