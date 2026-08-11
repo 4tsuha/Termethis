@@ -57,7 +57,7 @@ repositories {
 dependencies {
     implementation("org.connectbot:termlib:0.1.0")
     implementation("com.termux.termux-app:terminal-view:0.118.0")
-    implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
+    implementation("com.google.guava:listenablefuture:1.0")
     implementation(platform("androidx.compose:compose-bom:2026.05.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
