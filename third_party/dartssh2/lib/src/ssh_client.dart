@@ -235,6 +235,8 @@ class SSHClient {
       printTrace: printTrace,
       algorithms: algorithms,
       onVerifyHostKey: onVerifyHostKey,
+      onHostKeyVerificationStarted: _pauseHandshakeTimeout,
+      onHostKeyVerificationCompleted: _resumeHandshakeTimeout,
       onReady: _handleTransportReady,
       onPacket: _handlePacket,
       disableHostkeyVerification: disableHostkeyVerification,
@@ -756,6 +758,20 @@ class SSHClient {
     }
 
     _requestAuthentication();
+  }
+
+  void _pauseHandshakeTimeout() {
+    _handshakeTimeoutTimer?.cancel();
+    _handshakeTimeoutTimer = null;
+  }
+
+  void _resumeHandshakeTimeout() {
+    if (_transportReady || _authenticated.isCompleted) return;
+    final timeout = handshakeTimeout;
+    if (timeout != null) {
+      _handshakeTimeoutTimer?.cancel();
+      _handshakeTimeoutTimer = Timer(timeout, _handleHandshakeTimeout);
+    }
   }
 
   void _handleTransportClosed(SSHError? error) {

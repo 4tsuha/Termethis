@@ -37,7 +37,7 @@ class ChunkBuffer {
   }
 
   Uint8List view(int start, int length) {
-    return _buffer.sublist(start, start + length);
+    return Uint8List.sublistView(_buffer, start, start + length);
   }
 
   int get length {

@@ -6,6 +6,8 @@ import '../../../app/l10n/app_localizations.dart';
 import '../application/connection_profiles_controller.dart';
 import '../domain/connection_profile.dart';
 import '../../wake_on_lan/application/wake_on_lan_provider.dart';
+import '../../terminal/application/ssh_tabs_controller.dart';
+import '../../terminal/application/session_registry.dart';
 
 enum _ConnectionMenuAction { wakeOnLan, edit, delete }
 
@@ -24,6 +26,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final profiles = ref.watch(connectionProfilesProvider);
+    final sshTabs = ref.watch(sshTabsProvider).value ?? const [];
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.connectionsTitle)),
@@ -34,6 +37,36 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
             leading: const Icon(Icons.info_outline),
             actions: const [SizedBox.shrink()],
           ),
+          if (sshTabs.isNotEmpty)
+            SizedBox(
+              height: 56,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                itemCount: sshTabs.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final tab = sshTabs[index];
+                  return InputChip(
+                    avatar: Icon(
+                      tab.restored ? Icons.history : Icons.terminal,
+                      size: 18,
+                    ),
+                    label: Text(tab.title),
+                    onPressed: () => context.push(
+                      '/terminal/${tab.profileId}?tab=${tab.id}',
+                    ),
+                    onDeleted: () async {
+                      ref.read(sessionRegistryProvider).remove(tab.id);
+                      await ref.read(sshTabsProvider.notifier).close(tab.id);
+                    },
+                  );
+                },
+              ),
+            ),
           Expanded(
             child: profiles.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -57,7 +90,16 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
                           ),
                           title: Text(profile.name),
                           subtitle: Text(profile.target),
-                          onTap: () => context.push('/terminal/${profile.id}'),
+                          onTap: () async {
+                            final tabId = await ref
+                                .read(sshTabsProvider.notifier)
+                                .open(profile);
+                            if (context.mounted) {
+                              context.push(
+                                '/terminal/${profile.id}?tab=$tabId',
+                              );
+                            }
+                          },
                           trailing: _wakingProfileIds.contains(profile.id)
                               ? const Padding(
                                   padding: EdgeInsets.all(12),
@@ -141,6 +183,11 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
           ),
         );
         if (confirmed == true) {
+          final tabs = await ref.read(sshTabsProvider.future);
+          for (final tab in tabs.where((tab) => tab.profileId == profile.id)) {
+            ref.read(sessionRegistryProvider).remove(tab.id);
+            await ref.read(sshTabsProvider.notifier).close(tab.id);
+          }
           await ref
               .read(connectionProfilesProvider.notifier)
               .delete(profile.id);

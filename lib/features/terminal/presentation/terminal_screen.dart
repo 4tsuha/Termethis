@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,53 +11,125 @@ import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../connections/domain/credential_vault.dart';
 import '../../settings/application/app_font_controller.dart';
+import '../../settings/application/terminal_performance_settings_controller.dart';
+import '../../settings/domain/terminal_performance_settings.dart';
 import '../application/session_registry.dart';
 import '../application/ssh_session_controller.dart';
+import '../application/ssh_tabs_controller.dart';
+import '../domain/ssh_tab.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
+import '../../../infrastructure/display/android_terminal_window_controller.dart';
+import 'widgets/xterm_web_terminal.dart';
 
 class TerminalScreen extends ConsumerStatefulWidget {
-  const TerminalScreen({required this.profileId, super.key});
+  const TerminalScreen({
+    required this.profileId,
+    required this.tabId,
+    super.key,
+  });
 
   final String profileId;
+  final String tabId;
 
   @override
   ConsumerState<TerminalScreen> createState() => _TerminalScreenState();
 }
 
-class _TerminalScreenState extends ConsumerState<TerminalScreen> {
+class _TerminalScreenState extends ConsumerState<TerminalScreen>
+    with WidgetsBindingObserver {
   final _terminalFocusNode = FocusNode();
+  final _webTerminalKey = GlobalKey<XtermWebTerminalState>();
+  final _windowController = const AndroidTerminalWindowController();
   ConnectionProfile? _profile;
   SshSessionController? _session;
   SessionRegistry? _sessionRegistry;
-  bool _allowPop = false;
+  Timer? _performancePulseTimer;
+  String _webRenderer = '起動中';
+  bool _webTerminalFailed = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _profile = ref
         .read(connectionProfilesProvider.notifier)
         .findById(widget.profileId);
     if (_profile case final profile?) {
       _sessionRegistry = ref.read(sessionRegistryProvider);
-      _session = _sessionRegistry!.open(profile);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _startConnection());
+      _session = _sessionRegistry!.open(widget.tabId, profile);
+      if (ref.read(terminalPerformanceSettingsProvider).rendererMode ==
+          TerminalRendererMode.flutter) {
+        _session!.enableFlutterTerminalMirror();
+      }
+      _session!.setViewportVisible(true);
+      _session!.addTerminalActivityListener(_pulseHighFrameRate);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initializeTab());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyTerminalWindowSettings(
+          ref.read(terminalPerformanceSettingsProvider),
+        );
+      });
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+    _performancePulseTimer?.cancel();
+    _session?.removeTerminalActivityListener(_pulseHighFrameRate);
+    _session?.setViewportVisible(false);
     _terminalFocusNode.dispose();
-    if (_session != null) {
-      _sessionRegistry?.remove(widget.profileId);
-    }
+    unawaited(_windowController.restore());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final visible = state == AppLifecycleState.resumed;
+    _session?.setViewportVisible(visible);
+    if (visible) {
+      _webTerminalKey.currentState?.resume();
+    } else {
+      unawaited(
+        _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
+      );
+    }
+  }
+
+  Future<void> _initializeTab() async {
+    final tabs = await ref.read(sshTabsProvider.future);
+    SshTab? tab;
+    for (final item in tabs) {
+      if (item.id == widget.tabId) tab = item;
+    }
+    if (!mounted || tab == null || tab.restored) return;
+    if (_session?.status == SshSessionStatus.idle) {
+      await _startConnection();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final appFont = ref.watch(appFontProvider);
+    final performance = ref.watch(terminalPerformanceSettingsProvider);
+    ref.listen(terminalPerformanceSettingsProvider, (_, next) {
+      if (next.rendererMode == TerminalRendererMode.flutter) {
+        _session?.enableFlutterTerminalMirror();
+      }
+      unawaited(_applyTerminalWindowSettings(next));
+    });
+    final useWebRenderer =
+        performance.rendererMode == TerminalRendererMode.webgl &&
+        !_webTerminalFailed;
+    final rendererLabel = useWebRenderer
+        ? _webRenderer == 'webgl'
+              ? 'WebGL'
+              : _webRenderer
+        : 'Flutter互換';
+    final tabs = ref.watch(sshTabsProvider).value ?? const <SshTab>[];
     final session = _session;
     if (_profile == null || session == null) {
       return Scaffold(
@@ -63,12 +137,13 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
         body: Center(child: Text(l10n.profileNotFound)),
       );
     }
-
-    return PopScope(
-      canPop: _allowPop,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          _requestClose();
+    return PopScope<void>(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          unawaited(
+            _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
+          );
         }
       },
       child: ListenableBuilder(
@@ -76,80 +151,158 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
         builder: (context, child) {
           return Scaffold(
             backgroundColor: Colors.black,
+            resizeToAvoidBottomInset: performance.resizeForKeyboard,
             appBar: AppBar(
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(session.title, maxLines: 1),
                   Text(
-                    _statusText(l10n, session.status),
-                    style: Theme.of(context).textTheme.labelSmall,
+                    session.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _SessionStatusDot(status: session.status, size: 8),
+                      const SizedBox(width: 6),
+                      Text(
+                        _statusText(l10n, session.status),
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(width: 8),
+                      _RendererBadge(label: rendererLabel),
+                      if (tabs.length > 1) ...[
+                        const SizedBox(width: 8),
+                        _TabOverviewButton(
+                          label:
+                              '${tabs.indexWhere((tab) => tab.id == widget.tabId) + 1}/${tabs.length}',
+                          onTap: () => _showTabOverview(tabs),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
               actions: [
                 if (session.isConnected)
-                  IconButton(
+                  IconButton.filledTonal(
                     tooltip: l10n.disconnect,
-                    onPressed: _requestClose,
+                    onPressed: session.disconnect,
                     icon: const Icon(Icons.link_off),
                   ),
+                IconButton(
+                  tooltip: l10n.closeSessionTab,
+                  onPressed: _requestClose,
+                  icon: const Icon(Icons.close),
+                ),
               ],
+              bottom: performance.showSessionTabBar
+                  ? PreferredSize(
+                      preferredSize: const Size.fromHeight(60),
+                      child: _TerminalSessionBar(
+                        tabs: tabs,
+                        currentTabId: widget.tabId,
+                        registry: _sessionRegistry,
+                        showSearch: performance.showSearchButton,
+                        showCopy: performance.showCopyOutputButton,
+                        onSelect: (tab) => unawaited(_switchTab(tab)),
+                        onSearch: _sendSearchShortcut,
+                        onCopy: _copyLastOutput,
+                      ),
+                    )
+                  : null,
             ),
             body: SafeArea(
               top: false,
               child: Column(
                 children: [
                   Expanded(
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: TerminalView(
-                            session.terminal,
-                            focusNode: _terminalFocusNode,
-                            autofocus: true,
-                            keyboardType: TextInputType.text,
-                            enableSuggestions: true,
-                            textStyle: TerminalStyle(
-                              fontSize: 14,
-                              height: 1.15,
-                              fontFamily: 'CascadiaMono',
-                              fontFamilyFallback: [
-                                appFont.family,
-                                'Noto Color Emoji',
-                                'monospace',
-                              ],
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final fontSize = _terminalFontSize(
+                          constraints.maxWidth,
+                          MediaQuery.textScalerOf(context),
+                        );
+                        return Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (_) => _pulseHighFrameRate(),
+                                onPointerMove: (_) => _pulseHighFrameRate(),
+                                child: useWebRenderer
+                                    ? XtermWebTerminal(
+                                        key: _webTerminalKey,
+                                        session: session,
+                                        scrollbackLines:
+                                            performance.scrollbackLines,
+                                        japaneseFontFamily: appFont.family,
+                                        fontSize: fontSize,
+                                        mouseInput: performance.mouseInput,
+                                        longPressRightClick:
+                                            performance.longPressRightClick,
+                                        tapToMovePromptCursor:
+                                            performance.tapToMovePromptCursor,
+                                        onRendererChanged: (renderer) {
+                                          if (mounted &&
+                                              renderer != _webRenderer) {
+                                            setState(
+                                              () => _webRenderer = renderer,
+                                            );
+                                          }
+                                        },
+                                        onFatalError:
+                                            _fallbackToFlutterTerminal,
+                                      )
+                                    : TerminalView(
+                                        session.terminal,
+                                        focusNode: _terminalFocusNode,
+                                        autofocus: true,
+                                        keyboardType: TextInputType.text,
+                                        enableSuggestions: true,
+                                        textStyle: TerminalStyle(
+                                          fontSize: fontSize,
+                                          height: 1.15,
+                                          fontFamily: 'CascadiaMono',
+                                          fontFamilyFallback: [
+                                            appFont.family,
+                                            'Noto Color Emoji',
+                                            'monospace',
+                                          ],
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 6,
+                                        ),
+                                      ),
+                              ),
                             ),
-                            padding: const EdgeInsets.all(8),
-                          ),
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: _StatusBadge(
-                            status: session.status,
-                            label: _statusText(l10n, session.status),
-                          ),
-                        ),
-                        if ({
-                          SshSessionStatus.failed,
-                          SshSessionStatus.reconnectPrompt,
-                        }.contains(session.status))
-                          Positioned.fill(
-                            child: _FailurePanel(
-                              message: _failureText(l10n, session.failure),
-                              retryLabel: l10n.retry,
-                              onRetry: _startConnection,
-                            ),
-                          ),
-                      ],
+                            if ({
+                              SshSessionStatus.idle,
+                              SshSessionStatus.closed,
+                              SshSessionStatus.failed,
+                              SshSessionStatus.reconnectPrompt,
+                            }.contains(session.status))
+                              Positioned.fill(
+                                child: _FailurePanel(
+                                  message: session.failure == null
+                                      ? l10n.sessionRestoredMessage
+                                      : _failureText(l10n, session.failure),
+                                  retryLabel: l10n.retry,
+                                  onRetry: _startConnection,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   _SpecialKeyBar(
                     session: session,
                     pasteLabel: l10n.paste,
                     onPaste: _paste,
-                    onKeySent: _terminalFocusNode.requestFocus,
+                    onKeySent: _focusTerminal,
                   ),
                 ],
               ),
@@ -160,12 +313,174 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
     );
   }
 
+  Future<void> _switchTab(SshTab tab) async {
+    if (tab.id == widget.tabId) return;
+    await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
+    if (!mounted) return;
+    context.pushReplacement('/terminal/${tab.profileId}?tab=${tab.id}');
+  }
+
+  Future<void> _showTabOverview(List<SshTab> tabs) async {
+    final selected = await showModalBottomSheet<SshTab>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'SSHセッション',
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                  ),
+                  Text('${tabs.length}件'),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: tabs.length,
+                itemBuilder: (context, index) {
+                  final tab = tabs[index];
+                  final tabSession = _sessionRegistry?.find(tab.id);
+                  final status = tabSession?.status ?? SshSessionStatus.closed;
+                  final statusLabel = tabSession == null && tab.restored
+                      ? '復元済み'
+                      : _statusText(AppLocalizations.of(context), status);
+                  final selected = tab.id == widget.tabId;
+                  return ListTile(
+                    leading: _SessionStatusIcon(
+                      status: status,
+                      restored: tab.restored,
+                    ),
+                    title: Text(tab.title),
+                    subtitle: Text(statusLabel),
+                    selected: selected,
+                    trailing: selected
+                        ? const Icon(Icons.check_circle)
+                        : const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(context, tab),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && mounted) await _switchTab(selected);
+  }
+
+  Future<void> _applyTerminalWindowSettings(
+    TerminalPerformanceSettings settings,
+  ) => _windowController.apply(
+    keepScreenAwake: settings.keepScreenAwake,
+    resizeForKeyboard: settings.resizeForKeyboard,
+  );
+
+  void _sendSearchShortcut() {
+    final session = _session;
+    if (session == null || !session.isConnected) return;
+    final mode = ref.read(terminalPerformanceSettingsProvider).searchMode;
+    session.sendInput(terminalSearchSequence(mode));
+    _focusTerminal();
+  }
+
+  Future<void> _copyLastOutput() async {
+    final performance = ref.read(terminalPerformanceSettingsProvider);
+    String? output;
+    if (performance.rendererMode == TerminalRendererMode.webgl &&
+        !_webTerminalFailed) {
+      output = await _webTerminalKey.currentState?.copyLastCommandOutput();
+    }
+    if (!mounted) return;
+    if (output == null || output.isEmpty) {
+      await _showShellIntegrationHelp();
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: output));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('最後のコマンド出力をコピーしました。')));
+    }
+  }
+
+  Future<void> _showShellIntegrationHelp() {
+    const markerTest = "printf '\\e]133;A\\aPrompt\\e]133;B\\a'";
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'シェル統合が必要です',
+              style: Theme.of(sheetContext).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '最後の出力コピーとプロンプト内カーソル移動にはOSC 133マーカーが必要です。starship、fish 3.6以降、または対応するbash/zsh設定を使用してください。',
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(const ClipboardData(text: markerTest));
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+              },
+              icon: const Icon(Icons.copy),
+              label: const Text('確認コマンドをコピー'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _fallbackToFlutterTerminal(String _) {
+    if (!mounted || _webTerminalFailed) return;
+    _session?.enableFlutterTerminalMirror();
+    setState(() => _webTerminalFailed = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('WebGL端末を利用できないため互換描画へ切り替えました。')),
+    );
+  }
+
+  void _pulseHighFrameRate() {
+    final mode = ref.read(terminalPerformanceSettingsProvider).refreshRateMode;
+    if (mode != RefreshRateMode.balanced || _performancePulseTimer != null) {
+      return;
+    }
+    _performancePulseTimer = Timer(const Duration(milliseconds: 100), () {
+      _performancePulseTimer = null;
+    });
+    unawaited(ref.read(displayPerformanceControllerProvider).pulseHigh());
+  }
+
   Future<void> _startConnection() async {
     final session = _session;
     final profile = _profile;
     if (!mounted || session == null || profile == null) {
       return;
     }
+
+    await ref.read(sshTabsProvider.notifier).markActive(widget.tabId);
 
     final authentication = await _resolveAuthentication(profile, session);
     if (!mounted || authentication == null) {
@@ -181,7 +496,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
       onInteractivePrompt: _answerInteractivePrompt,
     );
     if (mounted && session.isConnected) {
-      _terminalFocusNode.requestFocus();
+      _focusTerminal();
     }
   }
 
@@ -375,8 +690,22 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
       }
     }
 
-    session.paste(text);
-    _terminalFocusNode.requestFocus();
+    final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
+    if (renderer == TerminalRendererMode.webgl && !_webTerminalFailed) {
+      _webTerminalKey.currentState?.paste(text);
+    } else {
+      session.paste(text);
+    }
+    _focusTerminal();
+  }
+
+  void _focusTerminal() {
+    final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
+    if (renderer == TerminalRendererMode.webgl && !_webTerminalFailed) {
+      _webTerminalKey.currentState?.focus();
+    } else {
+      _terminalFocusNode.requestFocus();
+    }
   }
 
   Future<void> _requestClose() async {
@@ -414,18 +743,20 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
       }
       await session.disconnect();
     }
-    await _finishAndPop();
+    _sessionRegistry?.remove(widget.tabId);
+    await ref.read(sshTabsProvider.notifier).close(widget.tabId);
+    final remaining = ref.read(sshTabsProvider).value ?? const <SshTab>[];
+    if (!mounted) return;
+    if (remaining.isNotEmpty) {
+      final next = remaining.last;
+      context.pushReplacement('/terminal/${next.profileId}?tab=${next.id}');
+    } else {
+      context.pop();
+    }
   }
 
   Future<void> _finishAndPop() async {
-    if (!mounted) {
-      return;
-    }
-    setState(() => _allowPop = true);
-    await Future<void>.delayed(Duration.zero);
-    if (mounted) {
-      context.pop();
-    }
+    if (mounted) context.pop();
   }
 }
 
@@ -570,6 +901,331 @@ class _InteractivePromptDialogState extends State<_InteractivePromptDialog> {
   }
 }
 
+class _TerminalSessionBar extends StatelessWidget {
+  const _TerminalSessionBar({
+    required this.tabs,
+    required this.currentTabId,
+    required this.registry,
+    required this.showSearch,
+    required this.showCopy,
+    required this.onSelect,
+    required this.onSearch,
+    required this.onCopy,
+  });
+
+  final List<SshTab> tabs;
+  final String currentTabId;
+  final SessionRegistry? registry;
+  final bool showSearch;
+  final bool showCopy;
+  final ValueChanged<SshTab> onSelect;
+  final VoidCallback onSearch;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: SizedBox(
+        height: 60,
+        child: Row(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(8, 5, 4, 5),
+                itemCount: tabs.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 4),
+                itemBuilder: (context, index) {
+                  final tab = tabs[index];
+                  return _SessionTabButton(
+                    tab: tab,
+                    session: registry?.find(tab.id),
+                    selected: tab.id == currentTabId,
+                    onTap: () => onSelect(tab),
+                  );
+                },
+              ),
+            ),
+            if (showSearch || showCopy)
+              Container(
+                margin: const EdgeInsets.fromLTRB(4, 6, 8, 6),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: colors.outlineVariant),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showSearch)
+                      IconButton(
+                        tooltip: '検索',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onSearch,
+                        icon: const Icon(Icons.search),
+                      ),
+                    if (showSearch && showCopy)
+                      SizedBox(
+                        height: 24,
+                        child: VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                    if (showCopy)
+                      IconButton(
+                        tooltip: '最後の出力をコピー',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onCopy,
+                        icon: const Icon(Icons.content_copy_outlined),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionTabButton extends StatelessWidget {
+  const _SessionTabButton({
+    required this.tab,
+    required this.session,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SshTab tab;
+  final SshSessionController? session;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final listenable = session;
+    if (listenable == null) return _buildButton(context, null);
+    return ListenableBuilder(
+      listenable: listenable,
+      builder: (context, _) => _buildButton(context, listenable.status),
+    );
+  }
+
+  Widget _buildButton(BuildContext context, SshSessionStatus? status) {
+    final colors = Theme.of(context).colorScheme;
+    final effectiveStatus = status ?? SshSessionStatus.closed;
+    final statusLabel = status == null && tab.restored
+        ? '復元済み'
+        : _statusText(AppLocalizations.of(context), effectiveStatus);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${tab.title}、$statusLabel',
+      child: Material(
+        color: selected ? colors.primaryContainer : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minWidth: 132, maxWidth: 184),
+            padding: const EdgeInsets.fromLTRB(10, 5, 12, 5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? colors.primary : colors.outlineVariant,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: _sessionStatusColor(
+                      colors,
+                      effectiveStatus,
+                    ).withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    _sessionStatusIcon(effectiveStatus, restored: tab.restored),
+                    size: 17,
+                    color: _sessionStatusColor(colors, effectiveStatus),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tab.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: _sessionStatusColor(colors, effectiveStatus),
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionStatusDot extends StatelessWidget {
+  const _SessionStatusDot({required this.status, this.size = 8});
+
+  final SshSessionStatus status;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: _sessionStatusColor(Theme.of(context).colorScheme, status),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _SessionStatusIcon extends StatelessWidget {
+  const _SessionStatusIcon({required this.status, required this.restored});
+
+  final SshSessionStatus status;
+  final bool restored;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color = _sessionStatusColor(colors, status);
+    return CircleAvatar(
+      backgroundColor: color.withValues(alpha: 0.14),
+      foregroundColor: color,
+      child: Icon(_sessionStatusIcon(status, restored: restored), size: 20),
+    );
+  }
+}
+
+class _TabOverviewButton extends StatelessWidget {
+  const _TabOverviewButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(5, 1, 3, 1),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelSmall),
+              const Icon(Icons.arrow_drop_down, size: 15),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RendererBadge extends StatelessWidget {
+  const _RendererBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Color _sessionStatusColor(ColorScheme colors, SshSessionStatus status) =>
+    switch (status) {
+      SshSessionStatus.connected => const Color(0xff2e7d32),
+      SshSessionStatus.connecting ||
+      SshSessionStatus.verifyingHost ||
+      SshSessionStatus.authenticating ||
+      SshSessionStatus.openingPty ||
+      SshSessionStatus.closing => colors.tertiary,
+      SshSessionStatus.failed ||
+      SshSessionStatus.reconnectPrompt => colors.error,
+      SshSessionStatus.idle || SshSessionStatus.closed => colors.outline,
+    };
+
+IconData _sessionStatusIcon(
+  SshSessionStatus status, {
+  required bool restored,
+}) => switch (status) {
+  SshSessionStatus.connected => Icons.terminal,
+  SshSessionStatus.connecting ||
+  SshSessionStatus.verifyingHost ||
+  SshSessionStatus.authenticating ||
+  SshSessionStatus.openingPty ||
+  SshSessionStatus.closing => Icons.sync,
+  SshSessionStatus.failed ||
+  SshSessionStatus.reconnectPrompt => Icons.error_outline,
+  SshSessionStatus.idle ||
+  SshSessionStatus.closed => restored ? Icons.history : Icons.terminal_outlined,
+};
+
 class _SpecialKeyBar extends StatelessWidget {
   const _SpecialKeyBar({
     required this.session,
@@ -643,41 +1299,6 @@ class _SpecialKeyBar extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status, required this.label});
-
-  final SshSessionStatus status;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final connected = status == SshSessionStatus.connected;
-    final failed = {
-      SshSessionStatus.failed,
-      SshSessionStatus.reconnectPrompt,
-    }.contains(status);
-    final color = connected
-        ? Colors.green
-        : failed
-        ? Colors.red
-        : Colors.orange;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        child: Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
-        ),
-      ),
-    );
-  }
-}
-
 class _FailurePanel extends StatelessWidget {
   const _FailurePanel({
     required this.message,
@@ -732,6 +1353,15 @@ String _statusText(AppLocalizations l10n, SshSessionStatus status) {
     SshSessionStatus.closed => l10n.statusClosed,
     SshSessionStatus.failed => l10n.statusFailed,
   };
+}
+
+double _terminalFontSize(double width, TextScaler textScaler) {
+  final baseSize = switch (width) {
+    < 400 => 12.0,
+    < 600 => 13.0,
+    _ => 14.0,
+  };
+  return textScaler.scale(baseSize).clamp(baseSize, 18.0);
 }
 
 String _failureText(AppLocalizations l10n, SshFailure? failure) {

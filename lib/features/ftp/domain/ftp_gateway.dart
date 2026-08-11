@@ -1,4 +1,7 @@
-enum FtpSecurityMode { ftp, ftpes, ftps }
+import '../../terminal/domain/ssh_gateway.dart';
+import '../../connections/domain/connection_profile.dart';
+
+enum FtpSecurityMode { ftp, ftpes, ftps, sftp }
 
 class FtpConnectRequest {
   const FtpConnectRequest({
@@ -8,6 +11,9 @@ class FtpConnectRequest {
     required this.username,
     required this.password,
     required this.securityMode,
+    this.onUnknownHostKey,
+    this.sshProfile,
+    this.sshAuthentication,
   });
 
   final String tabName;
@@ -16,8 +22,39 @@ class FtpConnectRequest {
   final String username;
   final String password;
   final FtpSecurityMode securityMode;
+  final HostKeyApprovalHandler? onUnknownHostKey;
+  final ConnectionProfile? sshProfile;
+  final SshAuthentication? sshAuthentication;
 
   String get target => '$username@$host:$port';
+
+  FtpConnectRequest withHostKeyApproval(HostKeyApprovalHandler handler) {
+    return FtpConnectRequest(
+      tabName: tabName,
+      host: host,
+      port: port,
+      username: username,
+      password: password,
+      securityMode: securityMode,
+      onUnknownHostKey: handler,
+      sshProfile: sshProfile,
+      sshAuthentication: sshAuthentication,
+    );
+  }
+
+  FtpConnectRequest withSshAuthentication(SshAuthentication authentication) {
+    return FtpConnectRequest(
+      tabName: tabName,
+      host: host,
+      port: port,
+      username: username,
+      password: password,
+      securityMode: securityMode,
+      onUnknownHostKey: onUnknownHostKey,
+      sshProfile: sshProfile,
+      sshAuthentication: authentication,
+    );
+  }
 }
 
 enum FtpEntryKind { directory, file, link, unknown }

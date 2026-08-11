@@ -36,6 +36,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get cancel => 'キャンセル';
 
   @override
+  String get discardChangesTitle => '変更を破棄しますか？';
+
+  @override
+  String get discardChangesMessage => '保存していない入力内容は失われます。';
+
+  @override
+  String get discardChanges => '破棄して戻る';
+
+  @override
   String get save => '保存';
 
   @override
@@ -233,7 +242,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get closeSessionTitle => 'SSH接続を切断しますか';
 
   @override
-  String get closeSessionMessage => '実行中のシェルは終了します。';
+  String get closeSessionMessage => 'このタブを閉じると、実行中のシェルも終了します。';
+
+  @override
+  String get closeSessionTab => 'セッションタブを閉じる';
+
+  @override
+  String get sessionRestoredMessage => '保存されたタブです。SSHセッションは切断されています。再接続してください。';
 
   @override
   String get failureDnsLookup => 'ホスト名を解決できませんでした。ホスト名とネットワークを確認してください。';
@@ -334,6 +349,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get ftpImplicitTls => 'FTPS（暗黙的TLS）';
 
   @override
+  String get sftp => 'SFTP（SSHファイル転送）';
+
+  @override
+  String get sftpSecurityNotice =>
+      'SFTPはSSHの暗号化通信とknown_hosts確認を使用します。パスワードは保存しません。';
+
+  @override
+  String get sftpSavedConnection => '保存済みSSH接続先（任意）';
+
+  @override
+  String sftpUsesPrivateKey(String name) {
+    return '保存済み秘密鍵を使用: $name';
+  }
+
+  @override
   String get ftpPlainWarning =>
       'FTPではパスワードと通信内容が暗号化されません。信頼できるネットワークでのみ使用してください。';
 
@@ -418,16 +448,79 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTerminalFont => 'ターミナルフォント';
 
   @override
-  String get settingsTerminalFontValue => 'Cascadia Mono';
+  String get settingsTerminalFontValue => '英数字・罫線にはCascadia Monoを固定で使用します。';
+
+  @override
+  String get settingsTerminalRenderer => 'ターミナル描画エンジン';
+
+  @override
+  String get settingsSelectTerminalRenderer => '描画エンジンを選択';
+
+  @override
+  String get terminalRendererWebgl => 'xterm.js WebGL';
+
+  @override
+  String get terminalRendererWebglDescription =>
+      '高速更新するTUI向けの既定値です。WebGLを使えない環境ではDOM描画へ自動で切り替わります。';
+
+  @override
+  String get terminalRendererFlutter => 'Flutter互換描画';
+
+  @override
+  String get terminalRendererFlutterDescription =>
+      'WebViewで表示や入力に問題がある場合の互換モードです。描画性能は低くなることがあります。';
 
   @override
   String get settingsJapaneseFont => '日本語フォント';
 
   @override
-  String get settingsJapaneseFontMessage => 'アプリUIとターミナルの日本語字形に使用します。';
+  String get settingsJapaneseFontMessage =>
+      'アプリUIとターミナルの日本語字形へ反映します。英数字と罫線はCascadia Monoのままです。';
 
   @override
   String get settingsSelectFont => '日本語フォントを選択';
+
+  @override
+  String get settingsRefreshRate => '画面の滑らかさ';
+
+  @override
+  String get settingsSelectRefreshRate => 'リフレッシュレート制御を選択';
+
+  @override
+  String get refreshRateAdaptive => '適応';
+
+  @override
+  String get refreshRateAdaptiveDescription =>
+      'OSに評価を任せ、操作と端末出力中だけ高いフレームレートを要求します。';
+
+  @override
+  String get refreshRateBalanced => 'バランス';
+
+  @override
+  String get refreshRateBalancedDescription =>
+      '通常は約60Hzで動作し、操作と大量出力中だけ高いフレームレートを要求します。';
+
+  @override
+  String get refreshRateMaximum => '最大';
+
+  @override
+  String get refreshRateMaximumDescription =>
+      '対応する最高リフレッシュレートを継続して要求します。消費電力が増える場合があります。';
+
+  @override
+  String get settingsScrollbackLines => 'スクロールバック行数';
+
+  @override
+  String settingsScrollbackLinesValue(int lines) {
+    return '新しく開くSSHセッションで$lines行を保持します。行数を増やすとメモリ使用量も増えます。';
+  }
+
+  @override
+  String get settingsBackgroundSession => 'バックグラウンド接続モード';
+
+  @override
+  String get settingsBackgroundSessionDescription =>
+      'オンにすると接続中だけ常駐通知を表示し、画面消灯中の維持を補助します。OSの省電力制御による切断は防げません。';
 
   @override
   String get fontNotoSansJp => 'Noto Sans JP';
@@ -448,7 +541,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsFtpSecurity => '安全な接続を推奨';
 
   @override
-  String get settingsFtpSecurityMessage => '可能な接続先ではFTPESまたはFTPSを選んでください。';
+  String get settingsFtpSecurityMessage =>
+      '平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。';
 
   @override
   String get settingsAboutSection => 'アプリについて';

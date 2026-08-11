@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../infrastructure/ftp/ftp_connect_gateway.dart';
+import '../../../infrastructure/ftp/dart_sftp_gateway.dart';
+import '../../terminal/application/session_registry.dart';
 import '../domain/ftp_gateway.dart';
 
 final ftpGatewayProvider = Provider<FtpGateway>(
-  (ref) => const FtpConnectGateway(),
+  (ref) => RoutingFtpGateway(
+    const FtpConnectGateway(),
+    DartSftpGateway(ref.watch(hostKeyRepositoryProvider)),
+  ),
 );
 
 final ftpTabsProvider = NotifierProvider<FtpTabsController, List<FtpTabState>>(

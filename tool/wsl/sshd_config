@@ -1,0 +1,20 @@
+Port 22222
+ListenAddress 127.0.0.1
+AddressFamily inet
+PidFile /run/sshd-vbterminal-test.pid
+
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+PermitRootLogin no
+UsePAM yes
+AllowUsers vbterminal-test
+
+AllowAgentForwarding no
+AllowTcpForwarding no
+GatewayPorts no
+PermitTunnel no
+X11Forwarding no
+
+Subsystem sftp internal-sftp
+LogLevel VERBOSE

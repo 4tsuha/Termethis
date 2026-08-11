@@ -15,6 +15,7 @@ import 'package:ssh_terminal_ja/features/connections/domain/private_key_importer
 import 'package:ssh_terminal_ja/features/settings/application/app_font_controller.dart';
 import 'package:ssh_terminal_ja/features/settings/domain/app_font.dart';
 import 'package:ssh_terminal_ja/features/terminal/application/session_registry.dart';
+import 'package:ssh_terminal_ja/features/terminal/application/ssh_tabs_controller.dart';
 import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
 import 'package:ssh_terminal_ja/features/wake_on_lan/application/wake_on_lan_provider.dart';
 import 'package:ssh_terminal_ja/features/wake_on_lan/domain/wake_on_lan.dart';
@@ -79,10 +80,27 @@ void main() {
 
     expect(find.text('接続済み'), findsWidgets);
     expect(tester.takeException(), isNull);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    final tab = (await container.read(sshTabsProvider.future)).single;
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('接続先'), findsOneWidget);
+    expect(
+      container.read(sessionRegistryProvider).find(tab.id)?.isConnected,
+      isTrue,
+    );
   });
 
   testWidgets('日本語IMEの確定文字列をUTF-8でSSHへ送る', (tester) async {
     final gateway = _WidgetTestGateway();
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(450, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [sshGatewayProvider.overrideWithValue(gateway)],
@@ -115,13 +133,90 @@ void main() {
     final terminalView = tester.widget<TerminalView>(find.byType(TerminalView));
     expect(terminalView.textStyle.fontFamily, 'CascadiaMono');
     expect(terminalView.textStyle.fontFamilyFallback.first, 'Mejiro');
-    expect(terminalView.textStyle.fontSize, 14);
+    expect(terminalView.textStyle.fontSize, 13);
 
-    tester.testTextInput.enterText('日本語');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'にほん',
+        selection: TextSelection.collapsed(offset: 3),
+        composing: TextRange(start: 0, end: 3),
+      ),
+    );
+    await tester.pump();
+    expect(gateway.connection.writes, isEmpty);
+
+    tester.view.physicalSize = const Size(900, 450);
+    await tester.pumpAndSettle();
+    expect(gateway.connection.writes, isEmpty);
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '日本語',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
     await tester.pump();
 
     expect(gateway.connection.writes, hasLength(1));
     expect(utf8.decode(gateway.connection.writes.single), '日本語');
+
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(gateway.connection.writes, hasLength(2));
+    expect(utf8.decode(gateway.connection.writes.last), '\r');
+  });
+
+  testWidgets('編集途中の戻る操作では破棄確認を表示する', (tester) async {
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('接続先を追加'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, '編集中');
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('変更を破棄しますか？'), findsOneWidget);
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+    expect(find.text('編集中'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('破棄して戻る'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('接続先'), findsOneWidget);
+  });
+
+  testWidgets('600dp以上ではNavigationRailへ切り替える', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(700, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+
+    tester.view.physicalSize = const Size(599, 900);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+
+    tester.view.physicalSize = const Size(320, 640);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('検索ボタン'), findsOneWidget);
+    expect(find.text('最後の出力をコピー'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('秘密鍵を選択してVault参照だけを接続先へ保存する', (tester) async {

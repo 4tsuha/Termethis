@@ -14,3 +14,17 @@ RFC 4254 section 5.4 permits sending another channel request before the prior
 reply and requires replies for the same channel to remain in request order.
 
 The app enables this option only for its interactive terminal connection.
+
+## Receive window adjustment batching
+
+Channel receive windows are replenished after half of the advertised window
+has been consumed instead of sending `SSH_MSG_CHANNEL_WINDOW_ADJUST` for every
+incoming data packet. This preserves SSH flow control while avoiding an
+encrypted response packet for each terminal output packet.
+
+## Native AES-CTR and ETM receive path
+
+ETM verification reads the packet length, ciphertext, and MAC as receive-buffer
+views rather than copying and joining the encrypted packet first.
+AES-CTR and HMAC-SHA2 ETM use `webcrypto`'s in-process BoringSSL implementation
+when available, with the Pointy Castle path retained for other algorithms.

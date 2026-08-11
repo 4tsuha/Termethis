@@ -14,6 +14,9 @@
 - DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
 - 同じ接続先も並行利用できるSSH複数タブ・複数セッション
 - アプリ再起動後に切断状態で復元するSSHセッションタブ
+- シェル／tmux／zellij／screen向け検索ボタンとOSC 133対応の出力コピー
+- TUIマウス、長押し右クリック、対応プロンプト内のタップ移動
+- タブバー、画面スリープ抑止、IME表示時リサイズの個別設定
 - Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
 - SSH接続準備の並列化とPTY・Shell要求のパイプライン化
 - 接続先ごとのWake on LAN設定とMagic Packet送信
@@ -51,6 +54,8 @@ npm run build
 
 ### WSLを使うAndroid SSH試験
 
+ネイティブ暗号のローカルビルドにはCMake、C/C++コンパイラー、NASMが必要です。GitHub Actionsではこれらをワークフロー内で導入します。
+
 通常のWSL環境と分離したテスト用sshdを起動し、エミュレータだけを接続します。パスワードはテストのたびに指定し、アプリには保存しません。
 
 ```powershell
@@ -60,14 +65,14 @@ adb -s emulator-5554 reverse tcp:22222 tcp:22222
 
 VBTerminalの接続先は`vbterminal-test@127.0.0.1:22222`にします。終了時は`.\tool\wsl\stop_test_ssh.ps1`を実行します。
 
-ヘッドレスAVDでWebGLを検証する場合は`-gpu host`を使用してください。API 35のSwiftShaderではxterm.jsの文字テクスチャが欠けることを確認しています。
+ヘッドレスAVDでWebGLを検証する場合は`-gpu host`を使用してください。環境別の既知事項は[TESTING.md](TESTING.md)にまとめています。
 
 WebGLの初期化やWebView通信に失敗した場合は、そのセッション画面だけFlutter互換描画へ自動的に切り替わります。設定値は変更しないため、次に端末画面を開いたときはWebGLを再試行します。
 
-設計、安全性、性能、実機試験の詳細は[ARCHITECTURE.md](ARCHITECTURE.md)を参照してください。
+設計と安全性は[ARCHITECTURE.md](ARCHITECTURE.md)、評価環境と実測結果は[TESTING.md](TESTING.md)を参照してください。
 
 ## 高リフレッシュレートの検証状況
 
-既定の「適応」は固定Hzを要求せずOne UIへ選択を任せます。「バランス」は通常60Hz相当で、タッチ、スクロール、端末出力中だけ高Hzを要求し、停止から約750ms後に戻します。「最大」だけが最高Hzを継続要求します。
+既定の「適応」は固定Hzを要求せずOSに評価を任せます。「バランス」は通常60Hz相当で、タッチ、スクロール、端末出力中だけ高Hzを要求し、停止から約750ms後に戻します。「最大」だけが最高Hzを継続要求します。
 
-省電力、熱制限、分割画面ではAndroidの判断を優先します。SO-41Aの可変リフレッシュレートと、SCG26の120Hz、Samsung Keyboard、DeX、画面消灯中の接続維持は未テストです。
+省電力、熱制限、分割画面ではOSの判断を優先します。可変リフレッシュレート、高Hz、各種IME、デスクトップ表示、画面消灯中の接続維持は環境別に検証します。

@@ -354,9 +354,10 @@ class SSHChannelController {
 
     if (_done.isCompleted) return;
     if (_remoteStream.isPaused) return;
-    if (_localWindow <= 0) return;
+    if (_localWindow > localInitialWindowSize ~/ 2) return;
 
     final bytesToAdd = localInitialWindowSize - _localWindow;
+    if (bytesToAdd <= 0) return;
     _localWindow = localInitialWindowSize;
 
     sendMessage(

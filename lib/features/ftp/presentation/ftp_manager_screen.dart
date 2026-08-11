@@ -4,8 +4,12 @@ import 'package:intl/intl.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../shared/utils/normalize_ascii_input.dart';
+import '../../connections/application/connection_profiles_controller.dart';
+import '../../connections/domain/connection_profile.dart';
+import '../../connections/domain/credential_vault.dart';
 import '../application/ftp_tabs_controller.dart';
 import '../domain/ftp_gateway.dart';
+import '../../terminal/domain/ssh_gateway.dart';
 
 enum _EntryAction { rename, delete }
 
@@ -37,14 +41,14 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
         title: Text(l10n.ftpTitle),
         actions: [
           IconButton(
-            onPressed: () => _showConnectionDialog(context),
+            onPressed: _showConnectionDialog,
             tooltip: l10n.ftpAddTab,
             icon: const Icon(Icons.add_link),
           ),
         ],
       ),
       body: tabs.isEmpty
-          ? _EmptyFtpState(onAdd: () => _showConnectionDialog(context))
+          ? _EmptyFtpState(onAdd: _showConnectionDialog)
           : Column(
               children: [
                 _ConnectionTabs(
@@ -52,7 +56,7 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
                   selectedId: activeId!,
                   onSelected: (id) => setState(() => _selectedTabId = id),
                   onClose: (tab) => _confirmCloseTab(context, tab),
-                  onAdd: () => _showConnectionDialog(context),
+                  onAdd: _showConnectionDialog,
                 ),
                 const Divider(height: 1),
                 Expanded(child: _buildTabContent(activeTab!)),
@@ -201,7 +205,7 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
-  Future<void> _showConnectionDialog(BuildContext context) async {
+  Future<void> _showConnectionDialog() async {
     final request = await showModalBottomSheet<FtpConnectRequest>(
       context: context,
       isScrollControlled: true,
@@ -209,8 +213,123 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
       builder: (context) => const _FtpConnectionSheet(),
     );
     if (request == null || !mounted) return;
-    final id = ref.read(ftpTabsProvider.notifier).openTab(request);
+    var configuredRequest = request.securityMode == FtpSecurityMode.sftp
+        ? request.withHostKeyApproval(_approveSftpHostKey)
+        : request;
+    final profile = request.sshProfile;
+    if (request.securityMode == FtpSecurityMode.sftp && profile != null) {
+      if (profile.authenticationType == AuthenticationType.privateKey) {
+        final reference = profile.credentialReference;
+        if (reference == null) return;
+        try {
+          final credential = await ref
+              .read(credentialVaultProvider)
+              .readPrivateKey(CredentialHandle(reference));
+          if (credential == null || !mounted) return;
+          var passphrase = credential.passphrase;
+          if (credential.isEncrypted &&
+              (passphrase == null || passphrase.isEmpty)) {
+            passphrase = await _askSftpKeyPassphrase(credential.label);
+            if (passphrase == null) return;
+          }
+          configuredRequest = configuredRequest.withSshAuthentication(
+            SshPrivateKeyAuthentication(
+              pem: credential.pem,
+              passphrase: passphrase,
+            ),
+          );
+        } on CredentialVaultFailure {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLocalizations.of(context).privateKeyInvalid),
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        configuredRequest = configuredRequest.withSshAuthentication(
+          SshPasswordAuthentication(request.password),
+        );
+      }
+    }
+    final id = ref.read(ftpTabsProvider.notifier).openTab(configuredRequest);
     setState(() => _selectedTabId = id);
+  }
+
+  Future<String?> _askSftpKeyPassphrase(String label) async {
+    final controller = TextEditingController();
+    final l10n = AppLocalizations.of(context);
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.keyPassphraseTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: l10n.keyPassphraseMessage(label),
+          ),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: Text(l10n.connect),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool> _approveSftpHostKey(HostKeyInfo info) async {
+    if (!mounted) return false;
+    final l10n = AppLocalizations.of(context);
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.security),
+            title: Text(l10n.hostKeyDialogTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.hostKeyDialogMessage),
+                  const SizedBox(height: 16),
+                  Text('${info.host}:${info.port}'),
+                  const SizedBox(height: 12),
+                  Text(l10n.hostKeyAlgorithm),
+                  SelectableText(info.algorithm),
+                  const SizedBox(height: 12),
+                  Text(l10n.hostKeyFingerprint),
+                  SelectableText(info.fingerprintSha256),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(l10n.reject),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(l10n.trustAndConnect),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _showNewFolderDialog(
@@ -561,14 +680,15 @@ class _CenteredStatus extends StatelessWidget {
   }
 }
 
-class _FtpConnectionSheet extends StatefulWidget {
+class _FtpConnectionSheet extends ConsumerStatefulWidget {
   const _FtpConnectionSheet();
 
   @override
-  State<_FtpConnectionSheet> createState() => _FtpConnectionSheetState();
+  ConsumerState<_FtpConnectionSheet> createState() =>
+      _FtpConnectionSheetState();
 }
 
-class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
+class _FtpConnectionSheetState extends ConsumerState<_FtpConnectionSheet> {
   final _formKey = GlobalKey<FormState>();
   final _tabName = TextEditingController();
   final _host = TextEditingController();
@@ -576,6 +696,7 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   FtpSecurityMode _securityMode = FtpSecurityMode.ftp;
+  ConnectionProfile? _sshProfile;
   bool _obscurePassword = true;
 
   @override
@@ -591,6 +712,7 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final profiles = ref.watch(connectionProfilesProvider).value ?? const [];
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -620,6 +742,41 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 20),
+              if (_securityMode == FtpSecurityMode.sftp) ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _sshProfile?.id,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: l10n.sftpSavedConnection,
+                    prefixIcon: const Icon(Icons.terminal),
+                  ),
+                  items: [
+                    for (final profile in profiles)
+                      DropdownMenuItem(
+                        value: profile.id,
+                        child: Text(
+                          profile.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (id) {
+                    final profile = profiles.firstWhere(
+                      (item) => item.id == id,
+                    );
+                    setState(() {
+                      _sshProfile = profile;
+                      _tabName.text = profile.name;
+                      _host.text = profile.host;
+                      _port.text = profile.port.toString();
+                      _username.text = profile.username;
+                      _password.clear();
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: _tabName,
                 decoration: InputDecoration(
@@ -666,29 +823,55 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
                     flex: 3,
                     child: DropdownButtonFormField<FtpSecurityMode>(
                       initialValue: _securityMode,
+                      isExpanded: true,
                       decoration: InputDecoration(labelText: l10n.ftpSecurity),
                       items: [
                         DropdownMenuItem(
                           value: FtpSecurityMode.ftp,
-                          child: Text(l10n.ftpPlain),
+                          child: Text(
+                            l10n.ftpPlain,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         DropdownMenuItem(
                           value: FtpSecurityMode.ftpes,
-                          child: Text(l10n.ftpExplicitTls),
+                          child: Text(
+                            l10n.ftpExplicitTls,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         DropdownMenuItem(
                           value: FtpSecurityMode.ftps,
-                          child: Text(l10n.ftpImplicitTls),
+                          child: Text(
+                            l10n.ftpImplicitTls,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: FtpSecurityMode.sftp,
+                          child: Text(
+                            l10n.sftp,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
                         setState(() {
                           _securityMode = value;
-                          if (_port.text == '21' || _port.text == '990') {
-                            _port.text = value == FtpSecurityMode.ftps
-                                ? '990'
-                                : '21';
+                          if (value != FtpSecurityMode.sftp) {
+                            _sshProfile = null;
+                          }
+                          if ({'21', '22', '990'}.contains(_port.text)) {
+                            _port.text = switch (value) {
+                              FtpSecurityMode.ftps => '990',
+                              FtpSecurityMode.sftp => '22',
+                              _ => '21',
+                            };
                           }
                         });
                       },
@@ -707,23 +890,32 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
                 validator: _required,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _password,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: l10n.password,
-                  prefixIcon: const Icon(Icons.password),
-                  suffixIcon: IconButton(
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+              if (_sshProfile?.authenticationType ==
+                  AuthenticationType.privateKey)
+                _InlineNotice(
+                  icon: Icons.key_outlined,
+                  message: l10n.sftpUsesPrivateKey(
+                    _sshProfile?.privateKeyLabel ?? '',
+                  ),
+                )
+              else
+                TextFormField(
+                  controller: _password,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: l10n.password,
+                    prefixIcon: const Icon(Icons.password),
+                    suffixIcon: IconButton(
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
                     ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
               _InlineNotice(
                 icon: _securityMode == FtpSecurityMode.ftp
@@ -731,6 +923,8 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
                     : Icons.lock_outline,
                 message: _securityMode == FtpSecurityMode.ftp
                     ? l10n.ftpPlainWarning
+                    : _securityMode == FtpSecurityMode.sftp
+                    ? l10n.sftpSecurityNotice
                     : l10n.ftpPasswordNotSaved,
               ),
               if (_securityMode == FtpSecurityMode.ftp) ...[
@@ -778,6 +972,7 @@ class _FtpConnectionSheetState extends State<_FtpConnectionSheet> {
         username: normalizeFullWidthAscii(_username.text).trim(),
         password: _password.text,
         securityMode: _securityMode,
+        sshProfile: _sshProfile,
       ),
     );
   }

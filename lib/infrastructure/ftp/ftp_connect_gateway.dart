@@ -32,6 +32,7 @@ SecurityType _securityType(FtpSecurityMode mode) => switch (mode) {
   FtpSecurityMode.ftp => SecurityType.ftp,
   FtpSecurityMode.ftpes => SecurityType.ftpes,
   FtpSecurityMode.ftps => SecurityType.ftps,
+  FtpSecurityMode.sftp => throw UnsupportedError('SFTP uses DartSftpGateway'),
 };
 
 class _FtpConnectConnection implements FtpConnection {

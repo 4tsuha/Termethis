@@ -24,6 +24,7 @@ import 'package:dartssh2/src/message/msg_kex_dh.dart';
 import 'package:dartssh2/src/message/msg_kex_ecdh.dart';
 import 'package:dartssh2/src/ssh_message.dart';
 import 'package:pointycastle/export.dart';
+import 'package:webcrypto/webcrypto.dart';
 
 import '../dartssh2.dart';
 
@@ -74,6 +75,12 @@ class SSHTransport {
   /// hostkey is valid, false to reject key and disconnect.
   final SSHHostkeyVerifyHandler? onVerifyHostKey;
 
+  /// Called immediately before and after an asynchronous host key decision.
+  /// The client uses these hooks to exclude user interaction from its
+  /// cryptographic handshake timeout.
+  final void Function()? onHostKeyVerificationStarted;
+  final void Function()? onHostKeyVerificationCompleted;
+
   /// Function called when the transport is ready to send data.
   final SSHTransportReadyHandler? onReady;
 
@@ -106,6 +113,8 @@ class SSHTransport {
     this.printTrace,
     this.algorithms = const SSHAlgorithms(),
     this.onVerifyHostKey,
+    this.onHostKeyVerificationStarted,
+    this.onHostKeyVerificationCompleted,
     this.onReady,
     this.onPacket,
     this.disableHostkeyVerification = false,
@@ -193,6 +202,11 @@ class SSHTransport {
 
   /// A [BlockCipher] to decrypt data sent from the other side.
   BlockCipher? _decryptCipher;
+
+  Future<AesCtrSecretKey>? _nativeRemoteAesCtrKey;
+  Future<HmacSecretKey>? _nativeRemoteHmacKey;
+  Uint8List? _nativeRemoteAesCtrCounter;
+
 
   /// The cipher key derived for encrypting outgoing data.
   Uint8List? _localCipherKey;
@@ -581,7 +595,7 @@ class SSHTransport {
     printDebug?.call('SSHTransport._processPackets');
 
     while (_buffer.isNotEmpty && !isClosed) {
-      final payload = _consumePacket();
+      final payload = await _consumePacket();
       if (payload == null) {
         break;
       }
@@ -599,10 +613,10 @@ class SSHTransport {
   /// Reads a single SSH packet from the buffer. Returns payload of the packet
   /// WITHOUT `packet length`, `padding length`, `padding` and `MAC`. Returns
   /// `null` if there is not enough data in the buffer to read the packet.
-  Uint8List? _consumePacket() {
+  Future<Uint8List?> _consumePacket() async {
     return (_decryptCipher == null && _remoteCipherKey == null)
         ? _consumeClearTextPacket()
-        : _consumeEncryptedPacket();
+        : await _consumeEncryptedPacket();
   }
 
   /// Consumes and returns a single unencrypted packet payload from the buffer.
@@ -629,7 +643,7 @@ class SSHTransport {
   }
 
   /// Consumes, decrypts, and returns a single encrypted packet payload from the buffer.
-  Uint8List? _consumeEncryptedPacket() {
+  Future<Uint8List?> _consumeEncryptedPacket() async {
     printDebug?.call('SSHTransport._consumeEncryptedPacket');
 
     final remoteCipherType = isClient ? _serverCipherType : _clientCipherType;
@@ -674,15 +688,6 @@ class SSHTransport {
       final encryptedPayload = _buffer.view(4, packetLength);
       final mac = _buffer.view(4 + packetLength, macLength);
 
-      // Verify the MAC on the packet length and encrypted payload
-      final packetForMac = Uint8List(4 + packetLength);
-      packetForMac.setRange(0, 4, packetLengthBytes);
-      packetForMac.setRange(4, 4 + packetLength, encryptedPayload);
-      _verifyPacketMac(packetForMac, mac, isEncrypted: true);
-
-      // Consume the packet and MAC from the buffer
-      _buffer.consume(4 + packetLength + macLength);
-
       // Ensure the encrypted payload length is a multiple of the block size
       if (encryptedPayload.length % blockSize != 0) {
         throw SSHPacketError(
@@ -690,8 +695,31 @@ class SSHTransport {
         );
       }
 
-      // Decrypt the payload
-      final decryptedPayload = _decryptCipher!.processAll(encryptedPayload);
+      late Uint8List decryptedPayload;
+      if (_nativeRemoteAesCtrKey != null && _nativeRemoteHmacKey != null) {
+        final authenticated = BytesBuilder(copy: false)
+          ..add(_remotePacketSN.value.toUint32())
+          ..add(packetLengthBytes)
+          ..add(encryptedPayload);
+        final hmacKey = await _nativeRemoteHmacKey!;
+        if (!await hmacKey.verifyBytes(mac, authenticated.takeBytes())) {
+          throw SSHPacketError('MAC mismatch');
+        }
+        final counter = _nativeRemoteAesCtrCounter!;
+        decryptedPayload = await (await _nativeRemoteAesCtrKey!).decryptBytes(
+          encryptedPayload,
+          counter,
+          128,
+        );
+        _incrementCtrCounter(counter, encryptedPayload.length ~/ blockSize);
+      } else {
+        // Verify directly against the buffer views. Joining them here would
+        // copy every encrypted packet before it can be decrypted.
+        _verifyEncryptedPacketMac(packetLengthBytes, encryptedPayload, mac);
+        decryptedPayload = _decryptCipher!.processAll(encryptedPayload);
+      }
+
+      _buffer.consume(4 + packetLength + macLength);
 
       // Process the decrypted payload
       final paddingLength = decryptedPayload[0];
@@ -834,11 +862,6 @@ class SSHTransport {
   /// For standard MAC algorithms, the MAC is calculated on the unencrypted packet.
   void _verifyPacketMac(Uint8List payload, Uint8List actualMac,
       {bool isEncrypted = false}) {
-    final macSize = _remoteMac!.macSize;
-    if (actualMac.length != macSize) {
-      throw ArgumentError.value(actualMac, 'mac', 'Invalid MAC size');
-    }
-
     final macType = isClient ? _serverMacType! : _clientMacType!;
     final isEtm = macType.isEtm;
 
@@ -856,12 +879,46 @@ class SSHTransport {
       );
     }
 
+    _finishPacketMac(actualMac);
+  }
+
+  void _verifyEncryptedPacketMac(
+    Uint8List packetLength,
+    Uint8List encryptedPayload,
+    Uint8List actualMac,
+  ) {
+    final macType = isClient ? _serverMacType! : _clientMacType!;
+    if (!macType.isEtm) {
+      throw SSHPacketError('Encrypted packet MAC requires ETM');
+    }
+
+    _remoteMac!.updateAll(_remotePacketSN.value.toUint32());
+    _remoteMac!.updateAll(packetLength);
+    _remoteMac!.updateAll(encryptedPayload);
+    _finishPacketMac(actualMac);
+  }
+
+  void _finishPacketMac(Uint8List actualMac) {
+    final macSize = _remoteMac!.macSize;
+    if (actualMac.length != macSize) {
+      throw ArgumentError.value(actualMac, 'mac', 'Invalid MAC size');
+    }
+
     final expectedMac = _remoteMac!.finish();
 
     if (!expectedMac.equals(actualMac)) {
       throw SSHPacketError(
         'MAC mismatch, expected: $expectedMac, actual: $actualMac',
       );
+    }
+  }
+
+  void _incrementCtrCounter(Uint8List counter, int blocks) {
+    var carry = blocks;
+    for (var index = counter.length - 1; index >= 0 && carry > 0; index--) {
+      final sum = counter[index] + (carry & 0xff);
+      counter[index] = sum & 0xff;
+      carry = (carry >> 8) + (sum >> 8);
     }
   }
 
@@ -925,7 +982,9 @@ class SSHTransport {
       isClient ? SSHDeriveKeyType.serverIV : SSHDeriveKeyType.clientIV,
       cipherType.ivSize,
     );
-
+    _nativeRemoteAesCtrKey = null;
+    _nativeRemoteHmacKey = null;
+    _nativeRemoteAesCtrCounter = null;
     if (cipherType.isAead) {
       _decryptCipher = null;
       _remoteMac = null;
@@ -947,6 +1006,19 @@ class SSHTransport {
       macType.keySize,
     );
     _remoteMac = macType.createMac(macKey);
+
+    final nativeCipherSupported = cipherType == SSHCipherType.aes128ctr ||
+        cipherType == SSHCipherType.aes256ctr;
+    final nativeMacHash = macType == SSHMacType.hmacSha256Etm
+        ? Hash.sha256
+        : macType == SSHMacType.hmacSha512Etm
+            ? Hash.sha512
+            : null;
+    if (nativeCipherSupported && nativeMacHash != null) {
+      _nativeRemoteAesCtrCounter = Uint8List.fromList(_remoteIV!);
+      _nativeRemoteAesCtrKey = AesCtrSecretKey.importRawKey(_remoteCipherKey!);
+      _nativeRemoteHmacKey = HmacSecretKey.importRawKey(macKey, nativeMacHash);
+    }
   }
 
   /// Derives a cryptographic key/IV of [keySize] bytes using KDF rules for the given [keyType].
@@ -1318,9 +1390,17 @@ class SSHTransport {
       return;
     }
 
-    final userVerified = onVerifyHostKey != null
-        ? await Future.value(onVerifyHostKey!(_hostkeyType!.name, fingerprint))
-        : true;
+    var userVerified = true;
+    if (onVerifyHostKey != null) {
+      onHostKeyVerificationStarted?.call();
+      try {
+        userVerified = await Future.value(
+          onVerifyHostKey!(_hostkeyType!.name, fingerprint),
+        );
+      } finally {
+        onHostKeyVerificationCompleted?.call();
+      }
+    }
 
     if (!userVerified) {
       closeWithError(SSHHostkeyError('Hostkey verification failed'));

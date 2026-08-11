@@ -21,9 +21,9 @@ void main() {
 
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
-    expect(find.text('ターミナルフォント'), findsOneWidget);
-    expect(find.textContaining('Cascadia Mono'), findsOneWidget);
-
+    expect(find.text('検索ボタン'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('日本語フォント'), 500);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('日本語フォント'));
     await tester.pumpAndSettle();
     expect(find.text('Noto Sans JP'), findsOneWidget);
@@ -87,11 +87,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('README.txt'), findsOneWidget);
   });
+
+  testWidgets('SFTPを選択してSSHファイル接続を開始する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(411, 891));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final gateway = _FakeFtpGateway();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [ftpGatewayProvider.overrideWithValue(gateway)],
+        child: const SshTerminalApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('FTP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('FTP接続'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('FTP（暗号化なし）'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SFTP（SSHファイル転送）').last);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), 'SFTPサーバー');
+    await tester.enterText(fields.at(1), 'sftp.example.com');
+    expect((tester.widget<TextFormField>(fields.at(2)).controller?.text), '22');
+    await tester.enterText(fields.at(3), 'sftp-user');
+    await tester.enterText(fields.at(4), 'secret');
+    tester.testTextInput.hide();
+    final connectButton = find.widgetWithText(FilledButton, '接続');
+    await tester.ensureVisible(connectButton);
+    await tester.tap(connectButton);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastRequest?.securityMode, FtpSecurityMode.sftp);
+    expect(gateway.lastRequest?.onUnknownHostKey, isNotNull);
+    expect(find.text('SFTPサーバー'), findsOneWidget);
+  });
 }
 
 class _FakeFtpGateway implements FtpGateway {
+  FtpConnectRequest? lastRequest;
+
   @override
   Future<FtpConnection> connect(FtpConnectRequest request) async {
+    lastRequest = request;
     return _FakeFtpConnection();
   }
 }

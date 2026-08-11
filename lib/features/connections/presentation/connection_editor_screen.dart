@@ -39,6 +39,8 @@ class _ConnectionEditorScreenState
   bool _saveKeyPassphrase = false;
   late bool _wakeOnLanEnabled;
   bool _saving = false;
+  bool _dirty = false;
+  bool _confirmingDiscard = false;
 
   @override
   void initState() {
@@ -72,6 +74,18 @@ class _ConnectionEditorScreenState
     _authenticationType =
         _existing?.authenticationType ??
         AuthenticationType.passwordOrInteractive;
+    for (final controller in [
+      _nameController,
+      _hostController,
+      _portController,
+      _usernameController,
+      _wakeOnLanMacController,
+      _wakeOnLanBroadcastController,
+      _wakeOnLanPortController,
+      _keyPassphraseController,
+    ]) {
+      controller.addListener(_markDirty);
+    }
   }
 
   @override
@@ -91,215 +105,270 @@ class _ConnectionEditorScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_existing == null ? l10n.addConnection : l10n.edit),
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: l10n.connectionName,
-                  hintText: l10n.connectionNameHint,
-                  border: const OutlineInputBorder(),
-                ),
-                textInputAction: TextInputAction.next,
-                validator: (value) => _required(value, l10n),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _hostController,
-                decoration: InputDecoration(
-                  labelText: l10n.host,
-                  hintText: l10n.hostHint,
-                  border: const OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.url,
-                textInputAction: TextInputAction.next,
-                autocorrect: false,
-                validator: (value) => _required(value, l10n),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _portController,
-                decoration: InputDecoration(
-                  labelText: l10n.port,
-                  border: const OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  final port = int.tryParse(value ?? '');
-                  if (port == null || port < 1 || port > 65535) {
-                    return l10n.invalidPort;
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: l10n.username,
-                  border: const OutlineInputBorder(),
-                ),
-                textInputAction: _wakeOnLanEnabled
-                    ? TextInputAction.next
-                    : TextInputAction.done,
-                autocorrect: false,
-                validator: (value) => _required(value, l10n),
-                onFieldSubmitted: (_) {
-                  if (!_wakeOnLanEnabled) {
-                    _save();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<AuthenticationType>(
-                initialValue: _authenticationType,
-                decoration: InputDecoration(
-                  labelText: l10n.authentication,
-                  border: const OutlineInputBorder(),
-                ),
-                items: [
-                  DropdownMenuItem(
-                    value: AuthenticationType.passwordOrInteractive,
-                    child: Text(l10n.passwordAuthentication),
+    return PopScope<void>(
+      canPop: !_dirty && !_saving,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _confirmDiscard();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_existing == null ? l10n.addConnection : l10n.edit),
+        ),
+        body: SafeArea(
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: l10n.connectionName,
+                    hintText: l10n.connectionNameHint,
+                    border: const OutlineInputBorder(),
                   ),
-                  DropdownMenuItem(
-                    value: AuthenticationType.privateKey,
-                    child: Text(l10n.privateKeyAuthentication),
+                  textInputAction: TextInputAction.next,
+                  validator: (value) => _required(value, l10n),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _hostController,
+                  decoration: InputDecoration(
+                    labelText: l10n.host,
+                    hintText: l10n.hostHint,
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.url,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  validator: (value) => _required(value, l10n),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _portController,
+                  decoration: InputDecoration(
+                    labelText: l10n.port,
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final port = int.tryParse(value ?? '');
+                    if (port == null || port < 1 || port > 65535) {
+                      return l10n.invalidPort;
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: InputDecoration(
+                    labelText: l10n.username,
+                    border: const OutlineInputBorder(),
+                  ),
+                  textInputAction: _wakeOnLanEnabled
+                      ? TextInputAction.next
+                      : TextInputAction.done,
+                  autocorrect: false,
+                  validator: (value) => _required(value, l10n),
+                  onFieldSubmitted: (_) {
+                    if (!_wakeOnLanEnabled) {
+                      _save();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<AuthenticationType>(
+                  initialValue: _authenticationType,
+                  decoration: InputDecoration(
+                    labelText: l10n.authentication,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: AuthenticationType.passwordOrInteractive,
+                      child: Text(l10n.passwordAuthentication),
+                    ),
+                    DropdownMenuItem(
+                      value: AuthenticationType.privateKey,
+                      child: Text(l10n.privateKeyAuthentication),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _authenticationType = value;
+                        _dirty = true;
+                      });
+                    }
+                  },
+                ),
+                if (_authenticationType == AuthenticationType.privateKey) ...[
+                  const SizedBox(height: 16),
+                  _PrivateKeySection(
+                    label:
+                        _selectedPrivateKey?.label ??
+                        _existing?.privateKeyLabel,
+                    hasExistingKey: _existing?.credentialReference != null,
+                    isEncrypted: _selectedPrivateKey?.isEncrypted ?? false,
+                    passphraseController: _keyPassphraseController,
+                    savePassphrase: _saveKeyPassphrase,
+                    onSavePassphraseChanged: (value) {
+                      setState(() {
+                        _saveKeyPassphrase = value;
+                        _dirty = true;
+                      });
+                    },
+                    onPick: _pickPrivateKey,
                   ),
                 ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _authenticationType = value);
-                  }
-                },
-              ),
-              if (_authenticationType == AuthenticationType.privateKey) ...[
                 const SizedBox(height: 16),
-                _PrivateKeySection(
-                  label:
-                      _selectedPrivateKey?.label ?? _existing?.privateKeyLabel,
-                  hasExistingKey: _existing?.credentialReference != null,
-                  isEncrypted: _selectedPrivateKey?.isEncrypted ?? false,
-                  passphraseController: _keyPassphraseController,
-                  savePassphrase: _saveKeyPassphrase,
-                  onSavePassphraseChanged: (value) {
-                    setState(() => _saveKeyPassphrase = value);
-                  },
-                  onPick: _pickPrivateKey,
+                Card.outlined(
+                  child: Column(
+                    children: [
+                      SwitchListTile.adaptive(
+                        value: _wakeOnLanEnabled,
+                        title: Text(l10n.wakeOnLanTitle),
+                        subtitle: Text(l10n.wakeOnLanDescription),
+                        secondary: const Icon(Icons.power_settings_new),
+                        onChanged: (value) {
+                          setState(() {
+                            _wakeOnLanEnabled = value;
+                            _dirty = true;
+                          });
+                        },
+                      ),
+                      if (_wakeOnLanEnabled)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                controller: _wakeOnLanMacController,
+                                decoration: InputDecoration(
+                                  labelText: l10n.wakeOnLanMacAddress,
+                                  hintText: l10n.wakeOnLanMacHint,
+                                  border: const OutlineInputBorder(),
+                                ),
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                textInputAction: TextInputAction.next,
+                                autocorrect: false,
+                                validator: (value) {
+                                  if (!_wakeOnLanEnabled) {
+                                    return null;
+                                  }
+                                  return WakeOnLanConfiguration.parseMacAddress(
+                                            value ?? '',
+                                          ) ==
+                                          null
+                                      ? l10n.invalidMacAddress
+                                      : null;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _wakeOnLanBroadcastController,
+                                decoration: InputDecoration(
+                                  labelText: l10n.wakeOnLanBroadcastAddress,
+                                  hintText: l10n.wakeOnLanBroadcastHint,
+                                  border: const OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                autocorrect: false,
+                                validator: (value) {
+                                  if (!_wakeOnLanEnabled) {
+                                    return null;
+                                  }
+                                  return WakeOnLanConfiguration.isValidIpv4Address(
+                                        value ?? '',
+                                      )
+                                      ? null
+                                      : l10n.invalidIpv4Address;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _wakeOnLanPortController,
+                                decoration: InputDecoration(
+                                  labelText: l10n.wakeOnLanPort,
+                                  border: const OutlineInputBorder(),
+                                ),
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.done,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                validator: (value) {
+                                  if (!_wakeOnLanEnabled) {
+                                    return null;
+                                  }
+                                  final port = int.tryParse(value ?? '');
+                                  return port == null ||
+                                          port < 1 ||
+                                          port > 65535
+                                      ? l10n.invalidPort
+                                      : null;
+                                },
+                                onFieldSubmitted: (_) => _save(),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(l10n.save),
                 ),
               ],
-              const SizedBox(height: 16),
-              Card.outlined(
-                child: Column(
-                  children: [
-                    SwitchListTile.adaptive(
-                      value: _wakeOnLanEnabled,
-                      title: Text(l10n.wakeOnLanTitle),
-                      subtitle: Text(l10n.wakeOnLanDescription),
-                      secondary: const Icon(Icons.power_settings_new),
-                      onChanged: (value) {
-                        setState(() => _wakeOnLanEnabled = value);
-                      },
-                    ),
-                    if (_wakeOnLanEnabled)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Column(
-                          children: [
-                            TextFormField(
-                              controller: _wakeOnLanMacController,
-                              decoration: InputDecoration(
-                                labelText: l10n.wakeOnLanMacAddress,
-                                hintText: l10n.wakeOnLanMacHint,
-                                border: const OutlineInputBorder(),
-                              ),
-                              textCapitalization: TextCapitalization.characters,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              validator: (value) {
-                                if (!_wakeOnLanEnabled) {
-                                  return null;
-                                }
-                                return WakeOnLanConfiguration.parseMacAddress(
-                                          value ?? '',
-                                        ) ==
-                                        null
-                                    ? l10n.invalidMacAddress
-                                    : null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _wakeOnLanBroadcastController,
-                              decoration: InputDecoration(
-                                labelText: l10n.wakeOnLanBroadcastAddress,
-                                hintText: l10n.wakeOnLanBroadcastHint,
-                                border: const OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              validator: (value) {
-                                if (!_wakeOnLanEnabled) {
-                                  return null;
-                                }
-                                return WakeOnLanConfiguration.isValidIpv4Address(
-                                      value ?? '',
-                                    )
-                                    ? null
-                                    : l10n.invalidIpv4Address;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _wakeOnLanPortController,
-                              decoration: InputDecoration(
-                                labelText: l10n.wakeOnLanPort,
-                                border: const OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.done,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              validator: (value) {
-                                if (!_wakeOnLanEnabled) {
-                                  return null;
-                                }
-                                final port = int.tryParse(value ?? '');
-                                return port == null || port < 1 || port > 65535
-                                    ? l10n.invalidPort
-                                    : null;
-                              },
-                              onFieldSubmitted: (_) => _save(),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _saving ? null : _save,
-                icon: const Icon(Icons.save_outlined),
-                label: Text(l10n.save),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  void _markDirty() {
+    if (mounted && !_dirty) {
+      setState(() => _dirty = true);
+    }
+  }
+
+  Future<void> _confirmDiscard() async {
+    if (_saving || !_dirty || _confirmingDiscard) return;
+    _confirmingDiscard = true;
+    final l10n = AppLocalizations.of(context);
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.discardChangesTitle),
+        content: Text(l10n.discardChangesMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.discardChanges),
+          ),
+        ],
+      ),
+    );
+    _confirmingDiscard = false;
+    if (discard != true || !mounted) return;
+    setState(() => _dirty = false);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) context.pop();
   }
 
   Future<void> _pickPrivateKey() async {
@@ -313,6 +382,7 @@ class _ConnectionEditorScreenState
         _selectedPrivateKey = selected;
         _keyPassphraseController.clear();
         _saveKeyPassphrase = false;
+        _dirty = true;
       });
     } on PrivateKeyImportFailure catch (error) {
       if (!mounted) {
@@ -403,6 +473,10 @@ class _ConnectionEditorScreenState
             ),
             replacementPrivateKey: replacementCredential,
           );
+      if (mounted) {
+        setState(() => _dirty = false);
+        await WidgetsBinding.instance.endOfFrame;
+      }
       if (mounted) {
         context.pop();
       }

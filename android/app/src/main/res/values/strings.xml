@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="background_session_channel">SSHバックグラウンド接続</string>
+    <string name="background_session_channel_description">画面消灯中のSSH接続維持を補助します。</string>
+    <string name="background_session_notification_title">SSH接続を維持中</string>
+    <string name="background_session_notification_text">タップしてターミナルへ戻ります。</string>
+    <string name="background_session_stop">停止</string>
+</resources>

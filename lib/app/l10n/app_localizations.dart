@@ -148,6 +148,24 @@ abstract class AppLocalizations {
   /// **'キャンセル'**
   String get cancel;
 
+  /// No description provided for @discardChangesTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'変更を破棄しますか？'**
+  String get discardChangesTitle;
+
+  /// No description provided for @discardChangesMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存していない入力内容は失われます。'**
+  String get discardChangesMessage;
+
+  /// No description provided for @discardChanges.
+  ///
+  /// In ja, this message translates to:
+  /// **'破棄して戻る'**
+  String get discardChanges;
+
   /// No description provided for @save.
   ///
   /// In ja, this message translates to:
@@ -523,8 +541,20 @@ abstract class AppLocalizations {
   /// No description provided for @closeSessionMessage.
   ///
   /// In ja, this message translates to:
-  /// **'実行中のシェルは終了します。'**
+  /// **'このタブを閉じると、実行中のシェルも終了します。'**
   String get closeSessionMessage;
+
+  /// No description provided for @closeSessionTab.
+  ///
+  /// In ja, this message translates to:
+  /// **'セッションタブを閉じる'**
+  String get closeSessionTab;
+
+  /// No description provided for @sessionRestoredMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存されたタブです。SSHセッションは切断されています。再接続してください。'**
+  String get sessionRestoredMessage;
 
   /// No description provided for @failureDnsLookup.
   ///
@@ -718,6 +748,30 @@ abstract class AppLocalizations {
   /// **'FTPS（暗黙的TLS）'**
   String get ftpImplicitTls;
 
+  /// No description provided for @sftp.
+  ///
+  /// In ja, this message translates to:
+  /// **'SFTP（SSHファイル転送）'**
+  String get sftp;
+
+  /// No description provided for @sftpSecurityNotice.
+  ///
+  /// In ja, this message translates to:
+  /// **'SFTPはSSHの暗号化通信とknown_hosts確認を使用します。パスワードは保存しません。'**
+  String get sftpSecurityNotice;
+
+  /// No description provided for @sftpSavedConnection.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存済みSSH接続先（任意）'**
+  String get sftpSavedConnection;
+
+  /// No description provided for @sftpUsesPrivateKey.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存済み秘密鍵を使用: {name}'**
+  String sftpUsesPrivateKey(String name);
+
   /// No description provided for @ftpPlainWarning.
   ///
   /// In ja, this message translates to:
@@ -883,8 +937,44 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTerminalFontValue.
   ///
   /// In ja, this message translates to:
-  /// **'Cascadia Mono'**
+  /// **'英数字・罫線にはCascadia Monoを固定で使用します。'**
   String get settingsTerminalFontValue;
+
+  /// No description provided for @settingsTerminalRenderer.
+  ///
+  /// In ja, this message translates to:
+  /// **'ターミナル描画エンジン'**
+  String get settingsTerminalRenderer;
+
+  /// No description provided for @settingsSelectTerminalRenderer.
+  ///
+  /// In ja, this message translates to:
+  /// **'描画エンジンを選択'**
+  String get settingsSelectTerminalRenderer;
+
+  /// No description provided for @terminalRendererWebgl.
+  ///
+  /// In ja, this message translates to:
+  /// **'xterm.js WebGL'**
+  String get terminalRendererWebgl;
+
+  /// No description provided for @terminalRendererWebglDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'高速更新するTUI向けの既定値です。WebGLを使えない環境ではDOM描画へ自動で切り替わります。'**
+  String get terminalRendererWebglDescription;
+
+  /// No description provided for @terminalRendererFlutter.
+  ///
+  /// In ja, this message translates to:
+  /// **'Flutter互換描画'**
+  String get terminalRendererFlutter;
+
+  /// No description provided for @terminalRendererFlutterDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'WebViewで表示や入力に問題がある場合の互換モードです。描画性能は低くなることがあります。'**
+  String get terminalRendererFlutterDescription;
 
   /// No description provided for @settingsJapaneseFont.
   ///
@@ -895,7 +985,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsJapaneseFontMessage.
   ///
   /// In ja, this message translates to:
-  /// **'アプリUIとターミナルの日本語字形に使用します。'**
+  /// **'アプリUIとターミナルの日本語字形へ反映します。英数字と罫線はCascadia Monoのままです。'**
   String get settingsJapaneseFontMessage;
 
   /// No description provided for @settingsSelectFont.
@@ -903,6 +993,78 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'日本語フォントを選択'**
   String get settingsSelectFont;
+
+  /// No description provided for @settingsRefreshRate.
+  ///
+  /// In ja, this message translates to:
+  /// **'画面の滑らかさ'**
+  String get settingsRefreshRate;
+
+  /// No description provided for @settingsSelectRefreshRate.
+  ///
+  /// In ja, this message translates to:
+  /// **'リフレッシュレート制御を選択'**
+  String get settingsSelectRefreshRate;
+
+  /// No description provided for @refreshRateAdaptive.
+  ///
+  /// In ja, this message translates to:
+  /// **'適応'**
+  String get refreshRateAdaptive;
+
+  /// No description provided for @refreshRateAdaptiveDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'OSに評価を任せ、操作と端末出力中だけ高いフレームレートを要求します。'**
+  String get refreshRateAdaptiveDescription;
+
+  /// No description provided for @refreshRateBalanced.
+  ///
+  /// In ja, this message translates to:
+  /// **'バランス'**
+  String get refreshRateBalanced;
+
+  /// No description provided for @refreshRateBalancedDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'通常は約60Hzで動作し、操作と大量出力中だけ高いフレームレートを要求します。'**
+  String get refreshRateBalancedDescription;
+
+  /// No description provided for @refreshRateMaximum.
+  ///
+  /// In ja, this message translates to:
+  /// **'最大'**
+  String get refreshRateMaximum;
+
+  /// No description provided for @refreshRateMaximumDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'対応する最高リフレッシュレートを継続して要求します。消費電力が増える場合があります。'**
+  String get refreshRateMaximumDescription;
+
+  /// No description provided for @settingsScrollbackLines.
+  ///
+  /// In ja, this message translates to:
+  /// **'スクロールバック行数'**
+  String get settingsScrollbackLines;
+
+  /// No description provided for @settingsScrollbackLinesValue.
+  ///
+  /// In ja, this message translates to:
+  /// **'新しく開くSSHセッションで{lines}行を保持します。行数を増やすとメモリ使用量も増えます。'**
+  String settingsScrollbackLinesValue(int lines);
+
+  /// No description provided for @settingsBackgroundSession.
+  ///
+  /// In ja, this message translates to:
+  /// **'バックグラウンド接続モード'**
+  String get settingsBackgroundSession;
+
+  /// No description provided for @settingsBackgroundSessionDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'オンにすると接続中だけ常駐通知を表示し、画面消灯中の維持を補助します。OSの省電力制御による切断は防げません。'**
+  String get settingsBackgroundSessionDescription;
 
   /// No description provided for @fontNotoSansJp.
   ///
@@ -943,7 +1105,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsFtpSecurityMessage.
   ///
   /// In ja, this message translates to:
-  /// **'可能な接続先ではFTPESまたはFTPSを選んでください。'**
+  /// **'平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。'**
   String get settingsFtpSecurityMessage;
 
   /// No description provided for @settingsAboutSection.

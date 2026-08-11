@@ -23,6 +23,7 @@ dependencies:
   intl: ^0.20.2
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
+  webview_flutter: ^4.14.1
   xterm:
     path: third_party/xterm
 
@@ -38,8 +39,10 @@ flutter:
   generate: true
   uses-material-design: true
   assets:
+    - assets/fonts/LICENSE-NotoSansJP.txt
     - assets/fonts/LICENSE-Koruri.txt
     - assets/fonts/LICENSE-Mejiro.txt
+    - assets/web_terminal/
   fonts:
     - family: CascadiaMono
       fonts:

@@ -7,6 +7,7 @@ import 'package:ssh_terminal_ja/features/connections/domain/connection_profile.d
 import 'package:ssh_terminal_ja/features/terminal/application/ssh_session_controller.dart';
 import 'package:ssh_terminal_ja/features/terminal/domain/ssh_gateway.dart';
 import 'package:ssh_terminal_ja/infrastructure/terminal/utf8_terminal_codec.dart';
+import 'package:xterm/xterm.dart';
 
 void main() {
   test('接続後の日本語入力とCtrl入力をSSHへ送る', () async {
@@ -34,9 +35,16 @@ void main() {
     controller.terminal.textInput('日本語');
     controller.toggleControl();
     controller.terminal.textInput('c');
+    controller.toggleAlt();
+    controller.terminal.textInput('x');
+    controller.sendKey(TerminalKey.escape);
+    controller.sendKey(TerminalKey.tab);
 
     expect(utf8.decode(connection.writes.first), '日本語');
-    expect(connection.writes.last, [3]);
+    expect(connection.writes[1], [3]);
+    expect(utf8.decode(connection.writes[2]), '\x1bx');
+    expect(utf8.decode(connection.writes[3]), '\x1b');
+    expect(utf8.decode(connection.writes[4]), '\t');
 
     await controller.disconnect();
     expect(controller.status, SshSessionStatus.closed);
@@ -102,6 +110,172 @@ void main() {
     );
     controller.dispose();
   });
+
+  test('SSH受信チャンクを8ms単位でまとめてターミナルへ反映する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'batch',
+        name: '大量出力',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      maxLines: 2000,
+    );
+    var activityCount = 0;
+    final renderedChunks = <String>[];
+    controller.setViewportVisible(true);
+    controller.addTerminalActivityListener(() => activityCount++);
+    controller.addTerminalDataListener(renderedChunks.add);
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('first');
+    connection.emitStdout('second');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.terminal.maxLines, 2000);
+    expect(
+      controller.terminal.buffer.getText(),
+      isNot(contains('firstsecond')),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 12));
+
+    expect(controller.terminal.buffer.getText(), contains('firstsecond'));
+    expect(renderedChunks, ['firstsecond']);
+    expect(activityCount, 1);
+    controller.dispose();
+  });
+
+  test('WebGL使用時のFlutter互換バッファを200行に抑える', () {
+    final controller = SshSessionController(
+      _FakeGateway(_FakeConnection()),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'compact',
+        name: 'WebGL',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      maxLines: 10000,
+      compactFlutterBuffer: true,
+    );
+
+    expect(controller.terminal.maxLines, 200);
+    controller.dispose();
+  });
+
+  test('WebGL使用時は障害時までFlutter互換端末の解析を遅延する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'deferred-fallback',
+        name: 'WebGL',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      compactFlutterBuffer: true,
+    );
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('WebGL only');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(controller.terminal.buffer.getText(), isNot(contains('WebGL only')));
+    expect(controller.webTerminalReplay.data, contains('WebGL only'));
+
+    controller.enableFlutterTerminalMirror();
+
+    expect(controller.terminal.buffer.getText(), contains('WebGL only'));
+    controller.dispose();
+  });
+
+  test('WebGL端末のスナップショットと非表示中の差分を再生する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'web-replay',
+        name: 'WebGL再生',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+      compactFlutterBuffer: true,
+    );
+    final events = <WebTerminalDataEvent>[];
+    controller.addWebTerminalDataListener(events.add);
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('first');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(events, hasLength(1));
+    expect(events.single.sequence, 1);
+    expect(events.single.data, 'first');
+    expect(controller.webTerminalReplay.data, 'first');
+    expect(controller.saveWebTerminalSnapshot('snapshot', 1), isTrue);
+
+    connection.emitStdout('second');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    final fullReplay = controller.webTerminalReplay;
+    expect(fullReplay.throughSequence, 2);
+    expect(fullReplay.data, 'snapshotsecond');
+    final delta = controller.webTerminalReplayAfter(1);
+    expect(delta.resetRequired, isFalse);
+    expect(delta.data, 'second');
+    controller.dispose();
+  });
+
+  test('古いWebGL表示世代には端末全体の再構築を要求する', () async {
+    final connection = _FakeConnection();
+    final controller = SshSessionController(
+      _FakeGateway(connection),
+      const Utf8TerminalCodec(),
+      profile: const ConnectionProfile(
+        id: 'web-reset',
+        name: 'WebGL復元',
+        host: 'localhost',
+        port: 22,
+        username: 'user',
+      ),
+    );
+
+    await controller.connect(
+      authentication: const SshPasswordAuthentication('secret'),
+      onUnknownHostKey: (_) async => true,
+      onInteractivePrompt: (_) async => const [],
+    );
+    connection.emitStdout('before');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(controller.saveWebTerminalSnapshot('serialized', 1), isTrue);
+
+    final replay = controller.webTerminalReplayAfter(0);
+    expect(replay.resetRequired, isTrue);
+    expect(replay.data, 'serialized');
+    controller.dispose();
+  });
 }
 
 class _FakeGateway implements SshGateway {
@@ -153,5 +327,9 @@ class _FakeConnection implements SshConnection {
     if (!_done.isCompleted) {
       _done.complete();
     }
+  }
+
+  void emitStdout(String value) {
+    _stdout.add(Uint8List.fromList(utf8.encode(value)));
   }
 }

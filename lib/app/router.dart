@@ -60,8 +60,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/terminal/:id',
-        builder: (context, state) =>
-            TerminalScreen(profileId: state.pathParameters['id']!),
+        builder: (context, state) => TerminalScreen(
+          profileId: state.pathParameters['id']!,
+          tabId:
+              state.uri.queryParameters['tab'] ?? state.pathParameters['id']!,
+        ),
       ),
     ],
   );
