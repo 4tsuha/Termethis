@@ -3,4 +3,5 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - third_party/dartssh2/**
+    - third_party/rust_lib_flutter_alacritty/**
     - third_party/xterm/**

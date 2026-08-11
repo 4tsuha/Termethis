@@ -126,10 +126,13 @@
   "chooseConnectionTypeMessage": "接続先で利用する方式を選んでください。あとから方式を変更する場合は、新しい接続先として登録します。",
   "connectionTypeSsh": "SSH",
   "connectionTypeSshDescription": "Termethis内のターミナルで、シェルやTUIを操作します。",
+  "connectionTypeSshCompactDescription": "ターミナル接続",
   "connectionTypeRdp": "RDP",
   "connectionTypeRdpDescription": "Windowsのリモートデスクトップへアプリ内から接続します。",
+  "connectionTypeRdpCompactDescription": "Windowsリモート",
   "connectionTypeVnc": "VNC",
   "connectionTypeVncDescription": "VNC対応アプリでリモート画面を開きます。",
+  "connectionTypeVncCompactDescription": "リモート画面",
   "addTypedConnection": "{type}接続先を追加",
   "@addTypedConnection": {
     "placeholders": {"type": {"type": "String"}}
@@ -137,7 +140,7 @@
   "connectionMethod": "接続方式",
   "usernameOptional": "ユーザー名（任意）",
   "externalAuthenticationNotice": "認証は接続先アプリで行います。Termethisからパスワードは渡しません。",
-  "internalRdpAuthenticationNotice": "パスワードは接続時に入力し、IronRDPへ直接渡します。接続先やログには保存しません。",
+  "internalRdpAuthenticationNotice": "パスワードは接続時に入力し、リモートデスクトップ接続にのみ使用します。接続先やログには保存しません。",
   "remoteClientUnavailableTitle": "対応アプリが見つかりません",
   "rdpClientUnavailableMessage": "RDP接続にはRDP URIを開けるリモートデスクトップアプリが必要です。対応アプリをインストールしてから再試行してください。",
   "vncClientUnavailableMessage": "VNC接続にはvnc URIを開けるVNCクライアントが必要です。対応アプリをインストールしてから再試行してください。",
@@ -251,6 +254,6 @@
   "settingsFtpSecurityMessage": "平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。",
   "settingsAboutSection": "Termethisについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.4.1",
+  "settingsVersionValue": "0.5.0",
   "settingsLicenses": "オープンソースライセンス"
 }

@@ -17,10 +17,16 @@ class ConnectionEditorScreen extends ConsumerStatefulWidget {
     super.key,
     this.profileId,
     this.connectionType = ConnectionType.ssh,
+    this.allowedConnectionTypes = const {
+      ConnectionType.ssh,
+      ConnectionType.rdp,
+      ConnectionType.vnc,
+    },
   });
 
   final String? profileId;
   final ConnectionType connectionType;
+  final Set<ConnectionType> allowedConnectionTypes;
 
   @override
   ConsumerState<ConnectionEditorScreen> createState() =>
@@ -41,7 +47,7 @@ class _ConnectionEditorScreenState
       TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   ConnectionProfile? _existing;
-  late final ConnectionType _connectionType;
+  late ConnectionType _connectionType;
   late AuthenticationType _authenticationType;
   ImportedPrivateKey? _selectedPrivateKey;
   bool _saveKeyPassphrase = false;
@@ -130,11 +136,7 @@ class _ConnectionEditorScreenState
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            _existing == null
-                ? l10n.addTypedConnection(_connectionTypeLabel(l10n))
-                : l10n.edit,
-          ),
+          title: Text(_existing == null ? l10n.addConnection : l10n.edit),
         ),
         body: SafeArea(
           child: Form(
@@ -142,23 +144,14 @@ class _ConnectionEditorScreenState
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _ConnectionTypeSummary(
-                  icon: _connectionTypeIcon,
-                  label: _connectionTypeLabel(l10n),
-                  description: _connectionTypeDescription(l10n),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: l10n.connectionName,
-                    hintText: l10n.connectionNameHint,
-                    border: const OutlineInputBorder(),
+                if (_existing == null) ...[
+                  _ConnectionTypeSelector(
+                    selectedType: _connectionType,
+                    allowedTypes: widget.allowedConnectionTypes,
+                    onSelected: _selectConnectionType,
                   ),
-                  textInputAction: TextInputAction.next,
-                  validator: (value) => _required(value, l10n),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: _hostController,
                   decoration: InputDecoration(
@@ -169,6 +162,17 @@ class _ConnectionEditorScreenState
                   keyboardType: TextInputType.url,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
+                  validator: (value) => _required(value, l10n),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                    labelText: l10n.connectionName,
+                    hintText: l10n.connectionNameHint,
+                    border: const OutlineInputBorder(),
+                  ),
+                  textInputAction: TextInputAction.next,
                   validator: (value) => _required(value, l10n),
                 ),
                 const SizedBox(height: 16),
@@ -602,51 +606,139 @@ class _ConnectionEditorScreenState
     }
   }
 
-  String _connectionTypeLabel(AppLocalizations l10n) =>
-      switch (_connectionType) {
-        ConnectionType.ssh => l10n.connectionTypeSsh,
-        ConnectionType.rdp => l10n.connectionTypeRdp,
-        ConnectionType.vnc => l10n.connectionTypeVnc,
-      };
-
-  String _connectionTypeDescription(AppLocalizations l10n) =>
-      switch (_connectionType) {
-        ConnectionType.ssh => l10n.connectionTypeSshDescription,
-        ConnectionType.rdp => l10n.connectionTypeRdpDescription,
-        ConnectionType.vnc => l10n.connectionTypeVncDescription,
-      };
-
-  IconData get _connectionTypeIcon => switch (_connectionType) {
-    ConnectionType.ssh => Icons.terminal,
-    ConnectionType.rdp => Icons.desktop_windows_outlined,
-    ConnectionType.vnc => Icons.monitor_outlined,
-  };
+  void _selectConnectionType(ConnectionType type) {
+    if (type == _connectionType) return;
+    final previousDefaultPort = _connectionType.defaultPort.toString();
+    setState(() {
+      _connectionType = type;
+      if (_portController.text.isEmpty ||
+          _portController.text == previousDefaultPort) {
+        _portController.text = type.defaultPort.toString();
+      }
+      _dirty = true;
+    });
+  }
 }
 
-class _ConnectionTypeSummary extends StatelessWidget {
-  const _ConnectionTypeSummary({
-    required this.icon,
-    required this.label,
-    required this.description,
+class _ConnectionTypeSelector extends StatelessWidget {
+  const _ConnectionTypeSelector({
+    required this.selectedType,
+    required this.allowedTypes,
+    required this.onSelected,
   });
 
-  final IconData icon;
-  final String label;
+  final ConnectionType selectedType;
+  final Set<ConnectionType> allowedTypes;
+  final ValueChanged<ConnectionType> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.connectionMethod,
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: 8),
+        for (final type in ConnectionType.values) ...[
+          if (allowedTypes.contains(type))
+            _ConnectionTypeChoice(
+              title: switch (type) {
+                ConnectionType.ssh => l10n.connectionTypeSsh,
+                ConnectionType.rdp => l10n.connectionTypeRdp,
+                ConnectionType.vnc => l10n.connectionTypeVnc,
+              },
+              description: switch (type) {
+                ConnectionType.ssh => l10n.connectionTypeSshCompactDescription,
+                ConnectionType.rdp => l10n.connectionTypeRdpCompactDescription,
+                ConnectionType.vnc => l10n.connectionTypeVncCompactDescription,
+              },
+              selected: type == selectedType,
+              onTap: () => onSelected(type),
+            ),
+          if (allowedTypes.contains(type) &&
+              type != ConnectionType.values.lastWhere(allowedTypes.contains))
+            const SizedBox(height: 6),
+        ],
+      ],
+    );
+  }
+}
+
+class _ConnectionTypeChoice extends StatelessWidget {
+  const _ConnectionTypeChoice({
+    required this.title,
+    required this.description,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
   final String description;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Card.filled(
-      color: colors.secondaryContainer,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: colors.secondary,
-          foregroundColor: colors.onSecondary,
-          child: Icon(icon),
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$title $description',
+      child: Material(
+        color: selected ? colors.primaryContainer : colors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: selected
+                          ? colors.onPrimaryContainer
+                          : colors.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: selected
+                          ? colors.onPrimaryContainer
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 24,
+                  child: selected
+                      ? Icon(
+                          Icons.check,
+                          size: 20,
+                          color: colors.onPrimaryContainer,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
         ),
-        title: Text(label, style: Theme.of(context).textTheme.titleMedium),
-        subtitle: Text(description),
       ),
     );
   }

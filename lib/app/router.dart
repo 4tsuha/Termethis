@@ -100,12 +100,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/connections/new',
-        builder: (context, state) => ConnectionEditorScreen(
-          connectionType: ConnectionType.values.firstWhere(
-            (type) => type.name == state.uri.queryParameters['type'],
-            orElse: () => ConnectionType.ssh,
-          ),
-        ),
+        builder: (context, state) {
+          final desktopOnly = state.uri.queryParameters['scope'] == 'desktop';
+          return ConnectionEditorScreen(
+            connectionType: desktopOnly
+                ? ConnectionType.rdp
+                : ConnectionType.ssh,
+            allowedConnectionTypes: desktopOnly
+                ? const {ConnectionType.rdp, ConnectionType.vnc}
+                : const {
+                    ConnectionType.ssh,
+                    ConnectionType.rdp,
+                    ConnectionType.vnc,
+                  },
+          );
+        },
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
