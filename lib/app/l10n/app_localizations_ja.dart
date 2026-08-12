@@ -434,13 +434,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get ftpTitle => 'FTPマネージャー';
 
   @override
-  String get ftpAddTab => 'FTP接続';
+  String get ftpAddTab => 'ファイル接続';
 
   @override
-  String get ftpEmptyTitle => 'FTPタブがありません';
+  String get ftpEmptyTitle => 'ファイル接続がありません';
 
   @override
-  String get ftpEmptyMessage => '接続先を追加すると、サーバー内のフォルダーを階層表示できます。';
+  String get ftpEmptyMessage => 'FTP、FTPS、SFTPの接続先を追加すると、サーバー内のファイルを管理できます。';
 
   @override
   String get ftpConnectionTitle => 'FTP接続を追加';

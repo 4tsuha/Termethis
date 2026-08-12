@@ -17,6 +17,7 @@ russh = { version = "0.53.0", default-features = false, features = ["ring"] }
 russh-sftp = "2.4.0"
 tokio = { version = "1.47", features = ["io-util", "net", "rt", "sync", "time"] }
 zeroize = "1.8"
+vnc-rs = "0.5.3"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

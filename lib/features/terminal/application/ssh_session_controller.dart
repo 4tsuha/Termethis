@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import '../../connection_logs/domain/connection_log_entry.dart';
 import '../../connection_logs/domain/connection_log_repository.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
+import '../infrastructure/mosh_bootstrapper.dart';
 
 enum SshSessionStatus {
   idle,
@@ -60,6 +62,8 @@ class SshSessionController extends ChangeNotifier {
     required this.profile,
     this.tabId,
     this.connectionLogs,
+    this.moshBootstrapper,
+    this.hostKeys,
   }) : terminal = Terminal(maxLines: 50) {
     terminal.onOutput = _handleTerminalOutput;
     terminal.onResize = _handleResize;
@@ -74,6 +78,8 @@ class SshSessionController extends ChangeNotifier {
   final SshGateway _gateway;
   final TerminalCodec _codec;
   final ConnectionLogRepository? connectionLogs;
+  final RustMoshBootstrapper? moshBootstrapper;
+  final HostKeyRepository? hostKeys;
   final Terminal terminal;
   final Set<VoidCallback> _terminalActivityListeners = {};
   final Set<ValueChanged<String>> _terminalDataListeners = {};
@@ -145,26 +151,32 @@ class SshSessionController extends ChangeNotifier {
     _setStatus(SshSessionStatus.connecting);
 
     try {
-      final connection = await _gateway.connect(
-        SshConnectRequest(
-          profile: profile,
-          authentication: authentication,
-          onUnknownHostKey: (info) async {
-            _setStatus(SshSessionStatus.verifyingHost);
-            return onUnknownHostKey(info);
-          },
-          onInteractivePrompt: onInteractivePrompt,
-          onAuthenticationStarted: () {
-            _setStatus(SshSessionStatus.authenticating);
-          },
-          onOpeningPty: () {
-            _setStatus(SshSessionStatus.openingPty);
-          },
-          terminalWidth: terminal.viewWidth,
-          terminalHeight: terminal.viewHeight,
-          jumpHosts: jumpHosts,
-        ),
-      );
+      final connection = profile.connectionType == ConnectionType.mosh
+          ? await _connectMosh(
+              authentication,
+              onUnknownHostKey,
+              jumpHosts: jumpHosts,
+            )
+          : await _gateway.connect(
+              SshConnectRequest(
+                profile: profile,
+                authentication: authentication,
+                onUnknownHostKey: (info) async {
+                  _setStatus(SshSessionStatus.verifyingHost);
+                  return onUnknownHostKey(info);
+                },
+                onInteractivePrompt: onInteractivePrompt,
+                onAuthenticationStarted: () {
+                  _setStatus(SshSessionStatus.authenticating);
+                },
+                onOpeningPty: () {
+                  _setStatus(SshSessionStatus.openingPty);
+                },
+                terminalWidth: terminal.viewWidth,
+                terminalHeight: terminal.viewHeight,
+                jumpHosts: jumpHosts,
+              ),
+            );
       if (_closing || _disposed) {
         await connection.close();
         return;
@@ -195,6 +207,56 @@ class SshSessionController extends ChangeNotifier {
     } catch (error) {
       failure = SshFailure(SshFailureCode.unexpected, error);
       _setStatus(SshSessionStatus.failed);
+    }
+  }
+
+  Future<SshConnection> _connectMosh(
+    SshAuthentication authentication,
+    HostKeyApprovalHandler onUnknownHostKey, {
+    required List<SshJumpHost> jumpHosts,
+  }) async {
+    if (jumpHosts.isNotEmpty) {
+      throw const SshFailure(SshFailureCode.moshProtocolMismatch);
+    }
+    final bootstrapper = moshBootstrapper;
+    final repository = hostKeys;
+    if (bootstrapper == null || repository == null) {
+      throw const SshFailure(SshFailureCode.moshProtocolMismatch);
+    }
+    var knownHosts = await repository.find(profile.host, profile.port);
+    if (knownHosts.isEmpty) {
+      final probe = await _gateway.connect(
+        SshConnectRequest(
+          profile: profile,
+          authentication: authentication,
+          onUnknownHostKey: onUnknownHostKey,
+          onInteractivePrompt: (_) async => null,
+          onAuthenticationStarted: () {},
+          onOpeningPty: () {},
+          terminalWidth: terminal.viewWidth,
+          terminalHeight: terminal.viewHeight,
+        ),
+      );
+      await probe.close();
+      knownHosts = await repository.find(profile.host, profile.port);
+    }
+    if (knownHosts.isEmpty) {
+      throw const SshFailure(SshFailureCode.hostKeyRejected);
+    }
+    final trusted = [
+      for (final host in knownHosts)
+        '${host.info.algorithm}|${host.info.fingerprintSha256}',
+    ];
+    try {
+      return await bootstrapper.connect(
+        profile: profile,
+        authentication: authentication,
+        trustedHostKeys: trusted,
+      );
+    } on FormatException {
+      throw const SshFailure(SshFailureCode.moshServerMissing);
+    } on SocketException {
+      throw const SshFailure(SshFailureCode.moshUdpUnreachable);
     }
   }
 

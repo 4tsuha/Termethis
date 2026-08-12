@@ -23,8 +23,8 @@ void main() {
 
     await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
-    expect(find.text('FTPマネージャー'), findsOneWidget);
-    expect(find.text('FTPタブがありません'), findsOneWidget);
+    expect(find.text('ファイル'), findsWidgets);
+    expect(find.text('ファイル接続がありません'), findsOneWidget);
 
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
@@ -117,7 +117,7 @@ void main() {
       (key: 'background', label: '動作とバックグラウンド'),
       (key: 'credentials', label: '鍵と認証'),
       (key: 'integrations', label: '連携と診断'),
-      (key: 'file-transfer', label: 'FTP'),
+      (key: 'file-transfer', label: 'ファイル転送'),
       (key: 'about', label: 'Termethisについて'),
     ]) {
       final groupFinder = find.byKey(
@@ -190,7 +190,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('FTP接続'));
+    await tester.tap(find.text('ファイル接続'));
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextFormField);
@@ -236,7 +236,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('FTP接続'));
+    await tester.tap(find.text('ファイル接続'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('FTP（暗号化なし）'));

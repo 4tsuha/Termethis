@@ -30,7 +30,7 @@
 - RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
 - RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
 - ホームの接続先としてSSH・RDP・VNCを一元管理
-- IronRDPとネイティブVulkan Surfaceによるアプリ内RDP、対応アプリへVNC URIを渡すリモートデスクトップ連携
+- IronRDPとネイティブVulkan SurfaceによるRDP、Rust RFBクライアントによるアプリ内VNC
 - 接続先ごとのWake on LAN設定とMagic Packet送信
 - ホーム、接続、ファイル、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
@@ -45,9 +45,9 @@
 
 SSHセッションの保存対象はタブID、接続先ID、表示名だけです。SSH通信、端末の表示内容、パスワード、秘密鍵は保存せず、アプリのプロセス再生成後は切断状態から利用者が再接続します。
 
-Moshは接続プロフィールと統合タブUIを準備済みですが、Mosh/SSPクライアントは未実装です。公式Mosh実装のライセンスとAndroid向け保守方法が確定するまで、不完全な独自プロトコル実装は同梱しません。SSHリモートポートフォワーディングも未実装です。秘密鍵デコードはCPU機能を実行時診断しますが、SVE/SVE2の採用基準を満たす実測がないため現在はportable経路を使用します。
+MoshはSSHで`mosh-server`を起動し、アプリ内SSP transportからUDP接続します。SSHリモートポートフォワーディングはserver-openedチャネルをRust側で処理します。秘密鍵デコードはCPU機能を実行時診断しますが、SVE/SVE2の採用基準を満たす実機測定がないため現在はportable経路を使用します。
 
-RDPはIronRDPでアプリ内接続し、デコード画面を中間フレームへ複製したりDartへ渡したりせず、AndroidのネイティブVulkan Surfaceへ提示します。接続時に入力したパスワードは保存しません。VNCはAndroidの対応クライアントを起動し、接続先とユーザー名だけを渡します。
+RDPはIronRDPでアプリ内接続し、AndroidのネイティブVulkan Surfaceへ提示します。VNCはRustでRFBを処理し、選択中タブへ最新フレームを表示します。接続時に入力したパスワードは保存しません。
 
 ## 開発
 

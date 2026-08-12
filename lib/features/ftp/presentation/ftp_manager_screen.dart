@@ -38,7 +38,7 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.ftpTitle),
+        title: const Text('ファイル'),
         actions: [
           IconButton(
             onPressed: _showConnectionDialog,

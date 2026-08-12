@@ -11,14 +11,21 @@ use russh::keys::{decode_secret_key, HashAlg, PrivateKey, PrivateKeyWithHashAlg}
 use russh::{ChannelMsg, ChannelWriteHalf, Disconnect};
 use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::FileType;
+use tokio::sync::mpsc;
 use tokio::sync::{Mutex, Notify};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
+use vnc::{
+    ClientKeyEvent, ClientMouseEvent, PixelFormat, Rect, VncConnector, VncEncoding, VncEvent,
+    X11Event,
+};
 use zeroize::Zeroize;
 
 const MAX_BUFFER_BYTES: usize = 2 * 1024 * 1024;
+const MAX_VNC_FRAME_BYTES: usize = 2560 * 1600 * 4;
+const MAX_FORWARDED_CHANNELS: usize = 32;
 const MAX_READ_BYTES: usize = 256 * 1024;
 const RETAINED_BUFFER_BYTES: usize = 128 * 1024;
 const READ_BATCH_BYTES: usize = 64 * 1024;
@@ -30,6 +37,7 @@ static PENDING_AUTHS: Lazy<DashMap<i64, PendingAuthentication>> = Lazy::new(Dash
 static SFTP_SESSIONS: Lazy<DashMap<i64, Arc<SftpSessionState>>> = Lazy::new(DashMap::new);
 static SSH_EXEC_CANCELLATIONS: Lazy<DashMap<i64, Arc<Notify>>> = Lazy::new(DashMap::new);
 static SSH_TUNNELS: Lazy<DashMap<i64, Arc<SshTunnel>>> = Lazy::new(DashMap::new);
+static VNC_SESSIONS: Lazy<DashMap<i64, Arc<VncSession>>> = Lazy::new(DashMap::new);
 
 #[derive(Clone)]
 pub struct RustSshConnectRequest {
@@ -120,6 +128,23 @@ pub struct RustSshExecResult {
     pub error_message: Option<String>,
 }
 
+#[derive(Clone)]
+pub struct RustMoshBootstrapRequest {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_kind: String,
+    pub password: String,
+    pub private_key_pem: String,
+    pub passphrase: Option<String>,
+    pub trusted_host_keys: Vec<String>,
+}
+
+pub struct RustMoshBootstrapResult {
+    pub output: String,
+    pub exit_status: Option<u32>,
+}
+
 pub struct RustKeyDecodeDiagnostics {
     pub selected_path: String,
     pub aarch64: bool,
@@ -151,6 +176,27 @@ pub struct RustSshTunnelStatus {
     pub bytes_up: u64,
     pub bytes_down: u64,
     pub active: bool,
+    pub error_message: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct RustVncConnectRequest {
+    pub host: String,
+    pub port: u16,
+    pub password: String,
+    pub shared: bool,
+}
+
+pub struct RustVncConnectResult {
+    pub session_id: i64,
+}
+
+pub struct RustVncFrame {
+    pub width: u32,
+    pub height: u32,
+    pub bgra: Vec<u8>,
+    pub sequence: u64,
+    pub closed: bool,
     pub error_message: Option<String>,
 }
 
@@ -190,9 +236,11 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
         return ssh_connect_via_jumps(request).await;
     }
     let observed = Arc::new(StdMutex::new(None));
+    let (forwarded_tx, forwarded_rx) = mpsc::channel(MAX_FORWARDED_CHANNELS);
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        forwarded_channels: Some(forwarded_tx),
     };
     let mut client = match connect_client(&request.host, request.port, handler).await {
         Ok(client) => client,
@@ -211,6 +259,7 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
                 Vec::new(),
                 request.terminal_width,
                 request.terminal_height,
+                forwarded_rx,
             )
             .await
         }
@@ -223,6 +272,7 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
                     terminal_width: request.terminal_width,
                     terminal_height: request.terminal_height,
                     jump_clients: Vec::new(),
+                    forwarded_channels: forwarded_rx,
                 },
             );
             Ok(RustSshConnectResult {
@@ -257,6 +307,7 @@ pub async fn ssh_continue_authentication(
                 pending.jump_clients,
                 pending.terminal_width,
                 pending.terminal_height,
+                pending.forwarded_channels,
             )
             .await
         }
@@ -391,7 +442,10 @@ pub async fn ssh_resize(
 }
 
 pub async fn ssh_close(session_id: i64) -> Result<()> {
-    let Some((_, session)) = SSH_SESSIONS.remove(&session_id) else {
+    let Some(session) = SSH_SESSIONS
+        .get(&session_id)
+        .map(|entry| Arc::clone(entry.value()))
+    else {
         return Ok(());
     };
     session.closed.store(true, Ordering::Release);
@@ -403,8 +457,9 @@ pub async fn ssh_close(session_id: i64) -> Result<()> {
         .map(|entry| *entry.key())
         .collect();
     for tunnel_id in tunnel_ids {
-        ssh_stop_tunnel(tunnel_id);
+        ssh_stop_tunnel(tunnel_id).await;
     }
+    SSH_SESSIONS.remove(&session_id);
     let _ = session.writer.lock().await.close().await;
     if let Some(client) = session.client.lock().await.take() {
         let _ = client
@@ -452,6 +507,66 @@ pub async fn ssh_execute(request: RustSshExecRequest) -> Result<RustSshExecResul
     };
     SSH_EXEC_CANCELLATIONS.remove(&request.execution_id);
     Ok(result)
+}
+
+pub async fn mosh_bootstrap(request: RustMoshBootstrapRequest) -> Result<RustMoshBootstrapResult> {
+    if request.trusted_host_keys.is_empty() {
+        return Err(anyhow!("No trusted host key is stored for this connection"));
+    }
+    let observed = Arc::new(StdMutex::new(None));
+    let handler = HostKeyHandler {
+        trusted: request.trusted_host_keys.iter().cloned().collect(),
+        observed,
+        forwarded_channels: None,
+    };
+    let mut client = connect_client(&request.host, request.port, handler).await?;
+    if request.auth_kind == "private_key" {
+        authenticate_private_key(
+            &mut client,
+            &request.username,
+            &request.private_key_pem,
+            request.passphrase.as_deref(),
+        )
+        .await?;
+    } else {
+        let authenticated = client
+            .authenticate_password(&request.username, &request.password)
+            .await
+            .context("Mosh bootstrap password authentication failed")?;
+        if !authenticated.success() {
+            return Err(anyhow!("Mosh bootstrap authentication was rejected"));
+        }
+    }
+    let mut channel = client.channel_open_session().await?;
+    channel
+        .exec(true, b"mosh-server new -s -c 256 -l LANG=en_US.UTF-8")
+        .await
+        .context("mosh-server launch was rejected")?;
+    let mut output = Vec::new();
+    let mut exit_status = None;
+    while let Some(message) = channel.wait().await {
+        match message {
+            ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, .. } => {
+                let available = 16 * 1024usize - output.len();
+                output.extend_from_slice(&data[..data.len().min(available)]);
+                if String::from_utf8_lossy(&output).contains("MOSH CONNECT ") {
+                    break;
+                }
+            }
+            ChannelMsg::ExitStatus {
+                exit_status: status,
+            } => exit_status = Some(status),
+            ChannelMsg::Eof | ChannelMsg::Close => break,
+            _ => {}
+        }
+    }
+    let _ = client
+        .disconnect(Disconnect::ByApplication, "", "English")
+        .await;
+    Ok(RustMoshBootstrapResult {
+        output: String::from_utf8_lossy(&output).into_owned(),
+        exit_status,
+    })
 }
 
 pub fn ssh_cancel_execution(execution_id: i64) {
@@ -648,14 +763,16 @@ async fn forward_socks5(
 }
 
 pub async fn ssh_start_tunnel(request: RustSshTunnelStartRequest) -> Result<RustSshTunnelStatus> {
-    if request.kind != "local" && request.kind != "socks5" {
+    if request.kind != "local" && request.kind != "remote" && request.kind != "socks5" {
         return Err(anyhow!("Unsupported SSH tunnel kind"));
     }
     if !request.allow_lan && request.bind_host != "127.0.0.1" {
         return Err(anyhow!("LAN tunnel binding requires explicit permission"));
     }
-    if request.kind == "local" && (request.target_host.is_empty() || request.target_port == 0) {
-        return Err(anyhow!("Local forwarding target is invalid"));
+    if (request.kind == "local" || request.kind == "remote")
+        && (request.target_host.is_empty() || request.target_port == 0)
+    {
+        return Err(anyhow!("SSH forwarding target is invalid"));
     }
     let session = SSH_SESSIONS
         .get(&request.session_id)
@@ -663,6 +780,9 @@ pub async fn ssh_start_tunnel(request: RustSshTunnelStartRequest) -> Result<Rust
         .context("SSH session is not active")?;
     if session.client.lock().await.is_none() {
         return Err(anyhow!("SSH session is closed"));
+    }
+    if request.kind == "remote" {
+        return start_remote_tunnel(request, session).await;
     }
     let listener = TcpListener::bind((request.bind_host.as_str(), request.bind_port))
         .await
@@ -718,6 +838,90 @@ pub async fn ssh_start_tunnel(request: RustSshTunnelStartRequest) -> Result<Rust
     ssh_tunnel_status(tunnel_id)
 }
 
+async fn start_remote_tunnel(
+    request: RustSshTunnelStartRequest,
+    session: Arc<SshSession>,
+) -> Result<RustSshTunnelStatus> {
+    if SSH_TUNNELS.iter().any(|entry| {
+        entry.session_id == request.session_id
+            && entry.kind == "remote"
+            && entry.active.load(Ordering::Acquire)
+    }) {
+        return Err(anyhow!("Only one remote forward can run per SSH session"));
+    }
+    let bound_port = {
+        let mut client = session.client.lock().await;
+        client
+            .as_mut()
+            .context("SSH session is closed")?
+            .tcpip_forward(request.bind_host.clone(), request.bind_port.into())
+            .await
+            .context("SSH server rejected remote forwarding")?
+    };
+    let bind_port = if request.bind_port == 0 {
+        u16::try_from(bound_port).context("SSH server returned an invalid remote port")?
+    } else {
+        request.bind_port
+    };
+    let tunnel_id = next_id();
+    let tunnel = Arc::new(SshTunnel {
+        session_id: request.session_id,
+        kind: request.kind,
+        bind_host: request.bind_host,
+        bind_port,
+        bytes_up: AtomicU64::new(0),
+        bytes_down: AtomicU64::new(0),
+        active: AtomicBool::new(true),
+        error: StdMutex::new(None),
+        stop: Notify::new(),
+    });
+    SSH_TUNNELS.insert(tunnel_id, Arc::clone(&tunnel));
+    let target_host = request.target_host;
+    let target_port = request.target_port;
+    let session_for_task = Arc::clone(&session);
+    tokio::spawn(async move {
+        let mut forwarded_channels = session_for_task.forwarded_channels.lock().await;
+        loop {
+            let received = tokio::select! {
+                _ = tunnel.stop.notified() => break,
+                received = forwarded_channels.recv() => received,
+            };
+            let Some(forwarded) = received else { break };
+            if forwarded.connected_port != u32::from(tunnel.bind_port) {
+                continue;
+            }
+            let tunnel_for_connection = Arc::clone(&tunnel);
+            let target_host = target_host.clone();
+            tokio::spawn(async move {
+                let outcome = async {
+                    let mut socket = TcpStream::connect((target_host.as_str(), target_port))
+                        .await
+                        .context("Remote forwarding target connection failed")?;
+                    let mut stream = forwarded.channel.into_stream();
+                    let (down, up) =
+                        tokio::io::copy_bidirectional(&mut stream, &mut socket).await?;
+                    tunnel_for_connection
+                        .bytes_down
+                        .fetch_add(down, Ordering::AcqRel);
+                    tunnel_for_connection
+                        .bytes_up
+                        .fetch_add(up, Ordering::AcqRel);
+                    Result::<()>::Ok(())
+                }
+                .await;
+                if let Err(error) = outcome {
+                    *tunnel_for_connection
+                        .error
+                        .lock()
+                        .expect("tunnel error mutex poisoned") = Some(format!("{error:#}"));
+                }
+            });
+        }
+        tunnel.active.store(false, Ordering::Release);
+    });
+    ssh_tunnel_status(tunnel_id)
+}
+
 pub fn ssh_tunnel_status(tunnel_id: i64) -> Result<RustSshTunnelStatus> {
     let tunnel = SSH_TUNNELS
         .get(&tunnel_id)
@@ -739,10 +943,19 @@ pub fn ssh_tunnel_status(tunnel_id: i64) -> Result<RustSshTunnelStatus> {
     })
 }
 
-pub fn ssh_stop_tunnel(tunnel_id: i64) {
+pub async fn ssh_stop_tunnel(tunnel_id: i64) {
     if let Some((_, tunnel)) = SSH_TUNNELS.remove(&tunnel_id) {
         tunnel.active.store(false, Ordering::Release);
         tunnel.stop.notify_waiters();
+        if tunnel.kind == "remote" {
+            if let Some(session) = SSH_SESSIONS.get(&tunnel.session_id) {
+                if let Some(client) = session.client.lock().await.as_ref() {
+                    let _ = client
+                        .cancel_tcpip_forward(tunnel.bind_host.clone(), tunnel.bind_port.into())
+                        .await;
+                }
+            }
+        }
     }
 }
 
@@ -751,6 +964,7 @@ pub async fn sftp_connect(request: RustSftpConnectRequest) -> Result<RustSftpCon
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        forwarded_channels: None,
     };
     let mut client = match connect_client(&request.host, request.port, handler).await {
         Ok(client) => client,
@@ -905,9 +1119,239 @@ pub async fn sftp_close(session_id: i64) -> Result<()> {
     Ok(())
 }
 
+pub async fn vnc_connect(request: RustVncConnectRequest) -> Result<RustVncConnectResult> {
+    let tcp = tokio::time::timeout(
+        Duration::from_secs(10),
+        TcpStream::connect((request.host.as_str(), request.port)),
+    )
+    .await
+    .context("VNC connection timed out")?
+    .context("VNC server is unreachable")?;
+    let password = request.password;
+    let client = VncConnector::new(tcp)
+        .set_auth_method(async move { Ok(password) })
+        .add_encoding(VncEncoding::Zrle)
+        .add_encoding(VncEncoding::CopyRect)
+        .add_encoding(VncEncoding::Raw)
+        .add_encoding(VncEncoding::DesktopSizePseudo)
+        .allow_shared(request.shared)
+        .set_pixel_format(PixelFormat::bgra())
+        .build()
+        .context("VNC configuration failed")?
+        .try_start()
+        .await
+        .context("VNC handshake failed")?
+        .finish()
+        .context("VNC authentication failed")?;
+    let session = Arc::new(VncSession {
+        client: client.clone(),
+        width: AtomicU64::new(0),
+        height: AtomicU64::new(0),
+        sequence: AtomicU64::new(0),
+        frame: Mutex::new(Vec::new()),
+        frame_ready: Notify::new(),
+        closed: AtomicBool::new(false),
+        error: StdMutex::new(None),
+    });
+    let session_id = next_id();
+    VNC_SESSIONS.insert(session_id, Arc::clone(&session));
+    tokio::spawn(async move {
+        let mut refresh = tokio::time::interval(Duration::from_millis(33));
+        loop {
+            tokio::select! {
+                _ = refresh.tick() => {
+                    if client.input(X11Event::Refresh).await.is_err() { break; }
+                }
+                event = client.recv_event() => {
+                    match event {
+                        Ok(VncEvent::SetResolution(screen)) => {
+                            let width = u64::from(screen.width);
+                            let height = u64::from(screen.height);
+                            let frame_bytes = width.saturating_mul(height).saturating_mul(4);
+                            if frame_bytes > MAX_VNC_FRAME_BYTES as u64 {
+                                *session.error.lock().expect("VNC error mutex poisoned") = Some(
+                                    "VNC framebuffer exceeds the 2560x1600 safety limit".to_owned(),
+                                );
+                                break;
+                            }
+                            session.width.store(width, Ordering::Release);
+                            session.height.store(height, Ordering::Release);
+                            session.frame.lock().await.resize(frame_bytes as usize, 0);
+                        }
+                        Ok(VncEvent::RawImage(rect, pixels)) => {
+                            if apply_vnc_rect(&session, rect, &pixels).await {
+                                session.sequence.fetch_add(1, Ordering::AcqRel);
+                                session.frame_ready.notify_waiters();
+                            }
+                        }
+                        Ok(VncEvent::Copy(destination, source)) => {
+                            if copy_vnc_rect(&session, destination, source).await {
+                                session.sequence.fetch_add(1, Ordering::AcqRel);
+                                session.frame_ready.notify_waiters();
+                            }
+                        }
+                        Ok(VncEvent::Error(message)) => {
+                            *session.error.lock().expect("VNC error mutex poisoned") = Some(message);
+                            break;
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            *session.error.lock().expect("VNC error mutex poisoned") = Some(error.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        session.closed.store(true, Ordering::Release);
+        session.frame_ready.notify_waiters();
+    });
+    Ok(RustVncConnectResult { session_id })
+}
+
+pub async fn vnc_read_frame(
+    session_id: i64,
+    after_sequence: u64,
+    wait_millis: u32,
+) -> Result<RustVncFrame> {
+    let session = VNC_SESSIONS
+        .get(&session_id)
+        .map(|entry| Arc::clone(entry.value()))
+        .context("VNC session not found")?;
+    if session.sequence.load(Ordering::Acquire) <= after_sequence
+        && !session.closed.load(Ordering::Acquire)
+    {
+        let _ = tokio::time::timeout(
+            Duration::from_millis(u64::from(wait_millis.clamp(1, 1_000))),
+            session.frame_ready.notified(),
+        )
+        .await;
+    }
+    let sequence = session.sequence.load(Ordering::Acquire);
+    let frame = if sequence > after_sequence {
+        session.frame.lock().await.clone()
+    } else {
+        Vec::new()
+    };
+    let error_message = session
+        .error
+        .lock()
+        .expect("VNC error mutex poisoned")
+        .clone();
+    Ok(RustVncFrame {
+        width: session.width.load(Ordering::Acquire) as u32,
+        height: session.height.load(Ordering::Acquire) as u32,
+        bgra: frame,
+        sequence,
+        closed: session.closed.load(Ordering::Acquire),
+        error_message,
+    })
+}
+
+pub async fn vnc_pointer(session_id: i64, x: u16, y: u16, buttons: u8) -> Result<()> {
+    let client = VNC_SESSIONS
+        .get(&session_id)
+        .map(|entry| entry.client.clone())
+        .context("VNC session not found")?;
+    client
+        .input(X11Event::PointerEvent(ClientMouseEvent::from((
+            x, y, buttons,
+        ))))
+        .await
+        .context("VNC pointer input failed")
+}
+
+pub async fn vnc_key(session_id: i64, key_sym: u32, down: bool) -> Result<()> {
+    let client = VNC_SESSIONS
+        .get(&session_id)
+        .map(|entry| entry.client.clone())
+        .context("VNC session not found")?;
+    client
+        .input(X11Event::KeyEvent(ClientKeyEvent::from((key_sym, down))))
+        .await
+        .context("VNC key input failed")
+}
+
+pub async fn vnc_close(session_id: i64) -> Result<()> {
+    let Some((_, session)) = VNC_SESSIONS.remove(&session_id) else {
+        return Ok(());
+    };
+    session.closed.store(true, Ordering::Release);
+    session.frame_ready.notify_waiters();
+    session.client.close().await.context("VNC close failed")
+}
+
+async fn apply_vnc_rect(session: &VncSession, rect: Rect, pixels: &[u8]) -> bool {
+    let width = session.width.load(Ordering::Acquire) as usize;
+    let height = session.height.load(Ordering::Acquire) as usize;
+    let rect_width = usize::from(rect.width);
+    let rect_height = usize::from(rect.height);
+    let rect_x = usize::from(rect.x);
+    let rect_y = usize::from(rect.y);
+    if width == 0
+        || height == 0
+        || rect_x >= width
+        || rect_y >= height
+        || pixels.len() < rect_width * rect_height * 4
+    {
+        return false;
+    }
+    let copy_width = rect_width.min(width - rect_x);
+    let copy_height = rect_height.min(height - rect_y);
+    let mut frame = session.frame.lock().await;
+    for row in 0..copy_height {
+        let source = row * rect_width * 4;
+        let target = ((rect_y + row) * width + rect_x) * 4;
+        frame[target..target + copy_width * 4]
+            .copy_from_slice(&pixels[source..source + copy_width * 4]);
+    }
+    true
+}
+
+async fn copy_vnc_rect(session: &VncSession, destination: Rect, source: Rect) -> bool {
+    let width = session.width.load(Ordering::Acquire) as usize;
+    let height = session.height.load(Ordering::Acquire) as usize;
+    let source_x = usize::from(source.x);
+    let source_y = usize::from(source.y);
+    let destination_x = usize::from(destination.x);
+    let destination_y = usize::from(destination.y);
+    if source_x >= width || source_y >= height || destination_x >= width || destination_y >= height
+    {
+        return false;
+    }
+    let copy_width = usize::from(source.width)
+        .min(width - source_x)
+        .min(width - destination_x);
+    let copy_height = usize::from(source.height)
+        .min(height - source_y)
+        .min(height - destination_y);
+    if copy_width == 0 || copy_height == 0 {
+        return false;
+    }
+    let mut frame = session.frame.lock().await;
+    let mut temporary = vec![0; copy_width * copy_height * 4];
+    for row in 0..copy_height {
+        let source_offset = ((source_y + row) * width + source_x) * 4;
+        temporary[row * copy_width * 4..(row + 1) * copy_width * 4]
+            .copy_from_slice(&frame[source_offset..source_offset + copy_width * 4]);
+    }
+    for row in 0..copy_height {
+        let target_offset = ((destination_y + row) * width + destination_x) * 4;
+        frame[target_offset..target_offset + copy_width * 4]
+            .copy_from_slice(&temporary[row * copy_width * 4..(row + 1) * copy_width * 4]);
+    }
+    true
+}
+
 struct HostKeyHandler {
     trusted: HashSet<String>,
     observed: Arc<StdMutex<Option<RustHostKey>>>,
+    forwarded_channels: Option<mpsc::Sender<ForwardedTcpIpChannel>>,
+}
+
+struct ForwardedTcpIpChannel {
+    channel: russh::Channel<client::Msg>,
+    connected_port: u32,
 }
 
 impl client::Handler for HostKeyHandler {
@@ -925,6 +1369,24 @@ impl client::Handler for HostKeyHandler {
         *self.observed.lock().expect("host key mutex poisoned") = Some(host_key);
         Ok(self.trusted.contains(&identity))
     }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        _connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        _session: &mut client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        if let Some(sender) = &self.forwarded_channels {
+            let _ = sender.try_send(ForwardedTcpIpChannel {
+                channel,
+                connected_port,
+            });
+        }
+        Ok(())
+    }
 }
 
 enum AuthenticationOutcome {
@@ -937,6 +1399,7 @@ struct PendingAuthentication {
     jump_clients: Vec<client::Handle<HostKeyHandler>>,
     terminal_width: u32,
     terminal_height: u32,
+    forwarded_channels: mpsc::Receiver<ForwardedTcpIpChannel>,
 }
 
 struct SshSession {
@@ -948,6 +1411,7 @@ struct SshSession {
     space_ready: Notify,
     closed: AtomicBool,
     interactive_response_pending: AtomicBool,
+    forwarded_channels: Mutex<mpsc::Receiver<ForwardedTcpIpChannel>>,
 }
 
 struct SshTunnel {
@@ -960,6 +1424,17 @@ struct SshTunnel {
     active: AtomicBool,
     error: StdMutex<Option<String>>,
     stop: Notify,
+}
+
+struct VncSession {
+    client: vnc::VncClient,
+    width: AtomicU64,
+    height: AtomicU64,
+    sequence: AtomicU64,
+    frame: Mutex<Vec<u8>>,
+    frame_ready: Notify,
+    closed: AtomicBool,
+    error: StdMutex<Option<String>>,
 }
 
 struct OutputBuffer {
@@ -1021,6 +1496,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
     let first_handler = HostKeyHandler {
         trusted: first.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&first_observed),
+        forwarded_channels: None,
     };
     let mut current = match connect_client(&first.host, first.port, first_handler).await {
         Ok(client) => client,
@@ -1064,6 +1540,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
         let handler = HostKeyHandler {
             trusted: next.trusted_host_keys.iter().cloned().collect(),
             observed: Arc::clone(&observed),
+            forwarded_channels: None,
         };
         let next_client = tokio::time::timeout(
             Duration::from_secs(15),
@@ -1105,9 +1582,11 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
         .await
         .context("Last jump host rejected target direct-tcpip")?;
     let observed = Arc::new(StdMutex::new(None));
+    let (forwarded_tx, forwarded_rx) = mpsc::channel(MAX_FORWARDED_CHANNELS);
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        forwarded_channels: Some(forwarded_tx),
     };
     let mut target = match tokio::time::timeout(
         Duration::from_secs(15),
@@ -1139,6 +1618,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
         jump_clients,
         request.terminal_width,
         request.terminal_height,
+        forwarded_rx,
     )
     .await
 }
@@ -1277,6 +1757,7 @@ async fn execute_ssh_command(
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed,
+        forwarded_channels: None,
     };
     let mut client = connect_client(&request.host, request.port, handler).await?;
     match request.auth_kind.as_str() {
@@ -1383,6 +1864,7 @@ async fn finalize_ssh_session(
     jump_clients: Vec<client::Handle<HostKeyHandler>>,
     width: u32,
     height: u32,
+    forwarded_channels: mpsc::Receiver<ForwardedTcpIpChannel>,
 ) -> Result<RustSshConnectResult> {
     let channel = client
         .channel_open_session()
@@ -1410,6 +1892,7 @@ async fn finalize_ssh_session(
         space_ready: Notify::new(),
         closed: AtomicBool::new(false),
         interactive_response_pending: AtomicBool::new(false),
+        forwarded_channels: Mutex::new(forwarded_channels),
     });
     let id = next_id();
     SSH_SESSIONS.insert(id, Arc::clone(&session));

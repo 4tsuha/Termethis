@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../application/connection_profiles_controller.dart';
 import '../application/connection_tabs_controller.dart';
-import '../application/remote_desktop_launcher_provider.dart';
 import '../domain/connection_profile.dart';
 import '../domain/remote_desktop_launcher.dart';
 import '../../wake_on_lan/application/wake_on_lan_provider.dart';
@@ -145,7 +144,8 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         return;
       }
 
-      if (profile.connectionType == ConnectionType.rdp) {
+      if (profile.connectionType == ConnectionType.rdp ||
+          profile.connectionType == ConnectionType.vnc) {
         final tabId = await ref
             .read(connectionTabsProvider.notifier)
             .open(profile);
@@ -159,15 +159,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         }
         return;
       }
-      final tabId = await ref
-          .read(connectionTabsProvider.notifier)
-          .open(profile);
-      await ref.read(remoteDesktopLauncherProvider).launch(profile);
-      if (context.mounted) {
-        context.go(
-          Uri(path: '/connections', queryParameters: {'tab': tabId}).toString(),
-        );
-      }
+      throw StateError('未対応の接続方式です。');
     } on RemoteDesktopLaunchFailure catch (error) {
       if (context.mounted) {
         await _showRemoteDesktopFailure(
@@ -349,9 +341,9 @@ class _ConnectionProfileCard extends StatelessWidget {
     final statusColor = _connectionStatusColor(colors, status);
     final statusLabel = switch (profile.connectionType) {
       ConnectionType.ssh => _connectionStatusText(l10n, status),
-      ConnectionType.mosh => '利用準備中',
+      ConnectionType.mosh => 'アプリ内蔵',
       ConnectionType.rdp => 'アプリ内蔵',
-      ConnectionType.vnc => '外部アプリ',
+      ConnectionType.vnc => 'アプリ内蔵',
     };
 
     return Card(

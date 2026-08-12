@@ -21,6 +21,7 @@ class ConnectionEditorScreen extends ConsumerStatefulWidget {
     this.connectionType = ConnectionType.ssh,
     this.allowedConnectionTypes = const {
       ConnectionType.ssh,
+      ConnectionType.mosh,
       ConnectionType.rdp,
       ConnectionType.vnc,
     },
@@ -268,6 +269,8 @@ class _ConnectionEditorScreenState
                       subtitle: Text(
                         _connectionType == ConnectionType.rdp
                             ? l10n.internalRdpAuthenticationNotice
+                            : _connectionType == ConnectionType.vnc
+                            ? 'VNC認証は接続開始時にアプリ内で行います。パスワードは接続中だけ保持します。'
                             : l10n.externalAuthenticationNotice,
                       ),
                     ),
@@ -817,6 +820,7 @@ class _ConnectionTypeSelector extends StatelessWidget {
         for (final type in ConnectionType.values) ...[
           if (allowedTypes.contains(type))
             _ConnectionTypeChoice(
+              key: ValueKey('connection-type-${type.name}'),
               title: switch (type) {
                 ConnectionType.ssh => l10n.connectionTypeSsh,
                 ConnectionType.mosh => 'Mosh',
@@ -843,6 +847,7 @@ class _ConnectionTypeSelector extends StatelessWidget {
 
 class _ConnectionTypeChoice extends StatelessWidget {
   const _ConnectionTypeChoice({
+    super.key,
     required this.title,
     required this.description,
     required this.selected,

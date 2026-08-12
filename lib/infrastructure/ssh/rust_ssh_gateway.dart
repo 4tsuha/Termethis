@@ -247,9 +247,6 @@ class RustSshConnection implements TunnelCapableSshConnection {
 
   @override
   Future<SshTunnelStatus> startTunnel(SshTunnelRequest request) async {
-    if (request.kind == SshTunnelKind.remote) {
-      throw UnsupportedError('リモートポートフォワーディングはまだ利用できません。');
-    }
     final status = await rust.sshStartTunnel(
       request: rust.RustSshTunnelStartRequest(
         sessionId: _sessionId,

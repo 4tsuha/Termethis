@@ -55,6 +55,7 @@ void main() {
     expect(find.text('開発サーバー'), findsOneWidget);
     expect(find.text('developer@192.168.1.20:2222'), findsOneWidget);
     expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('Mosh'), findsOneWidget);
     expect(find.text('未接続'), findsOneWidget);
     expect(find.byTooltip('接続'), findsOneWidget);
     final card = tester.widget<Card>(find.byType(Card));
@@ -433,7 +434,9 @@ void main() {
     expect(find.text('リモート画面'), findsOneWidget);
     expect(find.text('ホスト名またはIPアドレス'), findsOneWidget);
 
-    await tester.tap(find.text('RDP'));
+    final rdpChoice = find.byKey(const ValueKey('connection-type-rdp'));
+    await tester.ensureVisible(rdpChoice);
+    await tester.tap(rdpChoice);
     await tester.pumpAndSettle();
 
     expect(find.text('接続先を追加'), findsOneWidget);
@@ -477,12 +480,12 @@ void main() {
     await tester.tap(find.text('Windowsサーバー'));
     await tester.pumpAndSettle();
 
-    expect(find.text('IronRDPで接続'), findsOneWidget);
+    expect(find.text('RDP接続'), findsOneWidget);
     expect(find.text('operator · rdp.example.com:3389'), findsOneWidget);
     expect(launcher.lastProfile, isNull);
   });
 
-  testWidgets('VNC接続先を対応アプリへ渡す', (tester) async {
+  testWidgets('VNC接続先をアプリ内接続タブで開く', (tester) async {
     final launcher = _RecordingRemoteDesktopLauncher();
     final repository = EphemeralConnectionProfileRepository(
       initialProfiles: const [
@@ -510,12 +513,12 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Linuxデスクトップ'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(seconds: 1));
 
-    expect(launcher.lastProfile?.connectionType, ConnectionType.vnc);
-    expect(launcher.lastProfile?.host, 'vnc.example.com');
-    expect(launcher.lastProfile?.port, 5901);
-    expect(launcher.lastProfile?.username, 'operator');
+    expect(launcher.lastProfile, isNull);
+    expect(find.text('Linuxデスクトップ'), findsWidgets);
   });
 }
 

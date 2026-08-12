@@ -38,6 +38,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustHostKey dco_decode_box_autoadd_rust_host_key(dynamic raw);
 
   @protected
+  RustMoshBootstrapRequest dco_decode_box_autoadd_rust_mosh_bootstrap_request(
+    dynamic raw,
+  );
+
+  @protected
   RustRdpConnectRequest dco_decode_box_autoadd_rust_rdp_connect_request(
     dynamic raw,
   );
@@ -58,6 +63,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustSshTunnelStartRequest
   dco_decode_box_autoadd_rust_ssh_tunnel_start_request(dynamic raw);
+
+  @protected
+  RustVncConnectRequest dco_decode_box_autoadd_rust_vnc_connect_request(
+    dynamic raw,
+  );
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -118,6 +128,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustKeyDecodeDiagnostics dco_decode_rust_key_decode_diagnostics(dynamic raw);
 
   @protected
+  RustMoshBootstrapRequest dco_decode_rust_mosh_bootstrap_request(dynamic raw);
+
+  @protected
+  RustMoshBootstrapResult dco_decode_rust_mosh_bootstrap_result(dynamic raw);
+
+  @protected
   RustRdpConnectRequest dco_decode_rust_rdp_connect_request(dynamic raw);
 
   @protected
@@ -165,6 +181,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSshTunnelStatus dco_decode_rust_ssh_tunnel_status(dynamic raw);
 
   @protected
+  RustVncConnectRequest dco_decode_rust_vnc_connect_request(dynamic raw);
+
+  @protected
+  RustVncConnectResult dco_decode_rust_vnc_connect_result(dynamic raw);
+
+  @protected
+  RustVncFrame dco_decode_rust_vnc_frame(dynamic raw);
+
+  @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
@@ -202,6 +227,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustMoshBootstrapRequest sse_decode_box_autoadd_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustRdpConnectRequest sse_decode_box_autoadd_rust_rdp_connect_request(
     SseDeserializer deserializer,
   );
@@ -224,6 +254,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustSshTunnelStartRequest
   sse_decode_box_autoadd_rust_ssh_tunnel_start_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncConnectRequest sse_decode_box_autoadd_rust_vnc_connect_request(
     SseDeserializer deserializer,
   );
 
@@ -298,6 +333,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustMoshBootstrapRequest sse_decode_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustMoshBootstrapResult sse_decode_rust_mosh_bootstrap_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustRdpConnectRequest sse_decode_rust_rdp_connect_request(
     SseDeserializer deserializer,
   );
@@ -365,6 +410,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustVncConnectRequest sse_decode_rust_vnc_connect_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncConnectResult sse_decode_rust_vnc_connect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncFrame sse_decode_rust_vnc_frame(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
@@ -410,6 +468,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_rust_rdp_connect_request(
     RustRdpConnectRequest self,
     SseSerializer serializer,
@@ -436,6 +500,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_rust_ssh_tunnel_start_request(
     RustSshTunnelStartRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_rust_vnc_connect_request(
+    RustVncConnectRequest self,
     SseSerializer serializer,
   );
 
@@ -524,6 +594,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_mosh_bootstrap_result(
+    RustMoshBootstrapResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_rust_rdp_connect_request(
     RustRdpConnectRequest self,
     SseSerializer serializer,
@@ -603,6 +685,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RustSshTunnelStatus self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_rust_vnc_connect_request(
+    RustVncConnectRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_vnc_connect_result(
+    RustVncConnectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_vnc_frame(RustVncFrame self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_16(int self, SseSerializer serializer);

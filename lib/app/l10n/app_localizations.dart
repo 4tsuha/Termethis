@@ -901,19 +901,19 @@ abstract class AppLocalizations {
   /// No description provided for @ftpAddTab.
   ///
   /// In ja, this message translates to:
-  /// **'FTP接続'**
+  /// **'ファイル接続'**
   String get ftpAddTab;
 
   /// No description provided for @ftpEmptyTitle.
   ///
   /// In ja, this message translates to:
-  /// **'FTPタブがありません'**
+  /// **'ファイル接続がありません'**
   String get ftpEmptyTitle;
 
   /// No description provided for @ftpEmptyMessage.
   ///
   /// In ja, this message translates to:
-  /// **'接続先を追加すると、サーバー内のフォルダーを階層表示できます。'**
+  /// **'FTP、FTPS、SFTPの接続先を追加すると、サーバー内のファイルを管理できます。'**
   String get ftpEmptyMessage;
 
   /// No description provided for @ftpConnectionTitle.

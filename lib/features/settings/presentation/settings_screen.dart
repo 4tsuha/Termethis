@@ -390,8 +390,8 @@ class SettingsScreen extends ConsumerWidget {
           _SettingsGroup(
             storageKey: 'file-transfer',
             icon: Icons.folder_copy_outlined,
-            title: l10n.settingsFtpSection,
-            summary: '転送方式と証明書',
+            title: 'ファイル転送',
+            summary: 'FTP、FTPS、SFTPの安全な接続',
             children: [
               ListTile(
                 leading: const Icon(Icons.security_outlined),
@@ -883,7 +883,7 @@ class _SettingsGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
       color: colors.surfaceContainerLow,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -891,7 +891,7 @@ class _SettingsGroup extends StatelessWidget {
       child: ExpansionTile(
         key: PageStorageKey('settings-group-$storageKey'),
         maintainState: true,
-        tilePadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+        tilePadding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
         childrenPadding: const EdgeInsets.only(bottom: 8),
         collapsedShape: const Border(),
         shape: const Border(),
@@ -901,7 +901,7 @@ class _SettingsGroup extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(9),
             child: Icon(icon, color: colors.onPrimaryContainer),
           ),
         ),
@@ -911,7 +911,12 @@ class _SettingsGroup extends StatelessWidget {
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          summary,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
         children: [
           Divider(height: 1, color: colors.outlineVariant),
           for (var index = 0; index < children.length; index++) ...[

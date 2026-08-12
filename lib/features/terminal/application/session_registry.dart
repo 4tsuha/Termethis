@@ -8,6 +8,7 @@ import '../../connection_logs/domain/connection_log_repository.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../settings/application/background_session_coordinator.dart';
 import '../domain/ssh_gateway.dart';
+import '../infrastructure/mosh_bootstrapper.dart';
 import 'ssh_session_controller.dart';
 
 final hostKeyRepositoryProvider = Provider<HostKeyRepository>(
@@ -28,6 +29,7 @@ final sessionRegistryProvider = Provider<SessionRegistry>((ref) {
     ref.watch(terminalCodecProvider),
     backgroundSessions: ref.watch(backgroundSessionCoordinatorProvider),
     connectionLogs: ref.watch(connectionLogRepositoryProvider),
+    hostKeys: ref.watch(hostKeyRepositoryProvider),
   );
   ref.onDispose(registry.dispose);
   return registry;
@@ -39,12 +41,14 @@ class SessionRegistry {
     this._codec, {
     this.backgroundSessions,
     this.connectionLogs,
+    required this.hostKeys,
   });
 
   final SshGateway _gateway;
   final TerminalCodec _codec;
   final BackgroundSessionCoordinator? backgroundSessions;
   final ConnectionLogRepository? connectionLogs;
+  final HostKeyRepository hostKeys;
   final Map<String, SshSessionController> _sessions = {};
 
   SshSessionController open(String tabId, ConnectionProfile profile) {
@@ -55,6 +59,8 @@ class SessionRegistry {
         profile: profile,
         tabId: tabId,
         connectionLogs: connectionLogs,
+        moshBootstrapper: const RustMoshBootstrapper(),
+        hostKeys: hostKeys,
       );
       session.addListener(_syncBackgroundSessions);
       return session;

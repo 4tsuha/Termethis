@@ -1,0 +1,10 @@
+name: mosh_dart
+version: 0.1.0
+publish_to: none
+description: MIT-licensed Mosh SSP transport used by Termethis.
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  pointycastle: ^4.0.0

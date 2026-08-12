@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `release_excess_capacity`, `resolve_sftp_path`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`, `SshTunnel`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
+// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `apply_vnc_rect`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `copy_vnc_rect`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `release_excess_capacity`, `resolve_sftp_path`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`, `start_remote_tunnel`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `ForwardedTcpIpChannel`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`, `SshTunnel`, `VncSession`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `server_channel_open_forwarded_tcpip`
 
 Future<RustSshConnectResult> sshConnect({
   required RustSshConnectRequest request,
@@ -57,6 +57,10 @@ Future<void> sshClose({required PlatformInt64 sessionId}) =>
 
 Future<RustSshExecResult> sshExecute({required RustSshExecRequest request}) =>
     RustLib.instance.api.crateApiCoreSshExecute(request: request);
+
+Future<RustMoshBootstrapResult> moshBootstrap({
+  required RustMoshBootstrapRequest request,
+}) => RustLib.instance.api.crateApiCoreMoshBootstrap(request: request);
 
 Future<void> sshCancelExecution({required PlatformInt64 executionId}) => RustLib
     .instance
@@ -148,6 +152,45 @@ Future<void> sftpDeleteEmptyDirectory({
 
 Future<void> sftpClose({required PlatformInt64 sessionId}) =>
     RustLib.instance.api.crateApiCoreSftpClose(sessionId: sessionId);
+
+Future<RustVncConnectResult> vncConnect({
+  required RustVncConnectRequest request,
+}) => RustLib.instance.api.crateApiCoreVncConnect(request: request);
+
+Future<RustVncFrame> vncReadFrame({
+  required PlatformInt64 sessionId,
+  required BigInt afterSequence,
+  required int waitMillis,
+}) => RustLib.instance.api.crateApiCoreVncReadFrame(
+  sessionId: sessionId,
+  afterSequence: afterSequence,
+  waitMillis: waitMillis,
+);
+
+Future<void> vncPointer({
+  required PlatformInt64 sessionId,
+  required int x,
+  required int y,
+  required int buttons,
+}) => RustLib.instance.api.crateApiCoreVncPointer(
+  sessionId: sessionId,
+  x: x,
+  y: y,
+  buttons: buttons,
+);
+
+Future<void> vncKey({
+  required PlatformInt64 sessionId,
+  required int keySym,
+  required bool down,
+}) => RustLib.instance.api.crateApiCoreVncKey(
+  sessionId: sessionId,
+  keySym: keySym,
+  down: down,
+);
+
+Future<void> vncClose({required PlatformInt64 sessionId}) =>
+    RustLib.instance.api.crateApiCoreVncClose(sessionId: sessionId);
 
 class RustAuthChallenge {
   final String name;
@@ -262,6 +305,71 @@ class RustKeyDecodeDiagnostics {
           p50Microseconds == other.p50Microseconds &&
           p95Microseconds == other.p95Microseconds &&
           successfulIterations == other.successfulIterations;
+}
+
+class RustMoshBootstrapRequest {
+  final String host;
+  final int port;
+  final String username;
+  final String authKind;
+  final String password;
+  final String privateKeyPem;
+  final String? passphrase;
+  final List<String> trustedHostKeys;
+
+  const RustMoshBootstrapRequest({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.authKind,
+    required this.password,
+    required this.privateKeyPem,
+    this.passphrase,
+    required this.trustedHostKeys,
+  });
+
+  @override
+  int get hashCode =>
+      host.hashCode ^
+      port.hashCode ^
+      username.hashCode ^
+      authKind.hashCode ^
+      password.hashCode ^
+      privateKeyPem.hashCode ^
+      passphrase.hashCode ^
+      trustedHostKeys.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustMoshBootstrapRequest &&
+          runtimeType == other.runtimeType &&
+          host == other.host &&
+          port == other.port &&
+          username == other.username &&
+          authKind == other.authKind &&
+          password == other.password &&
+          privateKeyPem == other.privateKeyPem &&
+          passphrase == other.passphrase &&
+          trustedHostKeys == other.trustedHostKeys;
+}
+
+class RustMoshBootstrapResult {
+  final String output;
+  final int? exitStatus;
+
+  const RustMoshBootstrapResult({required this.output, this.exitStatus});
+
+  @override
+  int get hashCode => output.hashCode ^ exitStatus.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustMoshBootstrapResult &&
+          runtimeType == other.runtimeType &&
+          output == other.output &&
+          exitStatus == other.exitStatus;
 }
 
 class RustSftpConnectRequest {
@@ -743,5 +851,88 @@ class RustSshTunnelStatus {
           bytesUp == other.bytesUp &&
           bytesDown == other.bytesDown &&
           active == other.active &&
+          errorMessage == other.errorMessage;
+}
+
+class RustVncConnectRequest {
+  final String host;
+  final int port;
+  final String password;
+  final bool shared;
+
+  const RustVncConnectRequest({
+    required this.host,
+    required this.port,
+    required this.password,
+    required this.shared,
+  });
+
+  @override
+  int get hashCode =>
+      host.hashCode ^ port.hashCode ^ password.hashCode ^ shared.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustVncConnectRequest &&
+          runtimeType == other.runtimeType &&
+          host == other.host &&
+          port == other.port &&
+          password == other.password &&
+          shared == other.shared;
+}
+
+class RustVncConnectResult {
+  final PlatformInt64 sessionId;
+
+  const RustVncConnectResult({required this.sessionId});
+
+  @override
+  int get hashCode => sessionId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustVncConnectResult &&
+          runtimeType == other.runtimeType &&
+          sessionId == other.sessionId;
+}
+
+class RustVncFrame {
+  final int width;
+  final int height;
+  final Uint8List bgra;
+  final BigInt sequence;
+  final bool closed;
+  final String? errorMessage;
+
+  const RustVncFrame({
+    required this.width,
+    required this.height,
+    required this.bgra,
+    required this.sequence,
+    required this.closed,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      width.hashCode ^
+      height.hashCode ^
+      bgra.hashCode ^
+      sequence.hashCode ^
+      closed.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustVncFrame &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          bgra == other.bgra &&
+          sequence == other.sequence &&
+          closed == other.closed &&
           errorMessage == other.errorMessage;
 }

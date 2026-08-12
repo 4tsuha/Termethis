@@ -8,6 +8,7 @@ import 'app/app.dart';
 import 'app/font_licenses.dart';
 import 'features/connections/application/connection_profiles_controller.dart';
 import 'features/command_palette/application/command_palette_controller.dart';
+import 'features/command_palette/domain/command_snippet.dart';
 import 'features/connections/application/connection_tabs_controller.dart';
 import 'features/connections/application/ssh_routes_controller.dart';
 import 'features/connection_logs/application/connection_logs_controller.dart';
@@ -16,6 +17,7 @@ import 'features/connections/domain/connection_profile_repository.dart';
 import 'features/connections/domain/connection_tab.dart';
 import 'features/connections/domain/credential_vault.dart';
 import 'features/connections/domain/remote_desktop_launcher.dart';
+import 'features/connections/domain/ssh_route_configuration.dart';
 import 'features/connections/application/remote_desktop_launcher_provider.dart';
 import 'features/diagnostics/application/shizuku_diagnostics_controller.dart';
 import 'features/diagnostics/domain/shizuku_diagnostics_gateway.dart';
@@ -102,6 +104,8 @@ Future<void> main() async {
       remoteDesktopLauncher: const AndroidRemoteDesktopLauncher(),
       connectionTabStore: SharedPreferencesConnectionTabStore(),
       connectionLogRepository: SharedPreferencesConnectionLogRepository(),
+      commandSnippetStore: SharedPreferencesCommandSnippetStore(),
+      sshRouteStore: SharedPreferencesSshRouteStore(),
       shizukuDiagnosticsGateway: const AndroidShizukuDiagnosticsGateway(),
     ),
   );
@@ -131,6 +135,8 @@ class MainApp extends StatefulWidget {
     this.remoteDesktopLauncher = const UnavailableRemoteDesktopLauncher(),
     this.connectionTabStore,
     this.connectionLogRepository,
+    this.commandSnippetStore,
+    this.sshRouteStore,
     this.shizukuDiagnosticsGateway =
         const UnavailableShizukuDiagnosticsGateway(),
     super.key,
@@ -152,6 +158,8 @@ class MainApp extends StatefulWidget {
   final RemoteDesktopLauncher remoteDesktopLauncher;
   final ConnectionTabStore? connectionTabStore;
   final ConnectionLogRepository? connectionLogRepository;
+  final CommandSnippetStore? commandSnippetStore;
+  final SshRouteStore? sshRouteStore;
   final ShizukuDiagnosticsGateway shizukuDiagnosticsGateway;
 
   @override
@@ -161,6 +169,8 @@ class MainApp extends StatefulWidget {
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   ConnectionProfileRepository? _profiles;
   HostKeyRepository? _hostKeys;
+  late final CommandSnippetStore _commandSnippetStore;
+  late final SshRouteStore _sshRouteStore;
 
   @override
   void initState() {
@@ -171,6 +181,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       _profiles = DriftConnectionProfileRepository(database);
       _hostKeys = DriftHostKeyRepository(database);
     }
+    _commandSnippetStore =
+        widget.commandSnippetStore ?? EphemeralCommandSnippetStore();
+    _sshRouteStore = widget.sshRouteStore ?? EphemeralSshRouteStore();
   }
 
   @override
@@ -242,12 +255,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         shizukuDiagnosticsGatewayProvider.overrideWithValue(
           widget.shizukuDiagnosticsGateway,
         ),
-        commandSnippetStoreProvider.overrideWithValue(
-          SharedPreferencesCommandSnippetStore(),
-        ),
-        sshRouteStoreProvider.overrideWithValue(
-          SharedPreferencesSshRouteStore(),
-        ),
+        commandSnippetStoreProvider.overrideWithValue(_commandSnippetStore),
+        sshRouteStoreProvider.overrideWithValue(_sshRouteStore),
       ],
       child: const TermethisApp(),
     );

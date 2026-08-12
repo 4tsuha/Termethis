@@ -22,7 +22,7 @@ Android側はAndroid Keystoreのユーザー認証必須鍵とシステム認証
 
 ProxyJumpは各段の保存済みSSHプロフィール、個別の資格情報、個別のホスト鍵検証を使い、踏み台の`direct-tcpip`チャネルを`russh::client::connect_stream`へ渡す。保存時にプロフィールIDの有向グラフを検査し、循環を拒否する。任意コマンドを実行するProxyCommandは扱わない。
 
-ローカル転送とSOCKS5は既存Rust SSHセッションの`direct-tcpip`を再利用する。既定bindは`127.0.0.1`で、LAN bindは明示許可が必要である。各トンネルはID、種類、bind先、転送バイト数、状態、最後のエラーを持ち、親SSHセッション終了時に停止する。リモート転送はserver-opened forwarded channelの配送を含むため、未完のlocal転送として偽装せず独立した実装境界に置く。
+ローカル転送とSOCKS5は既存Rust SSHセッションの`direct-tcpip`を再利用する。リモート転送は`tcpip-forward`を要求し、server-opened `forwarded-tcpip`チャネルを端末側の転送先TCPストリームへ接続する。既定bindは`127.0.0.1`で、LAN bindは明示許可が必要である。各トンネルはID、種類、bind先、転送バイト数、状態、最後のエラーを持ち、親SSHセッション終了時に`cancel-tcpip-forward`を送って停止する。現行alphaでは、server-openedチャネルの所有権を明確にするためリモート転送はSSHセッションごとに1件へ制限する。
 
 ### コマンドパレット
 
@@ -30,9 +30,11 @@ ProxyJumpは各段の保存済みSSHプロフィール、個別の資格情報�
 
 ### MoshとCPU実行時ディスパッチ
 
-Moshプロフィールと共通タブ種別は確保するが、SSPを独自実装しない。公式MoshクライアントはGPL-3.0のC++実装であり、Android arm64へ保守可能に統合できるライセンス・ビルド・プロトコル境界が確定するまで、SSHで`mosh-server`を起動して得た鍵を不完全なクライアントへ渡さない。
+Moshは保存済みSSHプロフィールと既知ホスト鍵を使ってRust SSH execから`mosh-server`を起動し、返されたUDPポートと一時鍵をDartのSSP transportへ渡す。SSP、AES-OCB、protobuf wire形式はMITライセンスの`mosh_dart`をローカルpackageとして固定し、SSH秘密情報とMosh一時鍵は永続化しない。端末描画、IME、補助キー、コマンドパレットはSSHと共通化する一方、ProxyJump、SSHトンネル、SFTP、MCP execはMoshタブで有効化しない。
 
-秘密鍵読み込みはPEM/OpenSSH/PKCS#8解析を既存暗号ライブラリへ委譲する。Rustはaarch64、Neon、SVE、SVE2、AES、SHA2を実行時検出し、P50/P95を計測する。現在の採用経路は`portable`である。SVE/SVE2は出力・エラー分類一致、10%以上または0.5ms以上の改善、コピー回数非増加を満たす実測が得られた場合だけ採用し、未対応CPUで呼び出さない。
+VNCはRustの`vnc-rs`を用いてRFBハンドシェイク、認証、ZRLE／CopyRect／Rawデコード、ポインター入力をアプリ内で処理する。Dartへは選択中タブの最新BGRAフレームだけを最大30fpsで渡し、前の`ui.Image`は差し替え時に破棄する。フレームバッファは2560×1600を安全上限として、悪意ある巨大解像度で150MB目標を破壊しない。RDPのVulkan Surfaceとは別経路であり、VNCをゼロコピーVulkanとしては扱わない。
+
+秘密鍵読み込みはPEM/OpenSSH/PKCS#8解析を既存暗号ライブラリへ委譲する。Rustはaarch64、Neon、SVE、SVE2、AES、SHA2を実行時検出し、P50/P95を計測する。現在の採用経路は`portable`である。SVE/SVE2は出力・エラー分類一致、10%以上または0.5ms以上の改善、コピー回数非増加を満たすaarch64実機計測が得られた場合だけ採用し、未対応CPUで呼び出さない。x86_64エミュレーターでは機能検出とportableフォールバックだけを確認し、SVE/SVE2採用の根拠にはしない。
 
 ## 1. 対象と設計原則
 
@@ -178,9 +180,7 @@ FlutterのPlatformViewはHybrid Compositionを使い、Android 14以降ではVul
 
 RDPパスワードは接続画面からRustへ直接渡し、SQLite、URI、ログには保存しない。初期実装は直接接続、Unicode文字入力、スキャンコード入力、ポインター入力、動的解像度変更を対象とする。
 
-VNCは`vnc://` URIを使用し、ホスト、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
-
-VNCは`ACTION_VIEW`で起動し、対応アプリがない場合は必要なクライアント種別を日本語で案内する。VNCパスワードはURI、SQLite、ログへ渡さず、起動先のクライアントで入力する。
+VNCは共通接続タブ内の内蔵RFBクライアントで開く。保存済み資格情報がない場合は接続時にパスワードを入力し、接続処理だけで使用してSQLiteとログへ渡さない。
 
 ### 3.5 Wake on LAN
 

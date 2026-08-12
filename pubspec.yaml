@@ -21,6 +21,8 @@ dependencies:
   ftpconnect: ^2.0.10
   go_router: ^17.4.0
   intl: ^0.20.2
+  mosh_dart:
+    path: third_party/mosh_dart
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   termethis_core:
@@ -80,6 +82,9 @@ flutter:
     - assets/licenses/LICENSE-russh-sftp.txt
     - assets/licenses/LICENSE-tokio.txt
     - assets/licenses/LICENSE-Shizuku-API.txt
+    - assets/licenses/LICENSE-vnc-rs-MIT.txt
+    - assets/licenses/LICENSE-vnc-rs-APACHE.txt
+    - third_party/mosh_dart/LICENSE
     - third_party/xterm/LICENSE
     - third_party/termlib/LICENSE
     - third_party/termlib/lib/src/main/cpp/libvterm/LICENSE

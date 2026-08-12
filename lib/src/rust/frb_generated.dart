@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1685022247;
+  int get rustContentHash => -597932971;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -85,6 +85,10 @@ abstract class RustLibApi extends BaseApi {
     required String pem,
     String? passphrase,
     required int iterations,
+  });
+
+  Future<RustMoshBootstrapResult> crateApiCoreMoshBootstrap({
+    required RustMoshBootstrapRequest request,
   });
 
   Future<bool> crateApiCorePrivateKeyIsEncrypted({required String pem});
@@ -222,6 +226,31 @@ abstract class RustLibApi extends BaseApi {
     required String pem,
     String? passphrase,
   });
+
+  Future<void> crateApiCoreVncClose({required PlatformInt64 sessionId});
+
+  Future<RustVncConnectResult> crateApiCoreVncConnect({
+    required RustVncConnectRequest request,
+  });
+
+  Future<void> crateApiCoreVncKey({
+    required PlatformInt64 sessionId,
+    required int keySym,
+    required bool down,
+  });
+
+  Future<void> crateApiCoreVncPointer({
+    required PlatformInt64 sessionId,
+    required int x,
+    required int y,
+    required int buttons,
+  });
+
+  Future<RustVncFrame> crateApiCoreVncReadFrame({
+    required PlatformInt64 sessionId,
+    required BigInt afterSequence,
+    required int waitMillis,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -297,6 +326,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<RustMoshBootstrapResult> crateApiCoreMoshBootstrap({
+    required RustMoshBootstrapRequest request,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_rust_mosh_bootstrap_request(
+            request,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_mosh_bootstrap_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreMoshBootstrapConstMeta,
+        argValues: [request],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreMoshBootstrapConstMeta =>
+      const TaskConstMeta(debugName: "mosh_bootstrap", argNames: ["request"]);
+
+  @override
   Future<bool> crateApiCorePrivateKeyIsEncrypted({required String pem}) {
     return handler.executeNormal(
       NormalTask(
@@ -306,7 +368,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -337,7 +399,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -367,7 +429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -405,7 +467,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -441,7 +503,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -473,7 +535,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -509,7 +571,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -545,7 +607,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -579,7 +641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -613,7 +675,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -644,7 +706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -674,7 +736,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -706,7 +768,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -739,7 +801,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -774,7 +836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -809,7 +871,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 19,
             port: port_,
           );
         },
@@ -841,7 +903,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -878,7 +940,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -910,7 +972,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -941,7 +1003,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -971,7 +1033,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1003,7 +1065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1036,7 +1098,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1070,7 +1132,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1110,7 +1172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1145,7 +1207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1173,7 +1235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1203,7 +1265,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1238,7 +1300,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1272,7 +1334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1292,6 +1354,174 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "validate_private_key",
         argNames: ["pem", "passphrase"],
       );
+
+  @override
+  Future<void> crateApiCoreVncClose({required PlatformInt64 sessionId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreVncCloseConstMeta,
+        argValues: [sessionId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVncCloseConstMeta =>
+      const TaskConstMeta(debugName: "vnc_close", argNames: ["sessionId"]);
+
+  @override
+  Future<RustVncConnectResult> crateApiCoreVncConnect({
+    required RustVncConnectRequest request,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_rust_vnc_connect_request(request, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 35,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_vnc_connect_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreVncConnectConstMeta,
+        argValues: [request],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVncConnectConstMeta =>
+      const TaskConstMeta(debugName: "vnc_connect", argNames: ["request"]);
+
+  @override
+  Future<void> crateApiCoreVncKey({
+    required PlatformInt64 sessionId,
+    required int keySym,
+    required bool down,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_32(keySym, serializer);
+          sse_encode_bool(down, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 36,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreVncKeyConstMeta,
+        argValues: [sessionId, keySym, down],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVncKeyConstMeta => const TaskConstMeta(
+    debugName: "vnc_key",
+    argNames: ["sessionId", "keySym", "down"],
+  );
+
+  @override
+  Future<void> crateApiCoreVncPointer({
+    required PlatformInt64 sessionId,
+    required int x,
+    required int y,
+    required int buttons,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_16(x, serializer);
+          sse_encode_u_16(y, serializer);
+          sse_encode_u_8(buttons, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 37,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreVncPointerConstMeta,
+        argValues: [sessionId, x, y, buttons],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVncPointerConstMeta => const TaskConstMeta(
+    debugName: "vnc_pointer",
+    argNames: ["sessionId", "x", "y", "buttons"],
+  );
+
+  @override
+  Future<RustVncFrame> crateApiCoreVncReadFrame({
+    required PlatformInt64 sessionId,
+    required BigInt afterSequence,
+    required int waitMillis,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(sessionId, serializer);
+          sse_encode_u_64(afterSequence, serializer);
+          sse_encode_u_32(waitMillis, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 38,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_vnc_frame,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreVncReadFrameConstMeta,
+        argValues: [sessionId, afterSequence, waitMillis],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVncReadFrameConstMeta => const TaskConstMeta(
+    debugName: "vnc_read_frame",
+    argNames: ["sessionId", "afterSequence", "waitMillis"],
+  );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
@@ -1330,6 +1560,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustMoshBootstrapRequest dco_decode_box_autoadd_rust_mosh_bootstrap_request(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_rust_mosh_bootstrap_request(raw);
+  }
+
+  @protected
   RustRdpConnectRequest dco_decode_box_autoadd_rust_rdp_connect_request(
     dynamic raw,
   ) {
@@ -1364,6 +1602,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   dco_decode_box_autoadd_rust_ssh_tunnel_start_request(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_rust_ssh_tunnel_start_request(raw);
+  }
+
+  @protected
+  RustVncConnectRequest dco_decode_box_autoadd_rust_vnc_connect_request(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_rust_vnc_connect_request(raw);
   }
 
   @protected
@@ -1510,6 +1756,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       p50Microseconds: dco_decode_u_64(arr[7]),
       p95Microseconds: dco_decode_u_64(arr[8]),
       successfulIterations: dco_decode_u_32(arr[9]),
+    );
+  }
+
+  @protected
+  RustMoshBootstrapRequest dco_decode_rust_mosh_bootstrap_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return RustMoshBootstrapRequest(
+      host: dco_decode_String(arr[0]),
+      port: dco_decode_u_16(arr[1]),
+      username: dco_decode_String(arr[2]),
+      authKind: dco_decode_String(arr[3]),
+      password: dco_decode_String(arr[4]),
+      privateKeyPem: dco_decode_String(arr[5]),
+      passphrase: dco_decode_opt_String(arr[6]),
+      trustedHostKeys: dco_decode_list_String(arr[7]),
+    );
+  }
+
+  @protected
+  RustMoshBootstrapResult dco_decode_rust_mosh_bootstrap_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RustMoshBootstrapResult(
+      output: dco_decode_String(arr[0]),
+      exitStatus: dco_decode_opt_box_autoadd_u_32(arr[1]),
     );
   }
 
@@ -1768,6 +2044,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustVncConnectRequest dco_decode_rust_vnc_connect_request(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return RustVncConnectRequest(
+      host: dco_decode_String(arr[0]),
+      port: dco_decode_u_16(arr[1]),
+      password: dco_decode_String(arr[2]),
+      shared: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  RustVncConnectResult dco_decode_rust_vnc_connect_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return RustVncConnectResult(sessionId: dco_decode_i_64(arr[0]));
+  }
+
+  @protected
+  RustVncFrame dco_decode_rust_vnc_frame(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return RustVncFrame(
+      width: dco_decode_u_32(arr[0]),
+      height: dco_decode_u_32(arr[1]),
+      bgra: dco_decode_list_prim_u_8_strict(arr[2]),
+      sequence: dco_decode_u_64(arr[3]),
+      closed: dco_decode_bool(arr[4]),
+      errorMessage: dco_decode_opt_String(arr[5]),
+    );
+  }
+
+  @protected
   int dco_decode_u_16(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1840,6 +2155,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustMoshBootstrapRequest sse_decode_box_autoadd_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_rust_mosh_bootstrap_request(deserializer));
+  }
+
+  @protected
   RustRdpConnectRequest sse_decode_box_autoadd_rust_rdp_connect_request(
     SseDeserializer deserializer,
   ) {
@@ -1878,6 +2201,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_rust_ssh_tunnel_start_request(deserializer));
+  }
+
+  @protected
+  RustVncConnectRequest sse_decode_box_autoadd_rust_vnc_connect_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_rust_vnc_connect_request(deserializer));
   }
 
   @protected
@@ -2087,6 +2418,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       p50Microseconds: var_p50Microseconds,
       p95Microseconds: var_p95Microseconds,
       successfulIterations: var_successfulIterations,
+    );
+  }
+
+  @protected
+  RustMoshBootstrapRequest sse_decode_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_host = sse_decode_String(deserializer);
+    var var_port = sse_decode_u_16(deserializer);
+    var var_username = sse_decode_String(deserializer);
+    var var_authKind = sse_decode_String(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_privateKeyPem = sse_decode_String(deserializer);
+    var var_passphrase = sse_decode_opt_String(deserializer);
+    var var_trustedHostKeys = sse_decode_list_String(deserializer);
+    return RustMoshBootstrapRequest(
+      host: var_host,
+      port: var_port,
+      username: var_username,
+      authKind: var_authKind,
+      password: var_password,
+      privateKeyPem: var_privateKeyPem,
+      passphrase: var_passphrase,
+      trustedHostKeys: var_trustedHostKeys,
+    );
+  }
+
+  @protected
+  RustMoshBootstrapResult sse_decode_rust_mosh_bootstrap_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_output = sse_decode_String(deserializer);
+    var var_exitStatus = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return RustMoshBootstrapResult(
+      output: var_output,
+      exitStatus: var_exitStatus,
     );
   }
 
@@ -2424,6 +2793,51 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustVncConnectRequest sse_decode_rust_vnc_connect_request(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_host = sse_decode_String(deserializer);
+    var var_port = sse_decode_u_16(deserializer);
+    var var_password = sse_decode_String(deserializer);
+    var var_shared = sse_decode_bool(deserializer);
+    return RustVncConnectRequest(
+      host: var_host,
+      port: var_port,
+      password: var_password,
+      shared: var_shared,
+    );
+  }
+
+  @protected
+  RustVncConnectResult sse_decode_rust_vnc_connect_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sessionId = sse_decode_i_64(deserializer);
+    return RustVncConnectResult(sessionId: var_sessionId);
+  }
+
+  @protected
+  RustVncFrame sse_decode_rust_vnc_frame(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_bgra = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_sequence = sse_decode_u_64(deserializer);
+    var var_closed = sse_decode_bool(deserializer);
+    var var_errorMessage = sse_decode_opt_String(deserializer);
+    return RustVncFrame(
+      width: var_width,
+      height: var_height,
+      bgra: var_bgra,
+      sequence: var_sequence,
+      closed: var_closed,
+      errorMessage: var_errorMessage,
+    );
+  }
+
+  @protected
   int sse_decode_u_16(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint16();
@@ -2501,6 +2915,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rust_mosh_bootstrap_request(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_rust_rdp_connect_request(
     RustRdpConnectRequest self,
     SseSerializer serializer,
@@ -2543,6 +2966,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_rust_ssh_tunnel_start_request(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_rust_vnc_connect_request(
+    RustVncConnectRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rust_vnc_connect_request(self, serializer);
   }
 
   @protected
@@ -2733,6 +3165,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.p50Microseconds, serializer);
     sse_encode_u_64(self.p95Microseconds, serializer);
     sse_encode_u_32(self.successfulIterations, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.host, serializer);
+    sse_encode_u_16(self.port, serializer);
+    sse_encode_String(self.username, serializer);
+    sse_encode_String(self.authKind, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_String(self.privateKeyPem, serializer);
+    sse_encode_opt_String(self.passphrase, serializer);
+    sse_encode_list_String(self.trustedHostKeys, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_mosh_bootstrap_result(
+    RustMoshBootstrapResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.output, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.exitStatus, serializer);
   }
 
   @protected
@@ -2951,6 +3409,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.bytesUp, serializer);
     sse_encode_u_64(self.bytesDown, serializer);
     sse_encode_bool(self.active, serializer);
+    sse_encode_opt_String(self.errorMessage, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_vnc_connect_request(
+    RustVncConnectRequest self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.host, serializer);
+    sse_encode_u_16(self.port, serializer);
+    sse_encode_String(self.password, serializer);
+    sse_encode_bool(self.shared, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_vnc_connect_result(
+    RustVncConnectResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.sessionId, serializer);
+  }
+
+  @protected
+  void sse_encode_rust_vnc_frame(RustVncFrame self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_list_prim_u_8_strict(self.bgra, serializer);
+    sse_encode_u_64(self.sequence, serializer);
+    sse_encode_bool(self.closed, serializer);
     sse_encode_opt_String(self.errorMessage, serializer);
   }
 

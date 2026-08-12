@@ -11,6 +11,7 @@ import '../domain/connection_tab.dart';
 import '../../diagnostics/presentation/shizuku_shell_screen.dart';
 import '../../remote_desktop/application/rdp_session_registry.dart';
 import '../../remote_desktop/presentation/rdp_screen.dart';
+import '../../remote_desktop/presentation/vnc_screen.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/presentation/terminal_screen.dart';
 
@@ -61,21 +62,36 @@ class _ConnectionsWorkspaceScreenState
         final profile = active.profileId == null
             ? null
             : profiles.where((item) => item.id == active.profileId).firstOrNull;
-        return Column(
-          children: [
-            _ConnectionTabBar(
-              tabs: items,
-              activeTabId: active.id,
-              onSelect: _select,
-              onClose: _requestClose,
-              onAdd: _showConnectionPicker,
-              onMove: (tabId, index) =>
-                  ref.read(connectionTabsProvider.notifier).move(tabId, index),
-            ),
-            Expanded(
-              child: _ConnectionContentHost(tab: active, profile: profile),
-            ),
-          ],
+        return ColoredBox(
+          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+          child: Column(
+            children: [
+              _ConnectionTabBar(
+                tabs: items,
+                activeTabId: active.id,
+                onSelect: _select,
+                onClose: _requestClose,
+                onAdd: _showConnectionPicker,
+                onMove: (tabId, index) => ref
+                    .read(connectionTabsProvider.notifier)
+                    .move(tabId, index),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(16),
+                    ),
+                    child: _ConnectionContentHost(
+                      tab: active,
+                      profile: profile,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -183,14 +199,25 @@ class _ConnectionContentHost extends StatelessWidget {
         showSessionBar: false,
         popWhenEmpty: false,
       ),
+      ConnectionProtocol.mosh => TerminalScreen(
+        key: ValueKey('connection-mosh-${tab.id}'),
+        profileId: connection.id,
+        tabId: tab.id,
+        embedded: true,
+        showSessionBar: false,
+        popWhenEmpty: false,
+      ),
       ConnectionProtocol.rdp => RdpScreen(
         key: ValueKey('connection-rdp-${tab.id}'),
         profileId: connection.id,
         tabId: tab.id,
         embedded: true,
       ),
-      ConnectionProtocol.vnc => const _ExternalVncNotice(),
-      ConnectionProtocol.mosh => const _MoshUnavailableNotice(),
+      ConnectionProtocol.vnc => VncScreen(
+        key: ValueKey('connection-vnc-${tab.id}'),
+        profileId: connection.id,
+        tabId: tab.id,
+      ),
       ConnectionProtocol.shizukuShell => const SizedBox.shrink(),
     };
   }
@@ -221,14 +248,14 @@ class _ConnectionTabBar extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: SizedBox(
-          height: 50,
+          height: 56,
           child: Row(
             children: [
               Expanded(
                 child: ReorderableListView.builder(
                   scrollDirection: Axis.horizontal,
                   buildDefaultDragHandles: false,
-                  padding: const EdgeInsets.only(left: 4, top: 4),
+                  padding: const EdgeInsets.fromLTRB(8, 6, 0, 0),
                   itemCount: tabs.length,
                   onReorderItem: (oldIndex, newIndex) {
                     unawaited(onMove(tabs[oldIndex].id, newIndex));
@@ -252,14 +279,14 @@ class _ConnectionTabBar extends StatelessWidget {
                               minWidth: 128,
                               maxWidth: 196,
                             ),
-                            margin: const EdgeInsets.only(right: 3),
+                            margin: const EdgeInsets.only(right: 4),
                             padding: const EdgeInsets.only(left: 12),
                             decoration: BoxDecoration(
                               color: selected
                                   ? colors.surface
                                   : colors.surfaceContainerHighest,
                               borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(9),
+                                top: Radius.circular(14),
                               ),
                             ),
                             child: Row(
@@ -414,28 +441,6 @@ class _MissingConnection extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.all(24),
       child: Text('${tab.title}の接続先は削除されています。タブを閉じてください。'),
-    ),
-  );
-}
-
-class _ExternalVncNotice extends StatelessWidget {
-  const _ExternalVncNotice();
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(24),
-      child: Text('現在のVNC接続は対応アプリで開きます。内蔵VNC表示は未実装です。'),
-    ),
-  );
-}
-
-class _MoshUnavailableNotice extends StatelessWidget {
-  const _MoshUnavailableNotice();
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Padding(
-      padding: EdgeInsets.all(24),
-      child: Text('Moshバックエンドは調査中です。安全な実装が確定するまでSSHを使用してください。'),
     ),
   );
 }

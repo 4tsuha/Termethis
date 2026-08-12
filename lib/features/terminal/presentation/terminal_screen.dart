@@ -74,7 +74,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         .read(connectionProfilesProvider.notifier)
         .findById(widget.profileId);
     if (_profile case final profile?
-        when profile.connectionType == ConnectionType.ssh) {
+        when profile.connectionType.usesSshAuthentication) {
       _sessionRegistry = ref.read(sessionRegistryProvider);
       _session = _sessionRegistry!.open(_activeTabId, profile);
       _session!.setViewportVisible(true);
@@ -269,6 +269,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
           listenable: session,
           builder: (context, _) => _SpecialKeyBar(
             session: session,
+            supportsTunnels: _profile?.connectionType == ConnectionType.ssh,
             pasteLabel: l10n.paste,
             onPaste: _paste,
             onKey: _sendSpecialKey,
@@ -279,7 +280,10 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       ],
     );
     if (widget.embedded) {
-      return ColoredBox(color: Colors.black, child: content);
+      return ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        child: content,
+      );
     }
     return PopScope<void>(
       canPop: true,
@@ -1282,6 +1286,7 @@ Color _sessionStatusColor(ColorScheme colors, SshSessionStatus status) =>
 class _SpecialKeyBar extends StatelessWidget {
   const _SpecialKeyBar({
     required this.session,
+    required this.supportsTunnels,
     required this.pasteLabel,
     required this.onPaste,
     required this.onKey,
@@ -1290,6 +1295,7 @@ class _SpecialKeyBar extends StatelessWidget {
   });
 
   final SshSessionController session;
+  final bool supportsTunnels;
   final String pasteLabel;
   final VoidCallback onPaste;
   final void Function(TerminalKey key, int repeat) onKey;
@@ -1302,46 +1308,50 @@ class _SpecialKeyBar extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface,
       child: SizedBox(
         height: 52,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          children: [
-            FilterChip(
-              label: const Text('Ctrl'),
-              selected: session.controlArmed,
-              onSelected: (_) => session.toggleControl(),
-            ),
-            const SizedBox(width: 4),
-            FilterChip(
-              label: const Text('Alt'),
-              selected: session.altArmed,
-              onSelected: (_) => session.toggleAlt(),
-            ),
-            const SizedBox(width: 4),
-            _keyButton('Esc', TerminalKey.escape),
-            _keyButton('Tab', TerminalKey.tab),
-            _keyButton('↵', TerminalKey.enter),
-            _keyButton('↑', TerminalKey.arrowUp),
-            _keyButton('↓', TerminalKey.arrowDown),
-            _keyButton('←', TerminalKey.arrowLeft),
-            _keyButton('→', TerminalKey.arrowRight),
-            const SizedBox(width: 4),
-            TextButton.icon(
-              onPressed: session.isConnected ? onPaste : null,
-              icon: const Icon(Icons.content_paste, size: 18),
-              label: Text(pasteLabel),
-            ),
-            IconButton(
-              tooltip: 'コマンドパレット',
-              onPressed: session.isConnected ? onCommandPalette : null,
-              icon: const Icon(Icons.terminal_outlined),
-            ),
-            IconButton(
-              tooltip: 'SSHトンネル',
-              onPressed: session.isConnected ? onTunnels : null,
-              icon: const Icon(Icons.route_outlined),
-            ),
-          ],
+        child: Scrollbar(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            children: [
+              FilterChip(
+                label: const Text('Ctrl'),
+                selected: session.controlArmed,
+                onSelected: (_) => session.toggleControl(),
+              ),
+              const SizedBox(width: 4),
+              FilterChip(
+                label: const Text('Alt'),
+                selected: session.altArmed,
+                onSelected: (_) => session.toggleAlt(),
+              ),
+              const SizedBox(width: 4),
+              _keyButton('Esc', TerminalKey.escape),
+              _keyButton('Tab', TerminalKey.tab),
+              _keyButton('↵', TerminalKey.enter),
+              _keyButton('↑', TerminalKey.arrowUp),
+              _keyButton('↓', TerminalKey.arrowDown),
+              _keyButton('←', TerminalKey.arrowLeft),
+              _keyButton('→', TerminalKey.arrowRight),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                onPressed: session.isConnected ? onPaste : null,
+                icon: const Icon(Icons.content_paste, size: 18),
+                label: Text(pasteLabel),
+              ),
+              IconButton(
+                tooltip: 'コマンドパレット',
+                onPressed: session.isConnected ? onCommandPalette : null,
+                icon: const Icon(Icons.terminal_outlined),
+              ),
+              IconButton(
+                tooltip: 'SSHトンネル',
+                onPressed: session.isConnected && supportsTunnels
+                    ? onTunnels
+                    : null,
+                icon: const Icon(Icons.route_outlined),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1357,7 +1367,7 @@ class _SpecialKeyBar extends StatelessWidget {
             : null,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(48, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 9),
         ),
         child: Text(label),
       ),
@@ -1413,7 +1423,11 @@ class _TunnelManagerSheetState extends State<_TunnelManagerSheet> {
                 leading: const Icon(Icons.route),
                 title: Text('${tunnel.bindHost}:${tunnel.bindPort}'),
                 subtitle: Text(
-                  '${tunnel.kind == SshTunnelKind.socks5 ? 'SOCKS5' : 'ローカル転送'} ・ ↑${tunnel.bytesUp} ↓${tunnel.bytesDown} bytes',
+                  '${switch (tunnel.kind) {
+                    SshTunnelKind.local => 'ローカル転送',
+                    SshTunnelKind.remote => 'リモート転送',
+                    SshTunnelKind.socks5 => 'SOCKS5',
+                  }} ・ ↑${tunnel.bytesUp} ↓${tunnel.bytesDown} bytes',
                 ),
                 trailing: IconButton(
                   tooltip: '停止',
@@ -1427,6 +1441,7 @@ class _TunnelManagerSheetState extends State<_TunnelManagerSheet> {
             SegmentedButton<SshTunnelKind>(
               segments: const [
                 ButtonSegment(value: SshTunnelKind.local, label: Text('ローカル')),
+                ButtonSegment(value: SshTunnelKind.remote, label: Text('リモート')),
                 ButtonSegment(
                   value: SshTunnelKind.socks5,
                   label: Text('SOCKS5'),
@@ -1440,12 +1455,14 @@ class _TunnelManagerSheetState extends State<_TunnelManagerSheet> {
             TextField(
               controller: _bindPort,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'ローカルポート（0は自動）',
+              decoration: InputDecoration(
+                labelText: _kind == SshTunnelKind.remote
+                    ? 'リモートポート（0は自動）'
+                    : 'ローカルポート（0は自動）',
                 border: OutlineInputBorder(),
               ),
             ),
-            if (_kind == SshTunnelKind.local) ...[
+            if (_kind != SshTunnelKind.socks5) ...[
               const SizedBox(height: 12),
               TextField(
                 controller: _targetHost,
@@ -1464,15 +1481,16 @@ class _TunnelManagerSheetState extends State<_TunnelManagerSheet> {
                 ),
               ),
             ],
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('LANへ公開'),
-              subtitle: const Text(
-                '同じネットワークの端末から接続可能になります。信頼できる環境だけで有効にしてください。',
+            if (_kind != SshTunnelKind.remote)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('LANへ公開'),
+                subtitle: const Text(
+                  '同じネットワークの端末から接続可能になります。信頼できる環境だけで有効にしてください。',
+                ),
+                value: _allowLan,
+                onChanged: (value) => setState(() => _allowLan = value),
               ),
-              value: _allowLan,
-              onChanged: (value) => setState(() => _allowLan = value),
-            ),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
@@ -1491,7 +1509,7 @@ class _TunnelManagerSheetState extends State<_TunnelManagerSheet> {
     final bindPort = int.tryParse(_bindPort.text);
     final targetPort = int.tryParse(_targetPort.text);
     if (bindPort == null || bindPort < 0 || bindPort > 65535) return;
-    if (_kind == SshTunnelKind.local &&
+    if (_kind != SshTunnelKind.socks5 &&
         (targetPort == null || targetPort < 1 || targetPort > 65535)) {
       return;
     }
@@ -1524,11 +1542,14 @@ class _FailurePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.72),
+      color: colors.surfaceContainerLowest,
       child: Center(
         child: Card(
           margin: const EdgeInsets.all(24),
+          elevation: 0,
+          color: colors.surfaceContainerLow,
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
