@@ -8,8 +8,8 @@
 
 ## 主な機能
 
-- xterm.js WebGLを既定にした、vim・neovim・tmux・htop・ncurses向けSSHターミナル
-- libvtermを使うAndroidネイティブ省メモリ描画へ切り替え可能
+- termlibとlibvtermを使いAndroidのSurfaceへ直接描画する、vim・neovim・tmux・htop・ncurses向けSSHターミナル
+- xterm.js WebGL、Termux、Flutter Alacrittyへ切り替え可能
 - releaseビルドのネイティブ描画で接続中150MiB以下を目標とするメモリ設計
 - 日本語IME、UTF-8、CJK文字幅に対応した入出力
 - 非表示タブの描画ビューを解放し、ANSIスナップショットと受信差分から画面を復元
@@ -53,7 +53,7 @@ RDPはIronRDPでアプリ内接続し、AndroidのネイティブVulkan Surface�
 
 Flutter 3.44.9とDart 3.12.2を使用します。
 SSH・SFTPコアにはRust 1.96.0を使用し、`flutter_rust_bridge`でFlutterへ接続します。
-ネイティブ端末はConnectBot termlib＋libvtermと、Termux terminal-emulator＋terminal-viewを選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`へ固定しています。
+既定のネイティブSurface端末はConnectBot termlib＋libvtermを使います。PTY解析は専用スレッド、描画はVSYNCに合わせた専用Surfaceスレッドで行い、遅延時は古いスナップショットを蓄積せず最新状態を表示します。Termux terminal-emulator＋terminal-view、xterm.js WebGL、Flutter Alacrittyも選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`へ固定しています。
 AndroidビルドにはSDK版CMake 3.31.6とNDK 29.0.14206865が必要です。CIではSDK Managerから導入します。
 
 ```powershell

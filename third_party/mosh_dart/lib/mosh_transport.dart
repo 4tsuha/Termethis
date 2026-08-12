@@ -31,6 +31,7 @@ class MoshTransport {
   Uint8List? _pendingDiff;
   int _pendingOldNum = 0; // oldNum for the pending diff
   bool _hasPending = false; // true = we have an unacked state in flight
+  bool _pendingNeedsSend = false;
 
   // Incoming.
   int _recvNum = 0;
@@ -95,6 +96,19 @@ class MoshTransport {
 
   Duration get idleTime => DateTime.now().difference(_lastRecv);
 
+  /// Time until [tick] can produce the next datagram.
+  ///
+  /// Callers can use a one-shot timer instead of polling the transport at a
+  /// fixed frame rate. Incoming data and new user input should still call
+  /// [tick] immediately.
+  Duration get nextTickDelay {
+    if (_pendingNeedsSend || _pendingDataAck || _recvNum > _sentAckNum) {
+      return Duration.zero;
+    }
+    final remaining = _rto - DateTime.now().difference(_lastSend);
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
   void forceNextSend() {
     _lastSend = DateTime.fromMillisecondsSinceEpoch(0);
   }
@@ -104,6 +118,7 @@ class MoshTransport {
   /// the diff for the current in-flight state.
   void setPending(Uint8List? diff) {
     _pendingDiff = diff;
+    _pendingNeedsSend = _hasPending && diff != null;
   }
 
   /// Send a new state with the given diff. Increments sentNum.
@@ -113,20 +128,23 @@ class MoshTransport {
     _pendingDiff = diff;
     _pendingOldNum = _ackedNum;
     _hasPending = true;
+    _pendingNeedsSend = true;
   }
 
   List<Uint8List> tick() {
     final now = DateTime.now();
 
     final haveDiff = _hasPending && _pendingDiff != null;
+    final haveNewDiff = haveDiff && _pendingNeedsSend;
     final needAck = _recvNum > _sentAckNum;
     final sinceLastSend = now.difference(_lastSend);
     final expired = sinceLastSend >= _rto;
     final urgentAck = _pendingDataAck;
 
-    if (!haveDiff && !needAck && !expired && !urgentAck) return [];
+    if (!haveNewDiff && !needAck && !expired && !urgentAck) return [];
 
     _pendingDataAck = false;
+    _pendingNeedsSend = false;
 
     final ti = TransportInstruction(
       protocolVersion: 2,
@@ -192,6 +210,7 @@ class MoshTransport {
       if (_ackedNum >= _sentNum) {
         _hasPending = false;
         _pendingDiff = null;
+        _pendingNeedsSend = false;
       }
     }
     if (ti.newNum > _recvNum) _recvNum = ti.newNum;
@@ -245,8 +264,11 @@ class MoshTransport {
     } else {
       var delta = _srtt - rtt;
       if (delta.isNegative) delta = -delta;
-      _rttvar = Duration(microseconds: (3 * _rttvar.inMicroseconds + delta.inMicroseconds) ~/ 4);
-      _srtt = Duration(microseconds: (7 * _srtt.inMicroseconds + rtt.inMicroseconds) ~/ 8);
+      _rttvar = Duration(
+          microseconds:
+              (3 * _rttvar.inMicroseconds + delta.inMicroseconds) ~/ 4);
+      _srtt = Duration(
+          microseconds: (7 * _srtt.inMicroseconds + rtt.inMicroseconds) ~/ 8);
     }
     _rto = _srtt + _rttvar * 4;
     if (_rto < _minRTO) _rto = _minRTO;

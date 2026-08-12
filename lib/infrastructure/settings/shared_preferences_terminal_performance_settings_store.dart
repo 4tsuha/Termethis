@@ -3,6 +3,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/settings/domain/terminal_performance_settings.dart';
 import '../../features/settings/domain/terminal_performance_settings_store.dart';
 
+TerminalRendererMode selectRendererAfterNativeSurfaceMigration({
+  required TerminalRendererMode? savedRenderer,
+  required bool migrationCompleted,
+}) {
+  if (!migrationCompleted && savedRenderer == TerminalRendererMode.webgl) {
+    return TerminalRendererMode.connectBot;
+  }
+  return savedRenderer ?? TerminalRendererMode.connectBot;
+}
+
 class SharedPreferencesTerminalPerformanceSettingsStore
     implements TerminalPerformanceSettingsStore {
   SharedPreferencesTerminalPerformanceSettingsStore({
@@ -11,6 +21,8 @@ class SharedPreferencesTerminalPerformanceSettingsStore
 
   static const _refreshRateModeKey = 'settings.refresh_rate_mode';
   static const _rendererModeKey = 'settings.terminal_renderer_mode';
+  static const _nativeSurfaceMigrationKey =
+      'settings.native_surface_renderer_migrated';
   static const _terminalFontKey = 'settings.terminal_font';
   static const _hardwareAccelerationModeKey =
       'settings.hardware_acceleration_mode';
@@ -42,11 +54,20 @@ class SharedPreferencesTerminalPerformanceSettingsStore
     final mode = RefreshRateMode.values
         .where((value) => value.name == savedMode)
         .firstOrNull;
-    final renderer = savedRenderer == 'flutter' || savedRenderer == 'native'
+    var renderer = savedRenderer == 'flutter' || savedRenderer == 'native'
         ? TerminalRendererMode.connectBot
         : TerminalRendererMode.values
               .where((value) => value.name == savedRenderer)
               .firstOrNull;
+    final nativeSurfaceMigrated =
+        await _preferences.getBool(_nativeSurfaceMigrationKey) ?? false;
+    renderer = selectRendererAfterNativeSurfaceMigration(
+      savedRenderer: renderer,
+      migrationCompleted: nativeSurfaceMigrated,
+    );
+    if (!nativeSurfaceMigrated) {
+      await _preferences.setBool(_nativeSurfaceMigrationKey, true);
+    }
     final terminalFont = TerminalFont.values
         .where((value) => value.name == savedTerminalFont)
         .firstOrNull;
@@ -63,7 +84,7 @@ class SharedPreferencesTerminalPerformanceSettingsStore
         ? savedLines!
         : 2000;
     return TerminalPerformanceSettings(
-      rendererMode: renderer ?? TerminalRendererMode.webgl,
+      rendererMode: renderer,
       terminalFont: terminalFont ?? TerminalFont.cascadiaMono,
       hardwareAccelerationMode:
           hardwareAccelerationMode ?? HardwareAccelerationMode.automatic,

@@ -30,16 +30,32 @@ class _ConnectionsWorkspaceScreenState
   @override
   void initState() {
     super.initState();
-    final requested = widget.requestedTabId;
-    if (requested != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(
-            ref.read(connectionTabsProvider.notifier).markActive(requested),
-          );
-        }
-      });
+    _activateRequestedTab(widget.requestedTabId);
+  }
+
+  @override
+  void didUpdateWidget(covariant ConnectionsWorkspaceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.requestedTabId != widget.requestedTabId) {
+      _activateRequestedTab(widget.requestedTabId);
     }
+  }
+
+  void _activateRequestedTab(String? tabId) {
+    if (tabId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.requestedTabId != tabId) return;
+      final notifier = ref.read(connectionTabsProvider.notifier);
+      final requested = notifier.find(tabId);
+      final selected = notifier.selectedTab;
+      if (requested == null ||
+          (selected != null &&
+              selected.id != requested.id &&
+              selected.lastActivatedAt.isAfter(requested.lastActivatedAt))) {
+        return;
+      }
+      unawaited(notifier.markActive(tabId));
+    });
   }
 
   @override
@@ -56,7 +72,9 @@ class _ConnectionsWorkspaceScreenState
       ),
       data: (items) {
         if (items.isEmpty) return const _EmptyConnectionsWorkspace();
-        final active = _selectedTab(items, widget.requestedTabId);
+        final active =
+            ref.read(connectionTabsProvider.notifier).selectedTab ??
+            _selectedTab(items);
         final profiles =
             ref.watch(connectionProfilesProvider).value ?? const [];
         final profile = active.profileId == null
@@ -97,17 +115,10 @@ class _ConnectionsWorkspaceScreenState
     );
   }
 
-  ConnectionTab _selectedTab(List<ConnectionTab> tabs, String? requestedId) {
-    if (requestedId != null) {
-      final requested = tabs.where((tab) => tab.id == requestedId).firstOrNull;
-      if (requested != null) return requested;
-    }
-    return tabs.reduce(
-      (current, next) => next.lastActivatedAt.isAfter(current.lastActivatedAt)
-          ? next
-          : current,
-    );
-  }
+  ConnectionTab _selectedTab(List<ConnectionTab> tabs) => tabs.reduce(
+    (current, next) =>
+        next.lastActivatedAt.isAfter(current.lastActivatedAt) ? next : current,
+  );
 
   Future<void> _select(ConnectionTab tab) async {
     await ref.read(connectionTabsProvider.notifier).markActive(tab.id);

@@ -19,6 +19,7 @@ class XtermWebTerminal extends StatefulWidget {
     required this.mouseInput,
     required this.longPressRightClick,
     required this.tapToMovePromptCursor,
+    required this.agentMode,
     this.onRendererChanged,
     this.onFatalError,
     super.key,
@@ -32,6 +33,7 @@ class XtermWebTerminal extends StatefulWidget {
   final bool mouseInput;
   final bool longPressRightClick;
   final bool tapToMovePromptCursor;
+  final bool agentMode;
   final ValueChanged<String>? onRendererChanged;
   final ValueChanged<String>? onFatalError;
 
@@ -136,7 +138,8 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
             oldWidget.fontSize != widget.fontSize ||
             oldWidget.mouseInput != widget.mouseInput ||
             oldWidget.longPressRightClick != widget.longPressRightClick ||
-            oldWidget.tapToMovePromptCursor != widget.tapToMovePromptCursor)) {
+            oldWidget.tapToMovePromptCursor != widget.tapToMovePromptCursor ||
+            oldWidget.agentMode != widget.agentMode)) {
       _configure();
     }
   }
@@ -510,6 +513,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       'mouseInput': widget.mouseInput,
       'longPressRightClick': widget.longPressRightClick,
       'tapToMovePromptCursor': widget.tapToMovePromptCursor,
+      'agentMode': widget.agentMode,
     });
     _enqueueScript('window.termethisTerminal.setOptions($options);');
   }

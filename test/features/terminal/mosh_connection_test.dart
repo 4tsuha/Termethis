@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosh_dart/mosh_transport.dart';
 import 'package:mosh_dart/ocb.dart';
 import 'package:termethis/features/terminal/infrastructure/mosh_connection.dart';
 
@@ -38,6 +39,14 @@ void main() {
 
     expect(_toHex(encrypted), expected);
     expect(AesOcb(key).decrypt(nonce, encrypted), plaintext);
+  });
+  test('unacknowledged state is not retransmitted before RTO', () {
+    final transport = MoshTransport.client(AesOcb(Uint8List(16)));
+    transport.sendNew(Uint8List.fromList([1, 2, 3]));
+
+    expect(transport.tick(), isNotEmpty);
+    expect(transport.tick(), isEmpty);
+    expect(transport.nextTickDelay, isNot(Duration.zero));
   });
 }
 

@@ -63,6 +63,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   bool _nativeTerminalFailed = false;
   bool _alacrittyTerminalFailed = false;
   bool _switchingTab = false;
+  bool _agentMode = false;
   final List<SshTunnelStatus> _tunnels = [];
 
   @override
@@ -219,6 +220,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                           longPressRightClick: performance.longPressRightClick,
                           tapToMovePromptCursor:
                               performance.tapToMovePromptCursor,
+                          agentMode: _agentMode,
                           onFatalError: _fallbackToNativeTerminal,
                         )
                       : NativeTerminalView(
@@ -275,6 +277,10 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
             onKey: _sendSpecialKey,
             onCommandPalette: _openCommandPalette,
             onTunnels: _manageTunnels,
+            agentMode: _agentMode,
+            onToggleAgentMode: useWebRenderer
+                ? () => setState(() => _agentMode = !_agentMode)
+                : null,
           ),
         ),
       ],
@@ -1292,6 +1298,8 @@ class _SpecialKeyBar extends StatelessWidget {
     required this.onKey,
     required this.onCommandPalette,
     required this.onTunnels,
+    required this.agentMode,
+    required this.onToggleAgentMode,
   });
 
   final SshSessionController session;
@@ -1301,6 +1309,8 @@ class _SpecialKeyBar extends StatelessWidget {
   final void Function(TerminalKey key, int repeat) onKey;
   final VoidCallback onCommandPalette;
   final VoidCallback onTunnels;
+  final bool agentMode;
+  final VoidCallback? onToggleAgentMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1337,6 +1347,13 @@ class _SpecialKeyBar extends StatelessWidget {
                 onPressed: session.isConnected ? onPaste : null,
                 icon: const Icon(Icons.content_paste, size: 18),
                 label: Text(pasteLabel),
+              ),
+              IconButton(
+                tooltip: agentMode ? 'Agentモードを終了' : 'Agentモード',
+                isSelected: agentMode,
+                onPressed: session.isConnected ? onToggleAgentMode : null,
+                icon: const Icon(Icons.smart_toy_outlined),
+                selectedIcon: const Icon(Icons.smart_toy),
               ),
               IconButton(
                 tooltip: 'コマンドパレット',

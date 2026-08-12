@@ -2,7 +2,7 @@
 
 最終更新：2026年8月12日
 
-状態：Termethis 0.8.0-alpha企画として、統合接続画面とSSH／SFTP基盤を開発中
+状態：Termethis 0.8.0-alpha2企画として、統合接続画面とSSH／SFTP基盤を開発中
 
 ## 2026年8月 統合接続アーキテクチャ
 
@@ -214,7 +214,9 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 端末の横幅は本文へ全て割り当て、接続状態と描画方式は端末上へ重ねずAppBarの副題に表示する。左右パディングは4px、スクロールバーは5pxとし、表示幅400dp未満では12px、400dp以上600dp未満では13px、600dp以上では14pxを基準フォントサイズにする。OSの文字倍率は反映しつつ18pxを上限とし、再レイアウト後の列数と行数をPTYへ送る。
 
-既定の描画系はローカルアセットとして同梱した`xterm.js` WebGLとし、複雑なTUI、120Hz表示、CJK、絵文字、Nerd Fontsとの互換性を優先する。ネイティブ描画は、ConnectBot `termlib`のHaven系forkとTermux `terminal-emulator`の2方式から選択できる。ConnectBotはJetpack Compose CanvasとJNI経由の`libvterm`、TermuxはAndroid Canvasと`terminal-view`のレンダラーを使用する。
+既定の描画系はConnectBot `termlib`のHaven系forkとJNI経由の`libvterm`を使うネイティブSurfaceとする。PTY解析は表示優先のHandlerThread、描画はAndroid `SurfaceView`の専用スレッドへ分離する。更新通知では最新の不変スナップショット1件だけを保持し、VSYNCごとに最大1回描画して、UIが遅れた場合は古い状態を捨てる。日本語IMEと物理キー処理はtermlibの`ImeInputView`と`KeyboardHandler`を再利用し、描画経路から分離する。
+
+互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacrittyを選択可能にする。WebGLを保存していた既存利用者はネイティブSurfaceへ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
 
 WebViewは外部URLを開かず、Content Security Policyでスクリプト、CSS、フォントを同梱アセットに限定する。SSH出力はUTF-8を最大64Ki文字に分割してBase64へ変換し、xterm.jsの`Terminal.write`完了ACKを受け取ってから次を送る。端末入力とPTY寸法はJSONメッセージでDart側へ戻す。
 
@@ -679,7 +681,7 @@ Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力�
 | Dart・Rust連携 | `flutter_rust_bridge` | 実装済み | 生成APIをInfrastructure Adapterに閉じ込め、UIとネイティブ処理を分離する |
 | SSHとPTY | Rust `russh` | 実装済み | パケット解析、鍵交換、認証、チャンネル、PTY、keepaliveをRust側で処理する |
 | SFTP | Rust `russh-sftp` | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
-| 端末エミュレーター | `xterm.js` WebGL、ConnectBot `termlib`＋`libvterm`、Termux `terminal-emulator`＋`terminal-view` | 実装済み | WebGLを既定とし、ネイティブ描画は省メモリと互換性の要件に応じて選択する |
+| 端末エミュレーター | ConnectBot `termlib`＋`libvterm` Native Surface、`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacritty | 実装済み | Native Surfaceを既定とし、最新スナップショット優先で描画キューとWebView固定費を削減する |
 | Android端末ブリッジ | Flutter PlatformView＋MethodChannel | 実装済み | UTF-8バイト列、入力、PTY寸法だけを交換し、端末状態と描画はAndroid側に閉じ込める |
 | WebViewブリッジ | `webview_flutter` | 実装済み | 外部通信を許可せず、Base64 UTF-8出力とJSON入力だけを交換する |
 | 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |

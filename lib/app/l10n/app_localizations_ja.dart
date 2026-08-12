@@ -596,11 +596,11 @@ class AppLocalizationsJa extends AppLocalizations {
       'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。';
 
   @override
-  String get terminalRendererConnectBot => 'ConnectBot';
+  String get terminalRendererConnectBot => 'ネイティブSurface';
 
   @override
   String get terminalRendererConnectBotDescription =>
-      'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。';
+      'termlibとlibvtermで解析し、AndroidのSurfaceへ直接描画します。WebViewを使わず、最新フレームを優先して大量出力時の遅延とメモリ増加を抑えます。';
 
   @override
   String get terminalRendererTermux => 'Termux';
@@ -740,7 +740,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.8.0-alpha';
+  String get settingsVersionValue => '0.8.0-alpha2';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

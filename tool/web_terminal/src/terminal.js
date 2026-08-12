@@ -7,8 +7,10 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 
 const host = document.getElementById('terminal');
+const viewport = document.getElementById('terminal-scroll');
 const textDecoder = new TextDecoder('utf-8');
 const encoder = new TextEncoder();
+const WIDE_TERMINAL_COLUMNS = 160;
 const WRITE_SLICE_BYTES = 16 * 1024;
 const NORMAL_WRITE_BUDGET_MILLIS = 3.25;
 const INPUT_WRITE_BUDGET_MILLIS = 1.5;
@@ -21,6 +23,7 @@ let lastInputAt = Number.NEGATIVE_INFINITY;
 let lastCommandOutput = '';
 let commandOutputStart;
 let promptActive = false;
+let agentMode = false;
 let interaction = {
   mouseInput: false,
   longPressRightClick: false,
@@ -178,7 +181,10 @@ function enqueueWrite(value, reset, id) {
           sliceStartedAt = performance.now();
         }
       }
-      if (followOutput) terminal.scrollToBottom();
+      // xterm already follows output when the viewport starts at the bottom.
+      // An explicit scroll on every batch forces another viewport update and
+      // is especially expensive while a TUI repaints continuously.
+      if (reset && followOutput) terminal.scrollToBottom();
       post({ type: 'writeAck', id });
     })
     .catch((error) => {
@@ -187,7 +193,21 @@ function enqueueWrite(value, reset, id) {
 }
 
 function fit() {
-  if (!active || host.clientWidth === 0 || host.clientHeight === 0) return;
+  if (!active || viewport.clientWidth === 0 || viewport.clientHeight === 0) {
+    return;
+  }
+
+  host.style.width = '100%';
+  const visibleDimensions = fitAddon.proposeDimensions();
+  if (
+    !agentMode &&
+    visibleDimensions &&
+    visibleDimensions.cols > 0 &&
+    visibleDimensions.cols < WIDE_TERMINAL_COLUMNS
+  ) {
+    const widthPerColumn = viewport.clientWidth / visibleDimensions.cols;
+    host.style.width = `${Math.ceil(widthPerColumn * WIDE_TERMINAL_COLUMNS)}px`;
+  }
   fitAddon.fit();
 }
 
@@ -249,7 +269,9 @@ window.termethisTerminal = {
       longPressRightClick: options.longPressRightClick === true,
       tapToMovePromptCursor: options.tapToMovePromptCursor === true,
     };
-    host.style.touchAction = interaction.mouseInput ? 'none' : 'pan-y';
+    agentMode = options.agentMode === true;
+    if (agentMode) viewport.scrollLeft = 0;
+    host.style.touchAction = interaction.mouseInput ? 'none' : 'pan-x pan-y';
     fit();
   },
   copyLastOutputBase64() {
@@ -298,7 +320,7 @@ const resizeObserver = new ResizeObserver(() => {
   cancelAnimationFrame(resizeFrame);
   resizeFrame = requestAnimationFrame(fit);
 });
-resizeObserver.observe(host);
+resizeObserver.observe(viewport);
 
 let pointerStart;
 let longPressTimer;

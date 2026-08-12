@@ -58,11 +58,31 @@
         src: url('../fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
         font-display: block;
       }
-      html, body, #terminal {
+      html, body, #terminal-scroll {
         width: 100%;
         height: 100%;
         margin: 0;
         overflow: hidden;
+        background: #000;
+      }
+      #terminal-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        scrollbar-color: #4b4b4b transparent;
+        scrollbar-width: thin;
+      }
+      #terminal-scroll::-webkit-scrollbar {
+        height: 5px;
+      }
+      #terminal-scroll::-webkit-scrollbar-thumb {
+        background: #4b4b4b;
+        border-radius: 3px;
+      }
+      #terminal {
+        width: 100%;
+        min-width: 100%;
+        height: 100%;
         background: #000;
       }
       #terminal .xterm {
@@ -85,7 +105,9 @@
     </style>
   </head>
   <body>
-    <div id="terminal" aria-label="Termethis SSHターミナル"></div>
+    <div id="terminal-scroll">
+      <div id="terminal" aria-label="Termethis SSHターミナル"></div>
+    </div>
     <script src="terminal.js"></script>
   </body>
 </html>

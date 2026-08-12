@@ -12,17 +12,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.Process
 import android.view.View
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.sp
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -30,10 +20,10 @@ import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 import org.connectbot.terminal.MouseDragPhase
-import org.connectbot.terminal.Terminal
 import org.connectbot.terminal.TerminalEmulator
 import org.connectbot.terminal.TerminalEmulatorFactory
 import org.connectbot.terminal.TerminalGestureCallback
+import org.connectbot.terminal.TerminalSurfaceView
 
 internal const val NATIVE_TERMINAL_VIEW_TYPE = "jp.yts.termethis/native_terminal"
 
@@ -56,9 +46,10 @@ private class NativeTerminalPlatformView(
     creationArguments: Map<*, *>,
 ) : PlatformView, MethodChannel.MethodCallHandler {
     private val channel = MethodChannel(messenger, "$NATIVE_TERMINAL_VIEW_TYPE/$viewId")
-    private var options by mutableStateOf(NativeTerminalOptions.from(creationArguments))
-    private var active by mutableStateOf(true)
+    private var options = NativeTerminalOptions.from(creationArguments)
+    private var active = true
     private val modeTracker = TerminalModeTracker()
+    private var renderedMouseMode = false
     private var disposed = false
     private val parserThread = HandlerThread(
         "TermethisTerminalParser-$viewId",
@@ -136,55 +127,25 @@ private class NativeTerminalPlatformView(
         }
     }
 
-    private val composeView = ComposeView(context).apply {
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-        setBackgroundColor(android.graphics.Color.BLACK)
-        setContent {
-            val currentOptions = options
-            val currentTypeface = remember(
-                currentOptions.terminalFontFamily,
-                currentOptions.japaneseFontFamily,
-            ) {
-                terminalTypeface(
-                    context,
-                    currentOptions.terminalFontFamily,
-                    currentOptions.japaneseFontFamily,
-                )
-            }
-            MaterialTheme {
-                Terminal(
-                    terminalEmulator = emulator,
-                    modifier = Modifier.fillMaxSize(),
-                    typeface = currentTypeface,
-                    initialFontSize = currentOptions.fontSize.sp,
-                    minFontSize = 6.sp,
-                    maxFontSize = 30.sp,
-                    backgroundColor = Color.Black,
-                    foregroundColor = Color(0xFFF2F2F2),
-                    keyboardEnabled = active,
-                    showSoftKeyboard = active,
-                    allowStandardKeyboard = true,
-                    gestureCallback = if (currentOptions.mouseInput && modeTracker.mouseActive) {
-                        mouseGestures
-                    } else {
-                        null
-                    },
-                    mouseModeActive = currentOptions.mouseInput && modeTracker.mouseActive,
-                    tapToPositionCursorOnPrompt = currentOptions.tapToMovePromptCursor,
-                    reflowOnKeyboard = currentOptions.resizeForKeyboard,
-                    onPasteShortcut = ::pasteClipboard,
-                    onPasteRequest = ::pasteClipboard,
-                    onHyperlinkClick = { uri -> channel.invokeMethod("openLink", uri) },
-                )
-            }
-        }
-    }
+    private val terminalSurfaceView = TerminalSurfaceView(
+        context = context,
+        terminalEmulator = emulator,
+        typeface = terminalTypeface(
+            context,
+            options.terminalFontFamily,
+            options.japaneseFontFamily,
+        ),
+        fontSizeSp = options.fontSize,
+        gestureCallback = mouseGestures,
+        mouseModeActive = options.mouseInput && modeTracker.mouseActive,
+        tapToPositionCursorOnPrompt = options.tapToMovePromptCursor,
+    )
 
     init {
         channel.setMethodCallHandler(this)
     }
 
-    override fun getView(): View = composeView
+    override fun getView(): View = terminalSurfaceView
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         if (disposed) {
@@ -193,7 +154,11 @@ private class NativeTerminalPlatformView(
         }
         when (call.method) {
             "initialize" -> result.success(
-                mapOf("renderer" to "termlib", "scrollbackLines" to options.scrollbackLines),
+                mapOf(
+                    "renderer" to "termlib native Surface",
+                    "surface" to true,
+                    "scrollbackLines" to options.scrollbackLines,
+                ),
             )
             "write" -> {
                 val arguments = call.arguments as? Map<*, *>
@@ -220,6 +185,7 @@ private class NativeTerminalPlatformView(
                         if (disposed) {
                             result.error("disposed", "Native terminal has been disposed", null)
                         } else {
+                            updateInteractionOptionsIfNeeded()
                             result.success(null)
                         }
                     }
@@ -227,15 +193,18 @@ private class NativeTerminalPlatformView(
             }
             "setActive" -> {
                 active = call.arguments == true
+                terminalSurfaceView.setTerminalActive(active)
                 result.success(null)
             }
             "setOptions" -> {
                 options = NativeTerminalOptions.from(call.arguments as? Map<*, *> ?: emptyMap<String, Any>())
+                updateTerminalOptions()
                 result.success(null)
             }
             "focus" -> {
                 active = true
-                composeView.requestFocus()
+                terminalSurfaceView.setTerminalActive(true)
+                terminalSurfaceView.showKeyboard()
                 result.success(null)
             }
             "paste" -> {
@@ -272,7 +241,7 @@ private class NativeTerminalPlatformView(
         if (disposed) return
         disposed = true
         channel.setMethodCallHandler(null)
-        composeView.disposeComposition()
+        terminalSurfaceView.dispose()
         parserHandler.post {
             emulator.close()
             parserThread.quitSafely()
@@ -302,6 +271,33 @@ private class NativeTerminalPlatformView(
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
         if (text.isNotEmpty()) emitInput(modeTracker.pastePacket(text))
+    }
+
+    private fun updateTerminalOptions() {
+        if (disposed) return
+        terminalSurfaceView.updateOptions(
+            typeface = terminalTypeface(
+                context,
+                options.terminalFontFamily,
+                options.japaneseFontFamily,
+            ),
+            fontSizeSp = options.fontSize,
+            gestureCallback = mouseGestures,
+            mouseModeActive = options.mouseInput && modeTracker.mouseActive,
+            tapToPositionCursorOnPrompt = options.tapToMovePromptCursor,
+        )
+        renderedMouseMode = options.mouseInput && modeTracker.mouseActive
+    }
+
+    private fun updateInteractionOptionsIfNeeded() {
+        val mouseMode = options.mouseInput && modeTracker.mouseActive
+        if (mouseMode == renderedMouseMode) return
+        renderedMouseMode = mouseMode
+        terminalSurfaceView.updateInteractionOptions(
+            gestureCallback = mouseGestures,
+            mouseModeActive = mouseMode,
+            tapToPositionCursorOnPrompt = options.tapToMovePromptCursor,
+        )
     }
 
     private companion object {
@@ -353,7 +349,7 @@ private class TerminalModeTracker {
     @Volatile private var mouse1000 = false
     @Volatile private var mouse1002 = false
     @Volatile private var mouse1003 = false
-    var mouseActive by mutableStateOf(false)
+    var mouseActive = false
         private set
 
     val sgrMouse: Boolean get() = sgrMouseEnabled

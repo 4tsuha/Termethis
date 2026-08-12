@@ -13,10 +13,13 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
+import java.util.concurrent.ConcurrentHashMap
 
 internal const val RDP_VULKAN_VIEW_TYPE = "jp.yts.termethis/rdp_vulkan"
 
 internal object RdpVulkanBridge {
+    private val surfaceOwners = ConcurrentHashMap<Long, Int>()
+
     private val loaded = runCatching {
         System.loadLibrary("termethis_core")
         true
@@ -40,6 +43,24 @@ internal object RdpVulkanBridge {
     ): Boolean
 
     fun isLoaded(): Boolean = loaded
+
+    fun attachSurface(
+        sessionId: Long,
+        viewId: Int,
+        surface: Surface,
+        width: Int,
+        height: Int,
+    ): Boolean {
+        val attached = nativeAttachSurface(sessionId, surface, width, height)
+        if (attached) surfaceOwners[sessionId] = viewId
+        return attached
+    }
+
+    fun detachSurface(sessionId: Long, viewId: Int) {
+        if (surfaceOwners.remove(sessionId, viewId)) {
+            nativeDetachSurface(sessionId)
+        }
+    }
 }
 
 internal class RdpVulkanViewFactory(
@@ -60,6 +81,7 @@ private class RdpVulkanPlatformView(
     viewId: Int,
     creationArguments: Map<*, *>,
 ) : PlatformView, SurfaceHolder.Callback, View.OnTouchListener, MethodChannel.MethodCallHandler {
+    private val viewId = viewId
     private val sessionId = (creationArguments["sessionId"] as? Number)?.toLong() ?: -1L
     private val channel = MethodChannel(messenger, "$RDP_VULKAN_VIEW_TYPE/$viewId")
     private var disposed = false
@@ -69,6 +91,7 @@ private class RdpVulkanPlatformView(
     private var attachedHeight = 0
 
     private val surfaceView = SurfaceView(context).apply {
+        setZOrderOnTop(true)
         holder.setFormat(PixelFormat.OPAQUE)
         holder.addCallback(this@RdpVulkanPlatformView)
         setBackgroundColor(android.graphics.Color.BLACK)
@@ -102,20 +125,34 @@ private class RdpVulkanPlatformView(
         }
     }
 
-    override fun surfaceCreated(holder: SurfaceHolder) = Unit
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        attachSurface(holder, surfaceView.width, surfaceView.height)
+    }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        attachSurface(holder, width, height)
+    }
+
+    private fun attachSurface(holder: SurfaceHolder, width: Int, height: Int) {
         if (disposed || sessionId <= 0 || !RdpVulkanBridge.isLoaded()) return
-        if (surfaceAttached && attachedWidth == width && attachedHeight == height) return
-        surfaceAttached = RdpVulkanBridge.nativeAttachSurface(
+        val resolvedWidth = width.takeIf { it > 0 } ?: holder.surfaceFrame.width()
+        val resolvedHeight = height.takeIf { it > 0 } ?: holder.surfaceFrame.height()
+        if (resolvedWidth <= 0 || resolvedHeight <= 0 || !holder.surface.isValid) return
+        if (
+            surfaceAttached &&
+            attachedWidth == resolvedWidth &&
+            attachedHeight == resolvedHeight
+        ) return
+        surfaceAttached = RdpVulkanBridge.attachSurface(
             sessionId = sessionId,
+            viewId = viewId,
             surface = holder.surface,
-            width = width,
-            height = height,
+            width = resolvedWidth,
+            height = resolvedHeight,
         )
         if (surfaceAttached) {
-            attachedWidth = width
-            attachedHeight = height
+            attachedWidth = resolvedWidth
+            attachedHeight = resolvedHeight
         }
     }
 
@@ -124,7 +161,7 @@ private class RdpVulkanPlatformView(
         attachedWidth = 0
         attachedHeight = 0
         if (sessionId > 0 && RdpVulkanBridge.isLoaded()) {
-            RdpVulkanBridge.nativeDetachSurface(sessionId)
+            RdpVulkanBridge.detachSurface(sessionId, viewId)
         }
     }
 
@@ -156,7 +193,7 @@ private class RdpVulkanPlatformView(
         surfaceView.holder.removeCallback(this)
         surfaceView.setOnTouchListener(null)
         if (sessionId > 0 && RdpVulkanBridge.isLoaded()) {
-            RdpVulkanBridge.nativeDetachSurface(sessionId)
+            RdpVulkanBridge.detachSurface(sessionId, viewId)
         }
     }
 

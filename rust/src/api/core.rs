@@ -229,6 +229,9 @@ pub struct RustSftpEntry {
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
+    // Dependencies must never emit SSH packet payloads or credentials to
+    // Android logcat, including debug builds.
+    log::set_max_level(log::LevelFilter::Warn);
 }
 
 pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnectResult> {
@@ -539,7 +542,10 @@ pub async fn mosh_bootstrap(request: RustMoshBootstrapRequest) -> Result<RustMos
     }
     let mut channel = client.channel_open_session().await?;
     channel
-        .exec(true, b"mosh-server new -s -c 256 -l LANG=en_US.UTF-8")
+        .exec(
+            true,
+            b"mosh-server new -s -i 0.0.0.0 -c 256 -l LANG=en_US.UTF-8",
+        )
         .await
         .context("mosh-server launch was rejected")?;
     let mut output = Vec::new();

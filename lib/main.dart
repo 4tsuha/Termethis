@@ -116,7 +116,7 @@ class MainApp extends StatefulWidget {
     this.initialFont = AppFont.notoSansJp,
     this.fontStore = const EphemeralAppFontStore(),
     this.initialPerformanceSettings = const TerminalPerformanceSettings(
-      rendererMode: TerminalRendererMode.webgl,
+      rendererMode: TerminalRendererMode.connectBot,
     ),
     this.performanceSettingsStore =
         const EphemeralTerminalPerformanceSettingsStore(),

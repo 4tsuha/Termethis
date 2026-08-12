@@ -1207,13 +1207,13 @@ abstract class AppLocalizations {
   /// No description provided for @terminalRendererConnectBot.
   ///
   /// In ja, this message translates to:
-  /// **'ConnectBot'**
+  /// **'ネイティブSurface'**
   String get terminalRendererConnectBot;
 
   /// No description provided for @terminalRendererConnectBotDescription.
   ///
   /// In ja, this message translates to:
-  /// **'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。'**
+  /// **'termlibとlibvtermで解析し、AndroidのSurfaceへ直接描画します。WebViewを使わず、最新フレームを優先して大量出力時の遅延とメモリ増加を抑えます。'**
   String get terminalRendererConnectBotDescription;
 
   /// No description provided for @terminalRendererTermux.
@@ -1471,7 +1471,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.8.0-alpha'**
+  /// **'0.8.0-alpha2'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

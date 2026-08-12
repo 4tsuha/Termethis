@@ -4368,6 +4368,7 @@ dependencies = [
  "flutter_rust_bridge",
  "ironrdp",
  "jni",
+ "log",
  "ndk-sys",
  "once_cell",
  "pollster",

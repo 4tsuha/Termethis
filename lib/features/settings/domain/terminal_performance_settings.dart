@@ -24,7 +24,7 @@ String terminalSearchSequence(TerminalSearchMode mode) => switch (mode) {
 
 class TerminalPerformanceSettings {
   const TerminalPerformanceSettings({
-    this.rendererMode = TerminalRendererMode.webgl,
+    this.rendererMode = TerminalRendererMode.connectBot,
     this.terminalFont = TerminalFont.cascadiaMono,
     this.hardwareAccelerationMode = HardwareAccelerationMode.automatic,
     this.refreshRateMode = RefreshRateMode.adaptive,

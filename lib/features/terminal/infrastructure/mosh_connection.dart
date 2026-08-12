@@ -42,7 +42,6 @@ class MoshConnection implements SshConnection {
       onError: _fail,
       onDone: _complete,
     );
-    _ticker = Timer.periodic(const Duration(milliseconds: 8), (_) => _flush());
     _transport.forceNextSend();
     _flush();
   }
@@ -53,11 +52,18 @@ class MoshConnection implements SshConnection {
   final StreamController<Uint8List> _stdout = StreamController.broadcast();
   final StreamController<Uint8List> _stderr = StreamController.broadcast();
   final Completer<void> _done = Completer<void>();
-  final List<UserInstruction> _pending = [];
+  BytesBuilder _pendingKeys = BytesBuilder(copy: false);
   StreamSubscription<RawSocketEvent>? _subscription;
-  Timer? _ticker;
+  Timer? _pumpTimer;
+  Timer? _handshakeTimer;
+  DateTime? _pumpDeadline;
   InternetAddress? _address;
+  int _pendingWidth = 0;
+  int _pendingHeight = 0;
+  int _lastWidth = 0;
+  int _lastHeight = 0;
   bool _closed = false;
+  bool _receivedPacket = false;
 
   static Future<MoshConnection> connect(MoshBootstrap bootstrap) async {
     var key = bootstrap.key;
@@ -77,6 +83,16 @@ class MoshConnection implements SshConnection {
       MoshTransport.client(AesOcb(base64Decode(key))),
     );
     connection._address = address;
+    connection._handshakeTimer = Timer(const Duration(seconds: 10), () {
+      if (!connection._receivedPacket && !connection._closed) {
+        connection._fail(
+          const SocketException(
+            'MoshのUDP応答を受信できません。UDPポートとファイアウォールを確認してください。',
+          ),
+        );
+      }
+    });
+    connection._flush();
     return connection;
   }
 
@@ -92,14 +108,16 @@ class MoshConnection implements SshConnection {
   @override
   void write(Uint8List data) {
     if (_closed || data.isEmpty) return;
-    _pending.add(UserInstruction(keys: Uint8List.fromList(data)));
+    _pendingKeys.add(data);
     _flush();
   }
 
   @override
   void resize(int width, int height, int pixelWidth, int pixelHeight) {
     if (_closed || width <= 0 || height <= 0) return;
-    _pending.add(UserInstruction(width: width, height: height));
+    if (width == _lastWidth && height == _lastHeight) return;
+    _pendingWidth = width;
+    _pendingHeight = height;
     _flush();
   }
 
@@ -108,7 +126,10 @@ class MoshConnection implements SshConnection {
     Datagram? datagram;
     while ((datagram = _socket.receive()) != null) {
       try {
-        final diff = _transport.recv(Uint8List.fromList(datagram!.data));
+        _receivedPacket = true;
+        _handshakeTimer?.cancel();
+        _handshakeTimer = null;
+        final diff = _transport.recv(datagram!.data);
         if (diff == null || diff.isEmpty) continue;
         final output = BytesBuilder(copy: false);
         for (final instruction in unmarshalHostMessage(diff)) {
@@ -121,17 +142,52 @@ class MoshConnection implements SshConnection {
         _fail(error, stackTrace);
       }
     }
+    _flush();
   }
 
   void _flush() {
     if (_closed || _address == null) return;
-    if (!_transport.hasPendingState && _pending.isNotEmpty) {
-      _transport.sendNew(marshalUserMessage(List.of(_pending)));
-      _pending.clear();
+    if (!_transport.hasPendingState &&
+        (_pendingKeys.length > 0 || _pendingWidth > 0)) {
+      final instructions = <UserInstruction>[];
+      if (_pendingWidth > 0) {
+        instructions.add(
+          UserInstruction(width: _pendingWidth, height: _pendingHeight),
+        );
+        _lastWidth = _pendingWidth;
+        _lastHeight = _pendingHeight;
+        _pendingWidth = 0;
+        _pendingHeight = 0;
+      }
+      if (_pendingKeys.length > 0) {
+        instructions.add(UserInstruction(keys: _pendingKeys.takeBytes()));
+        _pendingKeys = BytesBuilder(copy: false);
+      }
+      _transport.sendNew(marshalUserMessage(instructions));
     }
     for (final datagram in _transport.tick()) {
       _socket.send(datagram, _address!, _bootstrap.port);
     }
+    _schedulePump(_transport.nextTickDelay);
+  }
+
+  void _schedulePump(Duration delay) {
+    if (_closed) return;
+    final now = DateTime.now();
+    final deadline = now.add(delay);
+    if (_pumpTimer?.isActive == true &&
+        _pumpDeadline != null &&
+        !_pumpDeadline!.isAfter(deadline)) {
+      return;
+    }
+    _pumpTimer?.cancel();
+    _handshakeTimer?.cancel();
+    _pumpDeadline = deadline;
+    _pumpTimer = Timer(delay, () {
+      _pumpTimer = null;
+      _pumpDeadline = null;
+      _flush();
+    });
   }
 
   void _fail(Object error, [StackTrace? stackTrace]) {
@@ -147,7 +203,7 @@ class MoshConnection implements SshConnection {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    _ticker?.cancel();
+    _pumpTimer?.cancel();
     await _subscription?.cancel();
     _socket.close();
     await _stdout.close();
