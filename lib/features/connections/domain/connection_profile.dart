@@ -4,12 +4,16 @@ enum AuthenticationType { passwordOrInteractive, privateKey }
 
 enum ConnectionType {
   ssh(defaultPort: 22),
+  mosh(defaultPort: 22),
   rdp(defaultPort: 3389),
   vnc(defaultPort: 5900);
 
   const ConnectionType({required this.defaultPort});
 
   final int defaultPort;
+
+  bool get usesSshAuthentication =>
+      this == ConnectionType.ssh || this == ConnectionType.mosh;
 }
 
 class ConnectionProfile {
@@ -40,7 +44,7 @@ class ConnectionProfile {
   String get target {
     final endpoint = '$host:$port';
     if (username.isEmpty) return endpoint;
-    return connectionType == ConnectionType.ssh
+    return connectionType.usesSshAuthentication
         ? '$username@$endpoint'
         : '$username · $endpoint';
   }

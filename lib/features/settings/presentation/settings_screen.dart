@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../application/app_font_controller.dart';
 import '../application/credential_settings_controller.dart';
+import '../domain/vault_protection.dart';
 import '../application/terminal_performance_settings_controller.dart';
 import '../domain/app_font.dart';
 import '../domain/hardware_acceleration_controller.dart';
@@ -28,8 +29,11 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          const _SectionHeader('タブバーとクイック操作'),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'terminal-operation',
+            icon: Icons.terminal_outlined,
+            title: 'ターミナル操作',
+            summary: 'タブ、検索、コピー、入力操作',
             children: [
               SwitchListTile(
                 secondary: const Icon(Icons.search),
@@ -84,11 +88,7 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showShellIntegrationHelp(context),
               ),
-            ],
-          ),
-          const _SectionHeader('入力とターミナル動作'),
-          _SettingsCard(
-            children: [
+
               SwitchListTile(
                 secondary: const Icon(Icons.mouse_outlined),
                 title: const Text('TUIアプリでのマウス入力'),
@@ -129,10 +129,68 @@ class SettingsScreen extends ConsumerWidget {
                     .read(terminalPerformanceSettingsProvider.notifier)
                     .setResizeForKeyboard,
               ),
+              ListTile(
+                leading: const Icon(Icons.fingerprint),
+                title: const Text('Vaultの保護'),
+                subtitle: Text(
+                  _vaultProtectionDescription(
+                    credentialSettings.vaultProtectionMode,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _selectVaultProtection(
+                  context,
+                  ref,
+                  credentialSettings.vaultProtectionMode,
+                ),
+              ),
+              Consumer(
+                builder: (context, ref, _) {
+                  final status = ref.watch(vaultProtectionStatusProvider);
+                  return ListTile(
+                    leading: const Icon(Icons.phonelink_lock_outlined),
+                    title: const Text('利用可能な認証方式'),
+                    subtitle: Text(
+                      status.when(
+                        loading: () => '確認中',
+                        error: (_, _) => '確認できませんでした',
+                        data: (value) => [
+                          if (value.strongBiometricAvailable) '強い生体認証',
+                          if (value.deviceCredentialAvailable)
+                            '端末のPIN・パターン・パスワード',
+                          if (!value.strongBiometricAvailable &&
+                              !value.deviceCredentialAvailable)
+                            '利用できる端末認証がありません',
+                        ].join(' / '),
+                      ),
+                    ),
+                    trailing: status.value?.locked == true
+                        ? const Icon(Icons.lock_outline)
+                        : const Icon(Icons.lock_open_outlined),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.lock_clock_outlined),
+                title: const Text('今すぐロック'),
+                subtitle: const Text('解錠状態と平文の認証情報キャッシュを破棄します。'),
+                onTap: () async {
+                  await ref
+                      .read(credentialSettingsProvider.notifier)
+                      .lockVault();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Vaultをロックしました。')),
+                  );
+                },
+              ),
             ],
           ),
-          const _SectionHeader('フォントと表示'),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'display-rendering',
+            icon: Icons.display_settings_outlined,
+            title: '表示と描画',
+            summary: 'フォント、エミュレータ、描画性能',
             children: [
               ListTile(
                 leading: const Icon(Icons.text_fields),
@@ -159,11 +217,7 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showFontPicker(context, ref, appFont),
               ),
-            ],
-          ),
-          const _SectionHeader('描画とパフォーマンス'),
-          _SettingsCard(
-            children: [
+
               ListTile(
                 leading: const Icon(Icons.developer_board_outlined),
                 title: Text(l10n.settingsTerminalRenderer),
@@ -236,8 +290,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const _SectionHeader('電源とバックグラウンド'),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'background',
+            icon: Icons.battery_saver_outlined,
+            title: '動作とバックグラウンド',
+            summary: '画面表示とバックグラウンド接続',
             children: [
               SwitchListTile(
                 secondary: const Icon(Icons.light_mode_outlined),
@@ -259,8 +316,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          _SectionHeader(l10n.settingsKeyManagementSection),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'credentials',
+            icon: Icons.key_outlined,
+            title: '鍵と認証',
+            summary: '秘密鍵、Vault、パスワード保存',
             children: [
               ListTile(
                 leading: const Icon(Icons.key_outlined),
@@ -289,8 +349,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const _SectionHeader('連携と診断'),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'integrations',
+            icon: Icons.extension_outlined,
+            title: '連携と診断',
+            summary: 'Shizuku、ログ、MCPサーバー',
             children: [
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings_outlined),
@@ -324,8 +387,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          _SectionHeader(l10n.settingsFtpSection),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'file-transfer',
+            icon: Icons.folder_copy_outlined,
+            title: l10n.settingsFtpSection,
+            summary: '転送方式と証明書',
             children: [
               ListTile(
                 leading: const Icon(Icons.security_outlined),
@@ -334,8 +400,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          _SectionHeader(l10n.settingsAboutSection),
-          _SettingsCard(
+          _SettingsGroup(
+            storageKey: 'about',
+            icon: Icons.info_outline,
+            title: l10n.settingsAboutSection,
+            summary: 'バージョンとライセンス',
             children: [
               ListTile(
                 leading: const Icon(Icons.info_outline),
@@ -726,41 +795,129 @@ class SettingsScreen extends ConsumerWidget {
       };
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.label);
+String _vaultProtectionDescription(VaultProtectionMode mode) => switch (mode) {
+  VaultProtectionMode.none => '生体認証を使用しません。',
+  VaultProtectionMode.everyUnlock => '保存した認証情報を使うたびに端末認証を求めます。',
+  VaultProtectionMode.thirtySeconds => '認証後30秒間、Vaultの解錠状態を維持します。',
+  VaultProtectionMode.fiveMinutes => '認証後5分間、Vaultの解錠状態を維持します。',
+};
 
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-        ),
+Future<void> _selectVaultProtection(
+  BuildContext context,
+  WidgetRef ref,
+  VaultProtectionMode current,
+) async {
+  final selected = await showModalBottomSheet<VaultProtectionMode>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Vaultの保護',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+          ),
+          RadioGroup<VaultProtectionMode>(
+            groupValue: current,
+            onChanged: (value) => Navigator.pop(context, value),
+            child: Column(
+              children: [
+                for (final mode in VaultProtectionMode.values)
+                  RadioListTile<VaultProtectionMode>(
+                    value: mode,
+                    title: Text(switch (mode) {
+                      VaultProtectionMode.none => '生体認証を使用しない',
+                      VaultProtectionMode.everyUnlock => 'Vaultを開くたびに認証',
+                      VaultProtectionMode.thirtySeconds => '認証後30秒間有効',
+                      VaultProtectionMode.fiveMinutes => '認証後5分間有効',
+                    }),
+                    subtitle: Text(_vaultProtectionDescription(mode)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
-    );
-  }
+    ),
+  );
+  if (selected == null || selected == current || !context.mounted) return;
+  final result = await ref
+      .read(credentialSettingsProvider.notifier)
+      .setVaultProtectionMode(selected);
+  if (!context.mounted || result == VaultAuthenticationResult.unlocked) return;
+  final message = switch (result) {
+    VaultAuthenticationResult.canceled => '端末認証をキャンセルしました。',
+    VaultAuthenticationResult.keyInvalidated =>
+      'Keystore鍵が無効です。Vault保護を再設定してください。',
+    VaultAuthenticationResult.backgroundDenied => 'アプリを表示してから認証してください。',
+    VaultAuthenticationResult.unavailable => 'この端末では指定した認証方式を利用できません。',
+    VaultAuthenticationResult.unlocked => '',
+  };
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.storageKey,
+    required this.icon,
+    required this.title,
+    required this.summary,
+    required this.children,
+  });
 
+  final String storageKey;
+  final IconData icon;
+  final String title;
+  final String summary;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      color: colors.surfaceContainerLow,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       clipBehavior: Clip.antiAlias,
-      child: Column(
+      child: ExpansionTile(
+        key: PageStorageKey('settings-group-$storageKey'),
+        maintainState: true,
+        tilePadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        collapsedShape: const Border(),
+        shape: const Border(),
+        leading: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, color: colors.onPrimaryContainer),
+          ),
+        ),
+        title: Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis),
         children: [
+          Divider(height: 1, color: colors.outlineVariant),
           for (var index = 0; index < children.length; index++) ...[
             children[index],
             if (index != children.length - 1)
-              const Divider(height: 1, indent: 56),
+              Divider(height: 1, indent: 56, color: colors.outlineVariant),
           ],
         ],
       ),

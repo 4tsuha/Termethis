@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../application/connection_profiles_controller.dart';
+import '../application/connection_tabs_controller.dart';
 import '../application/remote_desktop_launcher_provider.dart';
 import '../domain/connection_profile.dart';
 import '../domain/remote_desktop_launcher.dart';
 import '../../wake_on_lan/application/wake_on_lan_provider.dart';
-import '../../terminal/application/ssh_tabs_controller.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/application/ssh_session_controller.dart';
 
@@ -34,7 +34,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final profiles = ref.watch(connectionProfilesProvider);
-    final sshTabs = ref.watch(sshTabsProvider).value ?? const [];
+    final connectionTabs = ref.watch(connectionTabsProvider).value ?? const [];
     final sessionRegistry = ref.read(sessionRegistryProvider);
     final desktopOnly = widget.mode == ConnectionListMode.desktop;
     final allowedTypes = desktopOnly
@@ -83,7 +83,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
                           final profile = visibleItems[index];
                           final sessions =
                               [
-                                for (final tab in sshTabs)
+                                for (final tab in connectionTabs)
                                   if (tab.profileId == profile.id)
                                     sessionRegistry.find(tab.id),
                               ].whereType<SshSessionController>().toList(
@@ -130,22 +130,44 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
     if (_launchingProfileIds.contains(profile.id)) return;
     setState(() => _launchingProfileIds.add(profile.id));
     try {
-      if (profile.connectionType == ConnectionType.ssh) {
-        final tabId = await ref.read(sshTabsProvider.notifier).open(profile);
+      if (profile.connectionType.usesSshAuthentication) {
+        final tabId = await ref
+            .read(connectionTabsProvider.notifier)
+            .open(profile);
         if (context.mounted) {
           context.go(
-            Uri(path: '/terminals', queryParameters: {'tab': tabId}).toString(),
+            Uri(
+              path: '/connections',
+              queryParameters: {'tab': tabId},
+            ).toString(),
           );
         }
         return;
       }
 
       if (profile.connectionType == ConnectionType.rdp) {
-        if (context.mounted) context.push('/rdp/${profile.id}');
+        final tabId = await ref
+            .read(connectionTabsProvider.notifier)
+            .open(profile);
+        if (context.mounted) {
+          context.go(
+            Uri(
+              path: '/connections',
+              queryParameters: {'tab': tabId},
+            ).toString(),
+          );
+        }
         return;
       }
-
+      final tabId = await ref
+          .read(connectionTabsProvider.notifier)
+          .open(profile);
       await ref.read(remoteDesktopLauncherProvider).launch(profile);
+      if (context.mounted) {
+        context.go(
+          Uri(path: '/connections', queryParameters: {'tab': tabId}).toString(),
+        );
+      }
     } on RemoteDesktopLaunchFailure catch (error) {
       if (context.mounted) {
         await _showRemoteDesktopFailure(
@@ -206,12 +228,14 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
   String _connectionTypeLabel(AppLocalizations l10n, ConnectionType type) =>
       switch (type) {
         ConnectionType.ssh => l10n.connectionTypeSsh,
+        ConnectionType.mosh => 'Mosh',
         ConnectionType.rdp => l10n.connectionTypeRdp,
         ConnectionType.vnc => l10n.connectionTypeVnc,
       };
 
   IconData _connectionTypeIcon(ConnectionType type) => switch (type) {
     ConnectionType.ssh => Icons.terminal,
+    ConnectionType.mosh => Icons.swap_horiz,
     ConnectionType.rdp => Icons.desktop_windows_outlined,
     ConnectionType.vnc => Icons.monitor_outlined,
   };
@@ -246,10 +270,10 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
           ),
         );
         if (confirmed == true) {
-          final tabs = await ref.read(sshTabsProvider.future);
+          final tabs = await ref.read(connectionTabsProvider.future);
           for (final tab in tabs.where((tab) => tab.profileId == profile.id)) {
             ref.read(sessionRegistryProvider).remove(tab.id);
-            await ref.read(sshTabsProvider.notifier).close(tab.id);
+            await ref.read(connectionTabsProvider.notifier).close(tab.id);
           }
           await ref
               .read(connectionProfilesProvider.notifier)
@@ -325,6 +349,7 @@ class _ConnectionProfileCard extends StatelessWidget {
     final statusColor = _connectionStatusColor(colors, status);
     final statusLabel = switch (profile.connectionType) {
       ConnectionType.ssh => _connectionStatusText(l10n, status),
+      ConnectionType.mosh => '利用準備中',
       ConnectionType.rdp => 'アプリ内蔵',
       ConnectionType.vnc => '外部アプリ',
     };

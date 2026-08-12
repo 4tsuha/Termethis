@@ -4,10 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../connections/application/connection_profiles_controller.dart';
+import '../../connections/application/connection_tabs_controller.dart';
 import '../../connections/domain/connection_profile.dart';
+import '../../connections/domain/connection_tab.dart';
 import '../../diagnostics/presentation/shizuku_shell_screen.dart';
-import '../application/ssh_tabs_controller.dart';
-import '../domain/ssh_tab.dart';
 import 'terminal_screen.dart';
 
 class TerminalWorkspaceScreen extends ConsumerWidget {
@@ -23,14 +23,16 @@ class TerminalWorkspaceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (openShizukuShell) return const ShizukuShellScreen();
-    final tabs = ref.watch(sshTabsProvider);
+    final tabs = ref.watch(connectionTabsProvider);
     return tabs.when(
       loading: () => const _TerminalLoadingView(),
-      error: (_, _) =>
-          _TerminalErrorView(onRetry: () => ref.invalidate(sshTabsProvider)),
+      error: (_, _) => _TerminalErrorView(
+        onRetry: () => ref.invalidate(connectionTabsProvider),
+      ),
       data: (items) {
-        if (items.isEmpty) return const _EmptyTerminalView();
-        final selectedTab = _selectTab(items, requestedTabId);
+        final terminalTabs = items.where((tab) => tab.isTerminal).toList();
+        if (terminalTabs.isEmpty) return const _EmptyTerminalView();
+        final selectedTab = _selectTab(terminalTabs, requestedTabId);
         final profiles = ref.watch(connectionProfilesProvider);
         return profiles.when(
           loading: () => const _TerminalLoadingView(),
@@ -38,12 +40,13 @@ class TerminalWorkspaceScreen extends ConsumerWidget {
             onRetry: () => ref.invalidate(connectionProfilesProvider),
           ),
           data: (profiles) {
-            final profile = _findProfile(profiles, selectedTab.profileId);
+            final profile = _findProfile(profiles, selectedTab.profileId ?? '');
             if (profile == null) {
               return _MissingProfileView(
                 tab: selectedTab,
-                onClose: () =>
-                    ref.read(sshTabsProvider.notifier).close(selectedTab.id),
+                onClose: () => ref
+                    .read(connectionTabsProvider.notifier)
+                    .close(selectedTab.id),
               );
             }
             return TerminalScreen(
@@ -59,7 +62,7 @@ class TerminalWorkspaceScreen extends ConsumerWidget {
   }
 }
 
-SshTab _selectTab(List<SshTab> tabs, String? requestedTabId) {
+ConnectionTab _selectTab(List<ConnectionTab> tabs, String? requestedTabId) {
   for (final tab in tabs) {
     if (tab.id == requestedTabId) return tab;
   }
@@ -147,7 +150,14 @@ class _EmptyTerminalView extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               TextButton.icon(
-                onPressed: () => context.go('/terminals?mode=shizuku'),
+                onPressed: () async {
+                  final tabId = await ProviderScope.containerOf(
+                    context,
+                  ).read(connectionTabsProvider.notifier).openShizukuShell();
+                  if (context.mounted) {
+                    context.go('/connections?tab=$tabId');
+                  }
+                },
                 icon: const Icon(Icons.admin_panel_settings_outlined),
                 label: const Text('Shizuku ADBシェル'),
               ),
@@ -162,7 +172,7 @@ class _EmptyTerminalView extends StatelessWidget {
 class _MissingProfileView extends StatelessWidget {
   const _MissingProfileView({required this.tab, required this.onClose});
 
-  final SshTab tab;
+  final ConnectionTab tab;
   final Future<void> Function() onClose;
 
   @override

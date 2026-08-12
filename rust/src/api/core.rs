@@ -1,5 +1,5 @@
 use std::collections::{HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
@@ -12,6 +12,11 @@ use russh::{ChannelMsg, ChannelWriteHalf, Disconnect};
 use russh_sftp::client::SftpSession;
 use russh_sftp::protocol::FileType;
 use tokio::sync::{Mutex, Notify};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
+use zeroize::Zeroize;
 
 const MAX_BUFFER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_READ_BYTES: usize = 256 * 1024;
@@ -24,6 +29,7 @@ static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::ne
 static PENDING_AUTHS: Lazy<DashMap<i64, PendingAuthentication>> = Lazy::new(DashMap::new);
 static SFTP_SESSIONS: Lazy<DashMap<i64, Arc<SftpSessionState>>> = Lazy::new(DashMap::new);
 static SSH_EXEC_CANCELLATIONS: Lazy<DashMap<i64, Arc<Notify>>> = Lazy::new(DashMap::new);
+static SSH_TUNNELS: Lazy<DashMap<i64, Arc<SshTunnel>>> = Lazy::new(DashMap::new);
 
 #[derive(Clone)]
 pub struct RustSshConnectRequest {
@@ -37,6 +43,19 @@ pub struct RustSshConnectRequest {
     pub trusted_host_keys: Vec<String>,
     pub terminal_width: u32,
     pub terminal_height: u32,
+    pub jump_hosts: Vec<RustSshJumpHost>,
+}
+
+#[derive(Clone)]
+pub struct RustSshJumpHost {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_kind: String,
+    pub password: String,
+    pub private_key_pem: String,
+    pub passphrase: Option<String>,
+    pub trusted_host_keys: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -101,6 +120,40 @@ pub struct RustSshExecResult {
     pub error_message: Option<String>,
 }
 
+pub struct RustKeyDecodeDiagnostics {
+    pub selected_path: String,
+    pub aarch64: bool,
+    pub neon: bool,
+    pub sve: bool,
+    pub sve2: bool,
+    pub aes: bool,
+    pub sha2: bool,
+    pub p50_microseconds: u64,
+    pub p95_microseconds: u64,
+    pub successful_iterations: u32,
+}
+
+pub struct RustSshTunnelStartRequest {
+    pub session_id: i64,
+    pub kind: String,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub target_host: String,
+    pub target_port: u16,
+    pub allow_lan: bool,
+}
+
+pub struct RustSshTunnelStatus {
+    pub tunnel_id: i64,
+    pub kind: String,
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub bytes_up: u64,
+    pub bytes_down: u64,
+    pub active: bool,
+    pub error_message: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct RustSftpConnectRequest {
     pub host: String,
@@ -133,6 +186,9 @@ pub fn init_app() {
 }
 
 pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnectResult> {
+    if !request.jump_hosts.is_empty() {
+        return ssh_connect_via_jumps(request).await;
+    }
     let observed = Arc::new(StdMutex::new(None));
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
@@ -150,7 +206,13 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
 
     match authenticate(&mut client, &request).await {
         Ok(AuthenticationOutcome::Complete) => {
-            finalize_ssh_session(client, request.terminal_width, request.terminal_height).await
+            finalize_ssh_session(
+                client,
+                Vec::new(),
+                request.terminal_width,
+                request.terminal_height,
+            )
+            .await
         }
         Ok(AuthenticationOutcome::Challenge(challenge)) => {
             let id = next_id();
@@ -160,6 +222,7 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
                     client,
                     terminal_width: request.terminal_width,
                     terminal_height: request.terminal_height,
+                    jump_clients: Vec::new(),
                 },
             );
             Ok(RustSshConnectResult {
@@ -191,6 +254,7 @@ pub async fn ssh_continue_authentication(
         KeyboardInteractiveAuthResponse::Success => {
             finalize_ssh_session(
                 pending.client,
+                pending.jump_clients,
                 pending.terminal_width,
                 pending.terminal_height,
             )
@@ -244,7 +308,12 @@ pub async fn ssh_read(
             let mut output = session.output.lock().await;
             if output.len() > 0 || session.closed.load(Ordering::Acquire) {
                 has_buffered_data = output.len() > 0;
-                let batch_ready = output.len() >= limit.min(READ_BATCH_BYTES)
+                let interactive_response = has_buffered_data
+                    && session
+                        .interactive_response_pending
+                        .swap(false, Ordering::AcqRel);
+                let batch_ready = interactive_response
+                    || output.len() >= limit.min(READ_BATCH_BYTES)
                     || session.closed.load(Ordering::Acquire)
                     || coalesce_deadline.is_some_and(|deadline| Instant::now() >= deadline);
                 if batch_ready {
@@ -290,6 +359,9 @@ pub async fn ssh_read(
 
 pub async fn ssh_write(session_id: i64, data: Vec<u8>) -> Result<()> {
     let session = get_ssh_session(session_id)?;
+    session
+        .interactive_response_pending
+        .store(true, Ordering::Release);
     let result = session
         .writer
         .lock()
@@ -325,8 +397,21 @@ pub async fn ssh_close(session_id: i64) -> Result<()> {
     session.closed.store(true, Ordering::Release);
     session.data_ready.notify_waiters();
     session.space_ready.notify_waiters();
+    let tunnel_ids: Vec<i64> = SSH_TUNNELS
+        .iter()
+        .filter(|entry| entry.session_id == session_id)
+        .map(|entry| *entry.key())
+        .collect();
+    for tunnel_id in tunnel_ids {
+        ssh_stop_tunnel(tunnel_id);
+    }
     let _ = session.writer.lock().await.close().await;
     if let Some(client) = session.client.lock().await.take() {
+        let _ = client
+            .disconnect(Disconnect::ByApplication, "", "English")
+            .await;
+    }
+    for client in session.jump_clients.lock().await.drain(..).rev() {
         let _ = client
             .disconnect(Disconnect::ByApplication, "", "English")
             .await;
@@ -393,6 +478,272 @@ pub fn validate_private_key(pem: String, passphrase: Option<String>) -> Result<(
     decode_secret_key(&pem, passphrase.as_deref())
         .map(|_| ())
         .context("Invalid or unsupported private key")
+}
+
+pub fn key_decode_diagnostics(
+    mut pem: String,
+    mut passphrase: Option<String>,
+    iterations: u32,
+) -> Result<RustKeyDecodeDiagnostics> {
+    let sample_count = iterations.clamp(3, 100);
+    let features = runtime_key_decode_features();
+    let mut measurements = Vec::with_capacity(sample_count as usize);
+    let mut successful_iterations = 0;
+    for _ in 0..sample_count {
+        let started = Instant::now();
+        let decoded = decode_secret_key(&pem, passphrase.as_deref())
+            .context("Invalid or unsupported private key")?;
+        measurements.push(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
+        successful_iterations += 1;
+        drop(decoded);
+    }
+    measurements.sort_unstable();
+    let p50 = percentile(&measurements, 50);
+    let p95 = percentile(&measurements, 95);
+    pem.zeroize();
+    if let Some(secret) = passphrase.as_mut() {
+        secret.zeroize();
+    }
+    Ok(RustKeyDecodeDiagnostics {
+        selected_path: "portable".to_owned(),
+        aarch64: features.aarch64,
+        neon: features.neon,
+        sve: features.sve,
+        sve2: features.sve2,
+        aes: features.aes,
+        sha2: features.sha2,
+        p50_microseconds: p50,
+        p95_microseconds: p95,
+        successful_iterations,
+    })
+}
+
+struct KeyDecodeFeatures {
+    aarch64: bool,
+    neon: bool,
+    sve: bool,
+    sve2: bool,
+    aes: bool,
+    sha2: bool,
+}
+
+fn runtime_key_decode_features() -> KeyDecodeFeatures {
+    #[cfg(target_arch = "aarch64")]
+    {
+        KeyDecodeFeatures {
+            aarch64: true,
+            neon: std::arch::is_aarch64_feature_detected!("neon"),
+            sve: std::arch::is_aarch64_feature_detected!("sve"),
+            sve2: std::arch::is_aarch64_feature_detected!("sve2"),
+            aes: std::arch::is_aarch64_feature_detected!("aes"),
+            sha2: std::arch::is_aarch64_feature_detected!("sha2"),
+        }
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        KeyDecodeFeatures {
+            aarch64: false,
+            neon: false,
+            sve: false,
+            sve2: false,
+            aes: false,
+            sha2: false,
+        }
+    }
+}
+
+fn percentile(values: &[u64], percentile: usize) -> u64 {
+    let index = ((values.len() - 1) * percentile).div_ceil(100);
+    values[index.min(values.len() - 1)]
+}
+
+async fn forward_direct(
+    mut socket: TcpStream,
+    origin: std::net::SocketAddr,
+    session: Arc<SshSession>,
+    target_host: String,
+    target_port: u16,
+    tunnel: &SshTunnel,
+) -> Result<()> {
+    let channel = {
+        let client = session.client.lock().await;
+        client
+            .as_ref()
+            .context("SSH session is closed")?
+            .channel_open_direct_tcpip(
+                target_host,
+                target_port.into(),
+                origin.ip().to_string(),
+                origin.port().into(),
+            )
+            .await
+            .context("SSH server rejected direct-tcpip")?
+    };
+    let mut stream = channel.into_stream();
+    let (up, down) = tokio::io::copy_bidirectional(&mut socket, &mut stream).await?;
+    tunnel.bytes_up.fetch_add(up, Ordering::AcqRel);
+    tunnel.bytes_down.fetch_add(down, Ordering::AcqRel);
+    Ok(())
+}
+
+async fn forward_socks5(
+    mut socket: TcpStream,
+    origin: std::net::SocketAddr,
+    session: Arc<SshSession>,
+    tunnel: &SshTunnel,
+) -> Result<()> {
+    let version = socket.read_u8().await?;
+    let method_count = socket.read_u8().await? as usize;
+    let mut methods = vec![0; method_count];
+    socket.read_exact(&mut methods).await?;
+    if version != 5 || !methods.contains(&0) {
+        socket.write_all(&[5, 0xff]).await?;
+        return Err(anyhow!("SOCKS5 authentication method is unsupported"));
+    }
+    socket.write_all(&[5, 0]).await?;
+    if socket.read_u8().await? != 5 || socket.read_u8().await? != 1 {
+        return Err(anyhow!("SOCKS5 command is unsupported"));
+    }
+    let _reserved = socket.read_u8().await?;
+    let host = match socket.read_u8().await? {
+        1 => {
+            let mut bytes = [0; 4];
+            socket.read_exact(&mut bytes).await?;
+            std::net::Ipv4Addr::from(bytes).to_string()
+        }
+        3 => {
+            let length = socket.read_u8().await? as usize;
+            let mut bytes = vec![0; length];
+            socket.read_exact(&mut bytes).await?;
+            String::from_utf8(bytes)?
+        }
+        4 => {
+            let mut bytes = [0; 16];
+            socket.read_exact(&mut bytes).await?;
+            std::net::Ipv6Addr::from(bytes).to_string()
+        }
+        _ => return Err(anyhow!("SOCKS5 address type is unsupported")),
+    };
+    let port = socket.read_u16().await?;
+    let channel = {
+        let client = session.client.lock().await;
+        client
+            .as_ref()
+            .context("SSH session is closed")?
+            .channel_open_direct_tcpip(
+                host,
+                port.into(),
+                origin.ip().to_string(),
+                origin.port().into(),
+            )
+            .await
+            .context("SSH server rejected SOCKS5 destination")?
+    };
+    socket.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+    let mut stream = channel.into_stream();
+    let (up, down) = tokio::io::copy_bidirectional(&mut socket, &mut stream).await?;
+    tunnel.bytes_up.fetch_add(up, Ordering::AcqRel);
+    tunnel.bytes_down.fetch_add(down, Ordering::AcqRel);
+    Ok(())
+}
+
+pub async fn ssh_start_tunnel(request: RustSshTunnelStartRequest) -> Result<RustSshTunnelStatus> {
+    if request.kind != "local" && request.kind != "socks5" {
+        return Err(anyhow!("Unsupported SSH tunnel kind"));
+    }
+    if !request.allow_lan && request.bind_host != "127.0.0.1" {
+        return Err(anyhow!("LAN tunnel binding requires explicit permission"));
+    }
+    if request.kind == "local" && (request.target_host.is_empty() || request.target_port == 0) {
+        return Err(anyhow!("Local forwarding target is invalid"));
+    }
+    let session = SSH_SESSIONS
+        .get(&request.session_id)
+        .map(|entry| Arc::clone(entry.value()))
+        .context("SSH session is not active")?;
+    if session.client.lock().await.is_none() {
+        return Err(anyhow!("SSH session is closed"));
+    }
+    let listener = TcpListener::bind((request.bind_host.as_str(), request.bind_port))
+        .await
+        .context("Failed to bind SSH tunnel")?;
+    let local = listener
+        .local_addr()
+        .context("Tunnel bind address is unavailable")?;
+    let tunnel_id = next_id();
+    let tunnel = Arc::new(SshTunnel {
+        session_id: request.session_id,
+        kind: request.kind.clone(),
+        bind_host: local.ip().to_string(),
+        bind_port: local.port(),
+        bytes_up: AtomicU64::new(0),
+        bytes_down: AtomicU64::new(0),
+        active: AtomicBool::new(true),
+        error: StdMutex::new(None),
+        stop: Notify::new(),
+    });
+    SSH_TUNNELS.insert(tunnel_id, Arc::clone(&tunnel));
+    let target_host = request.target_host;
+    let target_port = request.target_port;
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = tunnel.stop.notified() => break,
+                accepted = listener.accept() => match accepted {
+                    Ok((socket, origin)) => {
+                        let session = Arc::clone(&session);
+                        let tunnel = Arc::clone(&tunnel);
+                        let kind = request.kind.clone();
+                        let target_host = target_host.clone();
+                        tokio::spawn(async move {
+                            let outcome = if kind == "socks5" {
+                                forward_socks5(socket, origin, session, &tunnel).await
+                            } else {
+                                forward_direct(socket, origin, session, target_host, target_port, &tunnel).await
+                            };
+                            if let Err(error) = outcome {
+                                *tunnel.error.lock().expect("tunnel error mutex poisoned") = Some(format!("{error:#}"));
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        *tunnel.error.lock().expect("tunnel error mutex poisoned") = Some(error.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        tunnel.active.store(false, Ordering::Release);
+    });
+    ssh_tunnel_status(tunnel_id)
+}
+
+pub fn ssh_tunnel_status(tunnel_id: i64) -> Result<RustSshTunnelStatus> {
+    let tunnel = SSH_TUNNELS
+        .get(&tunnel_id)
+        .context("SSH tunnel not found")?;
+    let error_message = tunnel
+        .error
+        .lock()
+        .expect("tunnel error mutex poisoned")
+        .clone();
+    Ok(RustSshTunnelStatus {
+        tunnel_id,
+        kind: tunnel.kind.clone(),
+        bind_host: tunnel.bind_host.clone(),
+        bind_port: tunnel.bind_port,
+        bytes_up: tunnel.bytes_up.load(Ordering::Acquire),
+        bytes_down: tunnel.bytes_down.load(Ordering::Acquire),
+        active: tunnel.active.load(Ordering::Acquire),
+        error_message,
+    })
+}
+
+pub fn ssh_stop_tunnel(tunnel_id: i64) {
+    if let Some((_, tunnel)) = SSH_TUNNELS.remove(&tunnel_id) {
+        tunnel.active.store(false, Ordering::Release);
+        tunnel.stop.notify_waiters();
+    }
 }
 
 pub async fn sftp_connect(request: RustSftpConnectRequest) -> Result<RustSftpConnectResult> {
@@ -583,17 +934,32 @@ enum AuthenticationOutcome {
 
 struct PendingAuthentication {
     client: client::Handle<HostKeyHandler>,
+    jump_clients: Vec<client::Handle<HostKeyHandler>>,
     terminal_width: u32,
     terminal_height: u32,
 }
 
 struct SshSession {
     client: Mutex<Option<client::Handle<HostKeyHandler>>>,
+    jump_clients: Mutex<Vec<client::Handle<HostKeyHandler>>>,
     writer: Mutex<ChannelWriteHalf<client::Msg>>,
     output: Mutex<OutputBuffer>,
     data_ready: Notify,
     space_ready: Notify,
     closed: AtomicBool,
+    interactive_response_pending: AtomicBool,
+}
+
+struct SshTunnel {
+    session_id: i64,
+    kind: String,
+    bind_host: String,
+    bind_port: u16,
+    bytes_up: AtomicU64,
+    bytes_down: AtomicU64,
+    active: AtomicBool,
+    error: StdMutex<Option<String>>,
+    stop: Notify,
 }
 
 struct OutputBuffer {
@@ -628,21 +994,201 @@ async fn connect_client(
     port: u16,
     handler: HostKeyHandler,
 ) -> Result<client::Handle<HostKeyHandler>> {
-    let config = client::Config {
+    tokio::time::timeout(
+        Duration::from_secs(15),
+        client::connect(ssh_client_config(), (host, port), handler),
+    )
+    .await
+    .context("SSH connection timed out")?
+    .context("SSH handshake failed")
+}
+
+fn ssh_client_config() -> Arc<client::Config> {
+    Arc::new(client::Config {
         window_size: 1024 * 1024,
         maximum_packet_size: 32 * 1024,
         channel_buffer_size: 64,
         keepalive_interval: Some(Duration::from_secs(15)),
         keepalive_max: 3,
         ..Default::default()
+    })
+}
+
+async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSshConnectResult> {
+    let mut jump_clients = Vec::with_capacity(request.jump_hosts.len());
+    let first = &request.jump_hosts[0];
+    let first_observed = Arc::new(StdMutex::new(None));
+    let first_handler = HostKeyHandler {
+        trusted: first.trusted_host_keys.iter().cloned().collect(),
+        observed: Arc::clone(&first_observed),
     };
-    tokio::time::timeout(
+    let mut current = match connect_client(&first.host, first.port, first_handler).await {
+        Ok(client) => client,
+        Err(error) => {
+            let host_key = first_observed
+                .lock()
+                .expect("host key mutex poisoned")
+                .clone();
+            let code = if host_key.is_some() {
+                "jump_host_key_rejected:0"
+            } else {
+                "jump_host_connection_failed:0"
+            };
+            return Ok(connect_error(code, error, host_key));
+        }
+    };
+    if let Err(error) = authenticate_jump_host(&mut current, first).await {
+        return Ok(connect_error(
+            "jump_host_authentication_failed:0",
+            error,
+            None,
+        ));
+    }
+
+    for (index, next) in request.jump_hosts.iter().enumerate().skip(1) {
+        let channel = current
+            .channel_open_direct_tcpip(&next.host, next.port.into(), "127.0.0.1", 0)
+            .await
+            .with_context(|| format!("Jump host {} rejected direct-tcpip", index - 1));
+        let channel = match channel {
+            Ok(channel) => channel,
+            Err(error) => {
+                return Ok(connect_error(
+                    &format!("jump_host_connection_failed:{index}"),
+                    error,
+                    None,
+                ));
+            }
+        };
+        let observed = Arc::new(StdMutex::new(None));
+        let handler = HostKeyHandler {
+            trusted: next.trusted_host_keys.iter().cloned().collect(),
+            observed: Arc::clone(&observed),
+        };
+        let next_client = tokio::time::timeout(
+            Duration::from_secs(15),
+            client::connect_stream(ssh_client_config(), channel.into_stream(), handler),
+        )
+        .await;
+        let mut next_client = match next_client {
+            Ok(Ok(client)) => client,
+            Ok(Err(error)) => {
+                let host_key = observed.lock().expect("host key mutex poisoned").clone();
+                let code = if host_key.is_some() {
+                    format!("jump_host_key_rejected:{index}")
+                } else {
+                    format!("jump_host_connection_failed:{index}")
+                };
+                return Ok(connect_error(&code, error, host_key));
+            }
+            Err(error) => {
+                return Ok(connect_error(
+                    &format!("jump_host_connection_failed:{index}"),
+                    error,
+                    None,
+                ));
+            }
+        };
+        if let Err(error) = authenticate_jump_host(&mut next_client, next).await {
+            return Ok(connect_error(
+                &format!("jump_host_authentication_failed:{index}"),
+                error,
+                None,
+            ));
+        }
+        jump_clients.push(current);
+        current = next_client;
+    }
+
+    let target_channel = current
+        .channel_open_direct_tcpip(&request.host, request.port.into(), "127.0.0.1", 0)
+        .await
+        .context("Last jump host rejected target direct-tcpip")?;
+    let observed = Arc::new(StdMutex::new(None));
+    let handler = HostKeyHandler {
+        trusted: request.trusted_host_keys.iter().cloned().collect(),
+        observed: Arc::clone(&observed),
+    };
+    let mut target = match tokio::time::timeout(
         Duration::from_secs(15),
-        client::connect(Arc::new(config), (host, port), handler),
+        client::connect_stream(ssh_client_config(), target_channel.into_stream(), handler),
     )
     .await
-    .context("SSH connection timed out")?
-    .context("SSH handshake failed")
+    {
+        Ok(Ok(client)) => client,
+        Ok(Err(error)) => {
+            let host_key = observed.lock().expect("host key mutex poisoned").clone();
+            return Ok(connect_error(
+                if host_key.is_some() {
+                    "host_key_untrusted"
+                } else {
+                    "connection_failed"
+                },
+                error,
+                host_key,
+            ));
+        }
+        Err(error) => return Ok(connect_error("connection_failed", error, None)),
+    };
+    if let Err(error) = authenticate_noninteractive_target(&mut target, &request).await {
+        return Ok(connect_error("authentication_failed", error, None));
+    }
+    jump_clients.push(current);
+    finalize_ssh_session(
+        target,
+        jump_clients,
+        request.terminal_width,
+        request.terminal_height,
+    )
+    .await
+}
+
+async fn authenticate_jump_host(
+    client: &mut client::Handle<HostKeyHandler>,
+    jump: &RustSshJumpHost,
+) -> Result<()> {
+    if jump.auth_kind == "private_key" {
+        return authenticate_private_key(
+            client,
+            &jump.username,
+            &jump.private_key_pem,
+            jump.passphrase.as_deref(),
+        )
+        .await;
+    }
+    let result = client
+        .authenticate_password(&jump.username, &jump.password)
+        .await
+        .context("Jump host password authentication failed")?;
+    if result.success() {
+        Ok(())
+    } else {
+        Err(anyhow!("Jump host authentication was rejected"))
+    }
+}
+
+async fn authenticate_noninteractive_target(
+    client: &mut client::Handle<HostKeyHandler>,
+    request: &RustSshConnectRequest,
+) -> Result<()> {
+    if request.auth_kind == "private_key" {
+        return authenticate_private_key(
+            client,
+            &request.username,
+            &request.private_key_pem,
+            request.passphrase.as_deref(),
+        )
+        .await;
+    }
+    let result = client
+        .authenticate_password(&request.username, &request.password)
+        .await
+        .context("Password authentication failed")?;
+    if result.success() {
+        Ok(())
+    } else {
+        Err(anyhow!("Password authentication was rejected"))
+    }
 }
 
 async fn authenticate(
@@ -834,6 +1380,7 @@ async fn authenticate_private_key(
 
 async fn finalize_ssh_session(
     client: client::Handle<HostKeyHandler>,
+    jump_clients: Vec<client::Handle<HostKeyHandler>>,
     width: u32,
     height: u32,
 ) -> Result<RustSshConnectResult> {
@@ -852,6 +1399,7 @@ async fn finalize_ssh_session(
     let (mut reader, writer) = channel.split();
     let session = Arc::new(SshSession {
         client: Mutex::new(Some(client)),
+        jump_clients: Mutex::new(jump_clients),
         writer: Mutex::new(writer),
         output: Mutex::new(OutputBuffer {
             stdout: VecDeque::new(),
@@ -861,6 +1409,7 @@ async fn finalize_ssh_session(
         data_ready: Notify::new(),
         space_ready: Notify::new(),
         closed: AtomicBool::new(false),
+        interactive_response_pending: AtomicBool::new(false),
     });
     let id = next_id();
     SSH_SESSIONS.insert(id, Arc::clone(&session));

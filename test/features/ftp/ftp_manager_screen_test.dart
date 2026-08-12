@@ -2,38 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termethis/app/app.dart';
+import 'package:termethis/features/connections/application/connection_tabs_controller.dart';
+import 'package:termethis/features/connections/domain/connection_tab.dart';
 import 'package:termethis/features/ftp/application/ftp_tabs_controller.dart';
 import 'package:termethis/features/ftp/domain/ftp_gateway.dart';
-import 'package:termethis/features/terminal/application/ssh_tabs_controller.dart';
-import 'package:termethis/features/terminal/domain/ssh_tab.dart';
 
 void main() {
-  testWidgets('ボトムナビで主要な5画面を切り替える', (tester) async {
+  testWidgets('ボトムナビで主要な4画面を切り替える', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('ホーム'), findsOneWidget);
-    expect(find.text('ターミナル'), findsOneWidget);
-    expect(find.text('デスクトップ'), findsOneWidget);
-    expect(find.text('FTP'), findsOneWidget);
+    expect(find.text('接続'), findsOneWidget);
+    expect(find.text('ファイル'), findsOneWidget);
     expect(find.text('設定'), findsOneWidget);
 
-    await tester.tap(find.text('ターミナル'));
+    await tester.tap(find.text('接続'));
     await tester.pumpAndSettle();
-    expect(find.text('ターミナルは開かれていません'), findsOneWidget);
+    expect(find.text('接続は開かれていません'), findsOneWidget);
 
-    await tester.tap(find.text('デスクトップ'));
-    await tester.pumpAndSettle();
-    expect(find.text('デスクトップ接続がありません'), findsOneWidget);
-
-    await tester.tap(find.text('FTP'));
+    await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
     expect(find.text('FTPマネージャー'), findsOneWidget);
     expect(find.text('FTPタブがありません'), findsOneWidget);
 
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('ターミナル操作'));
+    await tester.pumpAndSettle();
     expect(find.text('タブバーに検索ボタンを表示'), findsOneWidget);
+    await tester.tap(find.text('ターミナル操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('表示と描画'));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('ターミナルフォント'), 500);
     await tester.pumpAndSettle();
     await tester.tap(find.text('ターミナルフォント'));
@@ -102,19 +103,46 @@ void main() {
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
 
-    for (final label in const [
-      'タブバーとクイック操作',
-      '入力とターミナル動作',
-      'フォントと表示',
-      '描画とパフォーマンス',
-      '電源とバックグラウンド',
-      'キー管理',
-      '連携と診断',
+    expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsNothing);
+    await tester.tap(find.text('ターミナル操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('ターミナル操作'));
+    await tester.pumpAndSettle();
+    expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsNothing);
+
+    for (final group in const [
+      (key: 'terminal-operation', label: 'ターミナル操作'),
+      (key: 'display-rendering', label: '表示と描画'),
+      (key: 'background', label: '動作とバックグラウンド'),
+      (key: 'credentials', label: '鍵と認証'),
+      (key: 'integrations', label: '連携と診断'),
+      (key: 'file-transfer', label: 'FTP'),
+      (key: 'about', label: 'Termethisについて'),
     ]) {
-      await tester.scrollUntilVisible(find.text(label), 420);
-      expect(find.text(label), findsOneWidget);
+      final groupFinder = find.byKey(
+        PageStorageKey('settings-group-${group.key}'),
+      );
+      expect(groupFinder, findsWidgets);
+      expect(
+        find.descendant(
+          of: groupFinder.first,
+          matching: find.text(group.label),
+        ),
+        findsWidgets,
+      );
     }
 
+    await tester.ensureVisible(find.text('表示と描画'));
+    await tester.tap(find.text('表示と描画'));
+    await tester.pumpAndSettle();
+    expect(find.text('ターミナルエミュレータ'), findsOneWidget);
+    await tester.tap(find.text('表示と描画'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('鍵と認証'));
+    await tester.tap(find.text('鍵と認証'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('秘密鍵と信頼済みホスト鍵'));
     await tester.pumpAndSettle();
     expect(find.text('認証情報はこの端末内に保存'), findsOneWidget);
@@ -122,14 +150,22 @@ void main() {
     expect(find.text('信頼済みホスト鍵'), findsOneWidget);
   });
 
-  testWidgets('SSHタブ履歴はホームではなくターミナル画面に表示する', (tester) async {
-    final store = EphemeralSshTabStore();
-    await store.save(const [
-      SshTab(id: 'restored-tab', profileId: 'profile-1', title: '作業セッション'),
+  testWidgets('接続タブ履歴はホームではなく接続画面に表示する', (tester) async {
+    final store = EphemeralConnectionTabStore();
+    final now = DateTime.utc(2026, 8, 12);
+    await store.save([
+      ConnectionTab(
+        id: 'restored-tab',
+        profileId: 'profile-1',
+        protocol: ConnectionProtocol.ssh,
+        title: '作業セッション',
+        createdAt: now,
+        lastActivatedAt: now,
+      ),
     ]);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sshTabStoreProvider.overrideWithValue(store)],
+        overrides: [connectionTabStoreProvider.overrideWithValue(store)],
         child: const TermethisApp(),
       ),
     );
@@ -138,7 +174,7 @@ void main() {
     expect(find.text('作業セッション'), findsNothing);
     expect(find.byType(InputChip), findsNothing);
 
-    await tester.tap(find.text('ターミナル'));
+    await tester.tap(find.text('接続'));
     await tester.pumpAndSettle();
     expect(find.text('作業セッション'), findsOneWidget);
   });
@@ -152,7 +188,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('FTP'));
+    await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('FTP接続'));
     await tester.pumpAndSettle();
@@ -198,7 +234,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('FTP'));
+    await tester.tap(find.text('ファイル'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('FTP接続'));
     await tester.pumpAndSettle();

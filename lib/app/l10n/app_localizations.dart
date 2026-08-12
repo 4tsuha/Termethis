@@ -670,6 +670,18 @@ abstract class AppLocalizations {
   /// **'ホーム'**
   String get navHome;
 
+  /// No description provided for @navConnections.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続'**
+  String get navConnections;
+
+  /// No description provided for @navFiles.
+  ///
+  /// In ja, this message translates to:
+  /// **'ファイル'**
+  String get navFiles;
+
   /// No description provided for @navTerminal.
   ///
   /// In ja, this message translates to:
@@ -1159,7 +1171,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTerminalRenderer.
   ///
   /// In ja, this message translates to:
-  /// **'ターミナル描画エンジン'**
+  /// **'ターミナルエミュレータ'**
   String get settingsTerminalRenderer;
 
   /// No description provided for @settingsSelectTerminalRenderer.
@@ -1459,7 +1471,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.5.0'**
+  /// **'0.8.0-alpha'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

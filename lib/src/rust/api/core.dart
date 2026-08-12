@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `release_excess_capacity`, `resolve_sftp_path`, `sftp_connect_error`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `HostKeyHandler`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
+// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `release_excess_capacity`, `resolve_sftp_path`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`, `SshTunnel`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<RustSshConnectResult> sshConnect({
   required RustSshConnectRequest request,
@@ -71,6 +71,27 @@ Future<void> validatePrivateKey({required String pem, String? passphrase}) =>
       pem: pem,
       passphrase: passphrase,
     );
+
+Future<RustKeyDecodeDiagnostics> keyDecodeDiagnostics({
+  required String pem,
+  String? passphrase,
+  required int iterations,
+}) => RustLib.instance.api.crateApiCoreKeyDecodeDiagnostics(
+  pem: pem,
+  passphrase: passphrase,
+  iterations: iterations,
+);
+
+Future<RustSshTunnelStatus> sshStartTunnel({
+  required RustSshTunnelStartRequest request,
+}) => RustLib.instance.api.crateApiCoreSshStartTunnel(request: request);
+
+Future<RustSshTunnelStatus> sshTunnelStatus({
+  required PlatformInt64 tunnelId,
+}) => RustLib.instance.api.crateApiCoreSshTunnelStatus(tunnelId: tunnelId);
+
+Future<void> sshStopTunnel({required PlatformInt64 tunnelId}) =>
+    RustLib.instance.api.crateApiCoreSshStopTunnel(tunnelId: tunnelId);
 
 Future<RustSftpConnectResult> sftpConnect({
   required RustSftpConnectRequest request,
@@ -186,6 +207,61 @@ class RustInteractivePrompt {
           runtimeType == other.runtimeType &&
           text == other.text &&
           echo == other.echo;
+}
+
+class RustKeyDecodeDiagnostics {
+  final String selectedPath;
+  final bool aarch64;
+  final bool neon;
+  final bool sve;
+  final bool sve2;
+  final bool aes;
+  final bool sha2;
+  final BigInt p50Microseconds;
+  final BigInt p95Microseconds;
+  final int successfulIterations;
+
+  const RustKeyDecodeDiagnostics({
+    required this.selectedPath,
+    required this.aarch64,
+    required this.neon,
+    required this.sve,
+    required this.sve2,
+    required this.aes,
+    required this.sha2,
+    required this.p50Microseconds,
+    required this.p95Microseconds,
+    required this.successfulIterations,
+  });
+
+  @override
+  int get hashCode =>
+      selectedPath.hashCode ^
+      aarch64.hashCode ^
+      neon.hashCode ^
+      sve.hashCode ^
+      sve2.hashCode ^
+      aes.hashCode ^
+      sha2.hashCode ^
+      p50Microseconds.hashCode ^
+      p95Microseconds.hashCode ^
+      successfulIterations.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustKeyDecodeDiagnostics &&
+          runtimeType == other.runtimeType &&
+          selectedPath == other.selectedPath &&
+          aarch64 == other.aarch64 &&
+          neon == other.neon &&
+          sve == other.sve &&
+          sve2 == other.sve2 &&
+          aes == other.aes &&
+          sha2 == other.sha2 &&
+          p50Microseconds == other.p50Microseconds &&
+          p95Microseconds == other.p95Microseconds &&
+          successfulIterations == other.successfulIterations;
 }
 
 class RustSftpConnectRequest {
@@ -305,6 +381,7 @@ class RustSshConnectRequest {
   final List<String> trustedHostKeys;
   final int terminalWidth;
   final int terminalHeight;
+  final List<RustSshJumpHost> jumpHosts;
 
   const RustSshConnectRequest({
     required this.host,
@@ -317,6 +394,7 @@ class RustSshConnectRequest {
     required this.trustedHostKeys,
     required this.terminalWidth,
     required this.terminalHeight,
+    required this.jumpHosts,
   });
 
   @override
@@ -330,7 +408,8 @@ class RustSshConnectRequest {
       passphrase.hashCode ^
       trustedHostKeys.hashCode ^
       terminalWidth.hashCode ^
-      terminalHeight.hashCode;
+      terminalHeight.hashCode ^
+      jumpHosts.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -346,7 +425,8 @@ class RustSshConnectRequest {
           passphrase == other.passphrase &&
           trustedHostKeys == other.trustedHostKeys &&
           terminalWidth == other.terminalWidth &&
-          terminalHeight == other.terminalHeight;
+          terminalHeight == other.terminalHeight &&
+          jumpHosts == other.jumpHosts;
 }
 
 class RustSshConnectResult {
@@ -498,6 +578,53 @@ class RustSshExecResult {
           errorMessage == other.errorMessage;
 }
 
+class RustSshJumpHost {
+  final String host;
+  final int port;
+  final String username;
+  final String authKind;
+  final String password;
+  final String privateKeyPem;
+  final String? passphrase;
+  final List<String> trustedHostKeys;
+
+  const RustSshJumpHost({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.authKind,
+    required this.password,
+    required this.privateKeyPem,
+    this.passphrase,
+    required this.trustedHostKeys,
+  });
+
+  @override
+  int get hashCode =>
+      host.hashCode ^
+      port.hashCode ^
+      username.hashCode ^
+      authKind.hashCode ^
+      password.hashCode ^
+      privateKeyPem.hashCode ^
+      passphrase.hashCode ^
+      trustedHostKeys.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSshJumpHost &&
+          runtimeType == other.runtimeType &&
+          host == other.host &&
+          port == other.port &&
+          username == other.username &&
+          authKind == other.authKind &&
+          password == other.password &&
+          privateKeyPem == other.privateKeyPem &&
+          passphrase == other.passphrase &&
+          trustedHostKeys == other.trustedHostKeys;
+}
+
 class RustSshReadResult {
   final Uint8List stdout;
   final Uint8List stderr;
@@ -526,5 +653,95 @@ class RustSshReadResult {
           stdout == other.stdout &&
           stderr == other.stderr &&
           closed == other.closed &&
+          errorMessage == other.errorMessage;
+}
+
+class RustSshTunnelStartRequest {
+  final PlatformInt64 sessionId;
+  final String kind;
+  final String bindHost;
+  final int bindPort;
+  final String targetHost;
+  final int targetPort;
+  final bool allowLan;
+
+  const RustSshTunnelStartRequest({
+    required this.sessionId,
+    required this.kind,
+    required this.bindHost,
+    required this.bindPort,
+    required this.targetHost,
+    required this.targetPort,
+    required this.allowLan,
+  });
+
+  @override
+  int get hashCode =>
+      sessionId.hashCode ^
+      kind.hashCode ^
+      bindHost.hashCode ^
+      bindPort.hashCode ^
+      targetHost.hashCode ^
+      targetPort.hashCode ^
+      allowLan.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSshTunnelStartRequest &&
+          runtimeType == other.runtimeType &&
+          sessionId == other.sessionId &&
+          kind == other.kind &&
+          bindHost == other.bindHost &&
+          bindPort == other.bindPort &&
+          targetHost == other.targetHost &&
+          targetPort == other.targetPort &&
+          allowLan == other.allowLan;
+}
+
+class RustSshTunnelStatus {
+  final PlatformInt64 tunnelId;
+  final String kind;
+  final String bindHost;
+  final int bindPort;
+  final BigInt bytesUp;
+  final BigInt bytesDown;
+  final bool active;
+  final String? errorMessage;
+
+  const RustSshTunnelStatus({
+    required this.tunnelId,
+    required this.kind,
+    required this.bindHost,
+    required this.bindPort,
+    required this.bytesUp,
+    required this.bytesDown,
+    required this.active,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      tunnelId.hashCode ^
+      kind.hashCode ^
+      bindHost.hashCode ^
+      bindPort.hashCode ^
+      bytesUp.hashCode ^
+      bytesDown.hashCode ^
+      active.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSshTunnelStatus &&
+          runtimeType == other.runtimeType &&
+          tunnelId == other.tunnelId &&
+          kind == other.kind &&
+          bindHost == other.bindHost &&
+          bindPort == other.bindPort &&
+          bytesUp == other.bytesUp &&
+          bytesDown == other.bytesDown &&
+          active == other.active &&
           errorMessage == other.errorMessage;
 }

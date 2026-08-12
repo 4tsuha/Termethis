@@ -171,6 +171,47 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'visible terminal flushes the first response after input immediately',
+    () async {
+      final connection = _FakeConnection();
+      final controller = SshSessionController(
+        _FakeGateway(connection),
+        const Utf8TerminalCodec(),
+        profile: const ConnectionProfile(
+          id: 'interactive-latency',
+          name: 'Interactive',
+          host: 'localhost',
+          port: 22,
+          username: 'user',
+        ),
+      );
+      final renderedChunks = <String>[];
+      controller.setViewportVisible(true);
+      controller.addTerminalDataListener(renderedChunks.add);
+
+      await controller.connect(
+        authentication: const SshPasswordAuthentication('secret'),
+        onUnknownHostKey: (_) async => true,
+        onInteractivePrompt: (_) async => const [],
+      );
+
+      controller.sendInputDirect('a');
+      connection.emitStdout('a');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(renderedChunks, ['a']);
+      expect(_text(controller.webTerminalReplay.data), 'a');
+
+      connection.emitStdout('background');
+      await Future<void>.delayed(Duration.zero);
+      expect(renderedChunks, ['a']);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(renderedChunks, ['a', 'background']);
+      controller.dispose();
+    },
+  );
+
   test('受信データを非表示のFlutter端末へ二重入力しない', () async {
     final connection = _FakeConnection();
     final controller = SshSessionController(

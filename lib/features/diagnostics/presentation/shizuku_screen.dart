@@ -92,7 +92,7 @@ class _ShizukuBody extends ConsumerWidget {
           ),
         if (granted) ...[
           FilledButton.icon(
-            onPressed: () => context.go('/terminals?mode=shizuku'),
+            onPressed: () => context.go('/connections'),
             icon: const Icon(Icons.terminal),
             label: const Text('ADBシェルを開く'),
           ),

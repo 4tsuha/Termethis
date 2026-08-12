@@ -11,6 +11,23 @@ enum SshFailureCode {
   remoteClosed,
   networkLost,
   unexpected,
+  vaultLocked,
+  biometricUnavailable,
+  biometricCanceled,
+  keystoreKeyInvalidated,
+  jumpHostConnectionFailed,
+  jumpHostAuthenticationFailed,
+  jumpHostKeyRejected,
+  tunnelBindFailed,
+  tunnelRemoteRejected,
+  socksProtocolError,
+  moshServerMissing,
+  moshUdpUnreachable,
+  moshProtocolMismatch,
+  simdUnavailable,
+  keyDecodeFailed,
+  sessionProfileMissing,
+  remoteDesktopDisconnected,
 }
 
 class SshFailure implements Exception {

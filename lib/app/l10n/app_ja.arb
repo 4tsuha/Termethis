@@ -111,6 +111,8 @@
   "nothingToPaste": "貼り付ける文字列がありません。",
   "stageOneNotice": "接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。",
   "navHome": "ホーム",
+  "navConnections": "接続",
+  "navFiles": "ファイル",
   "navTerminal": "ターミナル",
   "navDesktop": "デスクトップ",
   "navFtp": "FTP",
@@ -201,7 +203,7 @@
   "settingsSelectTerminalFont": "ターミナルフォントを選択",
   "terminalFontCascadiaMono": "Cascadia Mono",
   "terminalFontJetBrainsMono": "JetBrains Mono",
-  "settingsTerminalRenderer": "ターミナル描画エンジン",
+  "settingsTerminalRenderer": "ターミナルエミュレータ",
   "settingsSelectTerminalRenderer": "ターミナルエミュレータを選択",
   "terminalRendererWebgl": "xterm.js WebGL",
   "terminalRendererWebglDescription": "複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。",
@@ -254,6 +256,6 @@
   "settingsFtpSecurityMessage": "平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。",
   "settingsAboutSection": "Termethisについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.5.0",
+  "settingsVersionValue": "0.8.0-alpha",
   "settingsLicenses": "オープンソースライセンス"
 }

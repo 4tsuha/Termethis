@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../connections/application/connection_profiles_controller.dart';
+import '../../connections/application/connection_tabs_controller.dart';
+import '../../connections/domain/connection_tab.dart';
 import '../../settings/application/credential_settings_controller.dart';
 import '../../terminal/application/session_registry.dart';
-import '../../terminal/application/ssh_tabs_controller.dart';
-import '../../terminal/domain/ssh_tab.dart';
 import '../domain/mcp_server_settings.dart';
 import '../infrastructure/mcp_streamable_http_server.dart';
 import '../infrastructure/rust_mcp_ssh_command_executor.dart';
@@ -25,7 +25,7 @@ final mcpSshCommandExecutorProvider = Provider<McpSshCommandExecutor>(
 
 final mcpSessionSourceProvider = Provider<McpSessionSource>((ref) {
   return _RegistryMcpSessionSource(
-    () => ref.read(sshTabsProvider).value ?? const <SshTab>[],
+    () => ref.read(connectionTabsProvider).value ?? const <ConnectionTab>[],
     ref.watch(sessionRegistryProvider),
   );
 });
@@ -60,17 +60,27 @@ final mcpServerControllerProvider = FutureProvider<McpServerController>((
 
 class _RegistryMcpSessionSource implements McpSessionSource {
   const _RegistryMcpSessionSource(this._readTabs, this._registry);
-  final List<SshTab> Function() _readTabs;
+  final List<ConnectionTab> Function() _readTabs;
   final SessionRegistry _registry;
 
   @override
-  List<McpSessionSummary> listSessions() => [
-    for (final tab in _readTabs())
-      if (_registry.find(tab.id) case final session?)
-        McpSessionSummary(
-          id: tab.id,
-          profileId: tab.profileId,
-          state: session.status.name,
-        ),
-  ];
+  List<McpSessionSummary> listSessions() {
+    final sessions = <McpSessionSummary>[];
+    for (final tab in _readTabs()) {
+      if (tab.protocol != ConnectionProtocol.ssh || tab.profileId == null) {
+        continue;
+      }
+      final session = _registry.find(tab.id);
+      if (session != null) {
+        sessions.add(
+          McpSessionSummary(
+            id: tab.id,
+            profileId: tab.profileId!,
+            state: session.status.name,
+          ),
+        );
+      }
+    }
+    return sessions;
+  }
 }

@@ -37,6 +37,10 @@ enum CredentialVaultFailureCode {
   corruptData,
   unsupportedVersion,
   invalidHandle,
+  vaultLocked,
+  biometricUnavailable,
+  biometricCanceled,
+  keystoreKeyInvalidated,
 }
 
 class CredentialVaultFailure implements Exception {
@@ -59,6 +63,11 @@ abstract interface class CredentialVault {
   Future<PasswordCredential?> readPassword(CredentialHandle handle);
 
   Future<void> delete(CredentialHandle handle);
+}
+
+abstract interface class LockableCredentialVault implements CredentialVault {
+  void setProtectionMode(Object mode);
+  void clearCachedSecrets();
 }
 
 class EphemeralCredentialVault implements CredentialVault {

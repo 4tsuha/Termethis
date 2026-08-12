@@ -310,6 +310,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navHome => 'ホーム';
 
   @override
+  String get navConnections => '接続';
+
+  @override
+  String get navFiles => 'ファイル';
+
+  @override
   String get navTerminal => 'ターミナル';
 
   @override
@@ -570,7 +576,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get terminalFontJetBrainsMono => 'JetBrains Mono';
 
   @override
-  String get settingsTerminalRenderer => 'ターミナル描画エンジン';
+  String get settingsTerminalRenderer => 'ターミナルエミュレータ';
 
   @override
   String get settingsSelectTerminalRenderer => 'ターミナルエミュレータを選択';
@@ -734,7 +740,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.5.0';
+  String get settingsVersionValue => '0.8.0-alpha';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

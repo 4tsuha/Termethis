@@ -7,17 +7,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:termethis/app/app.dart';
 import 'package:termethis/features/connections/application/connection_profiles_controller.dart';
+import 'package:termethis/features/connections/application/connection_tabs_controller.dart';
 import 'package:termethis/features/connections/application/private_key_providers.dart';
 import 'package:termethis/features/connections/application/remote_desktop_launcher_provider.dart';
 import 'package:termethis/features/connections/domain/connection_profile.dart';
 import 'package:termethis/features/connections/domain/connection_profile_repository.dart';
+import 'package:termethis/features/connections/domain/connection_tab.dart';
 import 'package:termethis/features/connections/domain/credential_vault.dart';
 import 'package:termethis/features/connections/domain/private_key_importer.dart';
 import 'package:termethis/features/connections/domain/remote_desktop_launcher.dart';
 import 'package:termethis/features/settings/application/app_font_controller.dart';
 import 'package:termethis/features/settings/domain/app_font.dart';
 import 'package:termethis/features/terminal/application/session_registry.dart';
-import 'package:termethis/features/terminal/application/ssh_tabs_controller.dart';
 import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
 import 'package:termethis/features/wake_on_lan/application/wake_on_lan_provider.dart';
 import 'package:termethis/features/wake_on_lan/domain/wake_on_lan.dart';
@@ -92,7 +93,7 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(MaterialApp)),
     );
-    final tab = (await container.read(sshTabsProvider.future)).single;
+    final tab = (await container.read(connectionTabsProvider.future)).single;
     final terminalTab = tester.widget<AnimatedContainer>(
       find.byKey(ValueKey('terminal-tab-${tab.id}')),
     );
@@ -121,6 +122,65 @@ void main() {
       connectedShape.side.color,
       Theme.of(cardContext).colorScheme.primary,
     );
+  });
+
+  testWidgets('復元済みの切断タブを置換してSSH接続を開始する', (tester) async {
+    final gateway = _WidgetTestGateway();
+    final tabStore = EphemeralConnectionTabStore();
+    final now = DateTime.utc(2026, 8, 12);
+    await tabStore.save([
+      ConnectionTab(
+        id: 'restored-tab-1',
+        profileId: 'wsl',
+        protocol: ConnectionProtocol.ssh,
+        title: 'WSL-Test',
+        createdAt: now,
+        lastActivatedAt: now,
+      ),
+      ConnectionTab(
+        id: 'restored-tab-2',
+        profileId: 'wsl',
+        protocol: ConnectionProtocol.ssh,
+        title: 'WSL-Test',
+        createdAt: now,
+        lastActivatedAt: now,
+      ),
+    ]);
+    final repository = EphemeralConnectionProfileRepository(
+      initialProfiles: const [
+        ConnectionProfile(
+          id: 'wsl',
+          name: 'WSL-Test',
+          host: '127.0.0.1',
+          port: 22222,
+          username: 'termethis-test',
+        ),
+      ],
+    );
+    addTearDown(repository.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          connectionProfileRepositoryProvider.overrideWithValue(repository),
+          sshGatewayProvider.overrideWithValue(gateway),
+          connectionTabStoreProvider.overrideWithValue(tabStore),
+        ],
+        child: const TermethisApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('WSL-Test'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    final tabs = await container.read(connectionTabsProvider.future);
+    expect(tabs, hasLength(1));
+    expect(tabs.single.id, isNot(anyOf('restored-tab-1', 'restored-tab-2')));
+    expect(find.text('認証情報'), findsOneWidget);
   });
 
   testWidgets('日本語IMEの確定文字列をUTF-8でSSHへ送る', (tester) async {

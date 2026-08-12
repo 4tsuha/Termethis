@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../application/connection_profiles_controller.dart';
 import '../application/private_key_providers.dart';
+import '../application/ssh_routes_controller.dart';
 import '../domain/connection_profile.dart';
 import '../domain/credential_vault.dart';
 import '../domain/private_key_importer.dart';
+import '../domain/ssh_route_configuration.dart';
 import '../../wake_on_lan/domain/wake_on_lan.dart';
 import '../../settings/application/credential_settings_controller.dart';
 
@@ -55,6 +57,7 @@ class _ConnectionEditorScreenState
   bool _saving = false;
   bool _dirty = false;
   bool _confirmingDiscard = false;
+  List<String> _jumpProfileIds = const [];
 
   @override
   void initState() {
@@ -89,6 +92,7 @@ class _ConnectionEditorScreenState
     _authenticationType =
         _existing?.authenticationType ??
         AuthenticationType.passwordOrInteractive;
+    _jumpProfileIds = const [];
     for (final controller in [
       _nameController,
       _hostController,
@@ -102,6 +106,19 @@ class _ConnectionEditorScreenState
     ]) {
       controller.addListener(_markDirty);
     }
+    if (widget.profileId case final profileId?) {
+      _loadRoute(profileId);
+    }
+  }
+
+  Future<void> _loadRoute(String profileId) async {
+    final routes = await ref.read(sshRoutesProvider.future);
+    if (!mounted || _dirty) return;
+    final route = routes
+        .where((route) => route.profileId == profileId)
+        .firstOrNull;
+    if (route == null) return;
+    setState(() => _jumpProfileIds = route.jumpProfileIds);
   }
 
   @override
@@ -215,7 +232,7 @@ class _ConnectionEditorScreenState
                     }
                   },
                 ),
-                if (_connectionType == ConnectionType.ssh) ...[
+                if (_connectionType.usesSshAuthentication) ...[
                   const SizedBox(height: 16),
                   DropdownButtonFormField<AuthenticationType>(
                     initialValue: _authenticationType,
@@ -256,7 +273,7 @@ class _ConnectionEditorScreenState
                     ),
                   ),
                 ],
-                if (_connectionType == ConnectionType.ssh &&
+                if (_connectionType.usesSshAuthentication &&
                     _authenticationType == AuthenticationType.privateKey) ...[
                   const SizedBox(height: 16),
                   _PrivateKeySection(
@@ -278,7 +295,7 @@ class _ConnectionEditorScreenState
                     },
                     onPick: _pickPrivateKey,
                   ),
-                ] else if (_connectionType == ConnectionType.ssh &&
+                ] else if (_connectionType.usesSshAuthentication &&
                     saveSshPasswords) ...[
                   const SizedBox(height: 16),
                   Card.outlined(
@@ -309,6 +326,22 @@ class _ConnectionEditorScreenState
                           return _required(value, l10n);
                         },
                       ),
+                    ),
+                  ),
+                ],
+                if (_connectionType.usesSshAuthentication) ...[
+                  const SizedBox(height: 16),
+                  Card.outlined(
+                    child: ListTile(
+                      leading: const Icon(Icons.route_outlined),
+                      title: const Text('踏み台'),
+                      subtitle: Text(
+                        _jumpProfileIds.isEmpty
+                            ? '直接接続'
+                            : '${_jumpProfileIds.length}段のProxyJump',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _selectJumpHosts,
                     ),
                   ),
                 ],
@@ -494,7 +527,7 @@ class _ConnectionEditorScreenState
 
     final l10n = AppLocalizations.of(context);
     final selectedKey = _selectedPrivateKey;
-    if (_connectionType == ConnectionType.ssh &&
+    if (_connectionType.usesSshAuthentication &&
         _authenticationType == AuthenticationType.privateKey &&
         selectedKey == null &&
         !(_existing?.authenticationType == AuthenticationType.privateKey &&
@@ -509,7 +542,7 @@ class _ConnectionEditorScreenState
     try {
       PrivateKeyCredential? replacementCredential;
       PasswordCredential? replacementPassword;
-      if (_connectionType == ConnectionType.ssh &&
+      if (_connectionType.usesSshAuthentication &&
           _authenticationType == AuthenticationType.privateKey &&
           selectedKey != null) {
         final passphrase = _keyPassphraseController.text;
@@ -528,7 +561,7 @@ class _ConnectionEditorScreenState
               : null,
         );
       }
-      if (_connectionType == ConnectionType.ssh &&
+      if (_connectionType.usesSshAuthentication &&
           _authenticationType == AuthenticationType.passwordOrInteractive &&
           ref.read(credentialSettingsProvider).saveSshPasswords &&
           _passwordController.text.isNotEmpty) {
@@ -538,7 +571,7 @@ class _ConnectionEditorScreenState
       final id =
           _existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
       final keepExistingCredential =
-          _connectionType == ConnectionType.ssh &&
+          _connectionType.usesSshAuthentication &&
           ((_authenticationType == AuthenticationType.privateKey &&
                   selectedKey == null &&
                   _existing?.authenticationType ==
@@ -580,12 +613,26 @@ class _ConnectionEditorScreenState
             replacementPrivateKey: replacementCredential,
             replacementPassword: replacementPassword,
           );
+      await ref
+          .read(sshRoutesProvider.notifier)
+          .saveRoute(
+            SshRouteConfiguration(
+              profileId: id,
+              jumpProfileIds: _jumpProfileIds,
+            ),
+          );
       if (mounted) {
         setState(() => _dirty = false);
         await WidgetsBinding.instance.endOfFrame;
       }
       if (mounted) {
         context.pop();
+      }
+    } on SshRouteCycleException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('踏み台の接続経路が循環しています。経路を見直してください。')),
+        );
       }
     } on PrivateKeyImportFailure {
       if (mounted) {
@@ -606,6 +653,31 @@ class _ConnectionEditorScreenState
     }
   }
 
+  Future<void> _selectJumpHosts() async {
+    final profiles = await ref.read(connectionProfilesProvider.future);
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _JumpHostPicker(
+        profiles: profiles
+            .where(
+              (profile) =>
+                  profile.id != widget.profileId &&
+                  profile.connectionType.usesSshAuthentication,
+            )
+            .toList(growable: false),
+        selectedIds: _jumpProfileIds,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _jumpProfileIds = selected;
+      _dirty = true;
+    });
+  }
+
   void _selectConnectionType(ConnectionType type) {
     if (type == _connectionType) return;
     final previousDefaultPort = _connectionType.defaultPort.toString();
@@ -618,6 +690,106 @@ class _ConnectionEditorScreenState
       _dirty = true;
     });
   }
+}
+
+class _JumpHostPicker extends StatefulWidget {
+  const _JumpHostPicker({required this.profiles, required this.selectedIds});
+
+  final List<ConnectionProfile> profiles;
+  final List<String> selectedIds;
+
+  @override
+  State<_JumpHostPicker> createState() => _JumpHostPickerState();
+}
+
+class _JumpHostPickerState extends State<_JumpHostPicker> {
+  late final List<String> _selected = List.of(widget.selectedIds);
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.68,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '踏み台を選択',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, _selected),
+                  child: const Text('完了'),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Text('上から順に接続します。長押しして順序を変更できます。'),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ReorderableListView(
+              buildDefaultDragHandles: false,
+              onReorderItem: (oldIndex, newIndex) {
+                setState(() {
+                  final id = _selected.removeAt(oldIndex);
+                  _selected.insert(newIndex, id);
+                });
+              },
+              children: [
+                for (var index = 0; index < _selected.length; index++)
+                  if (widget.profiles
+                          .where((profile) => profile.id == _selected[index])
+                          .firstOrNull
+                      case final profile?)
+                    ReorderableDragStartListener(
+                      key: ValueKey(profile.id),
+                      index: index,
+                      child: ListTile(
+                        leading: CircleAvatar(child: Text('${index + 1}')),
+                        title: Text(profile.name),
+                        subtitle: Text(profile.target),
+                        trailing: IconButton(
+                          tooltip: '踏み台から削除',
+                          onPressed: () =>
+                              setState(() => _selected.remove(profile.id)),
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: '踏み台を追加',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final profile in widget.profiles)
+                  if (!_selected.contains(profile.id))
+                    DropdownMenuItem(
+                      value: profile.id,
+                      child: Text(profile.name),
+                    ),
+              ],
+              onChanged: (id) {
+                if (id != null) setState(() => _selected.add(id));
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ConnectionTypeSelector extends StatelessWidget {
@@ -647,11 +819,13 @@ class _ConnectionTypeSelector extends StatelessWidget {
             _ConnectionTypeChoice(
               title: switch (type) {
                 ConnectionType.ssh => l10n.connectionTypeSsh,
+                ConnectionType.mosh => 'Mosh',
                 ConnectionType.rdp => l10n.connectionTypeRdp,
                 ConnectionType.vnc => l10n.connectionTypeVnc,
               },
               description: switch (type) {
                 ConnectionType.ssh => l10n.connectionTypeSshCompactDescription,
+                ConnectionType.mosh => 'ネットワーク切り替えに強いモバイルシェル',
                 ConnectionType.rdp => l10n.connectionTypeRdpCompactDescription,
                 ConnectionType.vnc => l10n.connectionTypeVncCompactDescription,
               },

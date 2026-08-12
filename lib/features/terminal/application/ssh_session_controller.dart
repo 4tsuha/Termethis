@@ -102,6 +102,7 @@ class SshSessionController extends ChangeNotifier {
   bool _webTerminalDeltaTruncated = false;
   bool _rendererOutputBackpressured = false;
   bool _outputSubscriptionsPaused = false;
+  bool _awaitingInteractiveResponse = false;
 
   static const _visibleWriteInterval = Duration(milliseconds: 8);
   static const _hiddenWriteInterval = Duration(milliseconds: 32);
@@ -124,6 +125,7 @@ class SshSessionController extends ChangeNotifier {
     required SshAuthentication authentication,
     required HostKeyApprovalHandler onUnknownHostKey,
     required InteractivePromptHandler onInteractivePrompt,
+    List<SshJumpHost> jumpHosts = const [],
   }) async {
     if ({
       SshSessionStatus.connecting,
@@ -160,6 +162,7 @@ class SshSessionController extends ChangeNotifier {
           },
           terminalWidth: terminal.viewWidth,
           terminalHeight: terminal.viewHeight,
+          jumpHosts: jumpHosts,
         ),
       );
       if (_closing || _disposed) {
@@ -312,6 +315,7 @@ class SshSessionController extends ChangeNotifier {
   void sendInputDirect(String data) {
     final connection = _connection;
     if (connection == null || status != SshSessionStatus.connected) return;
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(_codec.encode(data));
   }
@@ -331,6 +335,7 @@ class SshSessionController extends ChangeNotifier {
       output = Uint8List.fromList([0x1b, ...output]);
     }
     _clearModifiers();
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(output);
   }
@@ -338,6 +343,7 @@ class SshSessionController extends ChangeNotifier {
   void sendInputBytesDirect(Uint8List data) {
     final connection = _connection;
     if (connection == null || status != SshSessionStatus.connected) return;
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(data);
   }
@@ -381,6 +387,29 @@ class SshSessionController extends ChangeNotifier {
     _setStatus(SshSessionStatus.closed);
   }
 
+  Future<SshTunnelStatus> startTunnel(SshTunnelRequest request) async {
+    final connection = _connection;
+    if (connection is! TunnelCapableSshConnection || !isConnected) {
+      throw StateError('SSHトンネルを開始できる接続ではありません。');
+    }
+    return connection.startTunnel(request);
+  }
+
+  Future<SshTunnelStatus> tunnelStatus(int tunnelId) async {
+    final connection = _connection;
+    if (connection is! TunnelCapableSshConnection) {
+      throw StateError('SSHトンネルが見つかりません。');
+    }
+    return connection.tunnelStatus(tunnelId);
+  }
+
+  Future<void> stopTunnel(int tunnelId) async {
+    final connection = _connection;
+    if (connection is TunnelCapableSshConnection) {
+      await connection.stopTunnel(tunnelId);
+    }
+  }
+
   Future<void> _releaseConnection() async {
     final connection = _connection;
     _connection = null;
@@ -397,6 +426,11 @@ class SshSessionController extends ChangeNotifier {
     if (data.isEmpty || _disposed) return;
     _pendingTerminalData.add(data);
     _pendingTerminalLength += data.length;
+    if (_viewportVisible && _awaitingInteractiveResponse) {
+      _awaitingInteractiveResponse = false;
+      _flushTerminalWrites();
+      return;
+    }
     if (_pendingTerminalLength >= _maximumBufferedBytes) {
       _flushTerminalWrites();
       return;
@@ -478,8 +512,14 @@ class SshSessionController extends ChangeNotifier {
       output = '\x1b$output';
     }
     _clearModifiers();
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(_codec.encode(output));
+  }
+
+  void _prioritizeInteractiveResponse() {
+    if (!_viewportVisible) return;
+    _awaitingInteractiveResponse = true;
   }
 
   void _reportTerminalActivity() {

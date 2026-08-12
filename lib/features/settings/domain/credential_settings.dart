@@ -1,10 +1,20 @@
+import 'vault_protection.dart';
+
 class CredentialSettings {
-  const CredentialSettings({this.saveSshPasswords = false});
+  const CredentialSettings({
+    this.saveSshPasswords = false,
+    this.vaultProtectionMode = VaultProtectionMode.none,
+  });
 
   final bool saveSshPasswords;
+  final VaultProtectionMode vaultProtectionMode;
 
-  CredentialSettings copyWith({bool? saveSshPasswords}) => CredentialSettings(
+  CredentialSettings copyWith({
+    bool? saveSshPasswords,
+    VaultProtectionMode? vaultProtectionMode,
+  }) => CredentialSettings(
     saveSshPasswords: saveSshPasswords ?? this.saveSshPasswords,
+    vaultProtectionMode: vaultProtectionMode ?? this.vaultProtectionMode,
   );
 }
 

@@ -4346,6 +4346,7 @@ dependencies = [
  "russh-sftp",
  "tokio",
  "wgpu",
+ "zeroize",
 ]
 
 [[package]]

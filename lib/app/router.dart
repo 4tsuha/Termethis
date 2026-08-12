@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/ftp/presentation/ftp_manager_screen.dart';
 import '../features/connections/presentation/connection_editor_screen.dart';
 import '../features/connections/presentation/connection_list_screen.dart';
+import '../features/connections/presentation/connections_workspace_screen.dart';
 import '../features/connections/domain/connection_profile.dart';
 import '../features/connection_logs/presentation/connection_logs_screen.dart';
 import '../features/diagnostics/presentation/logcat_capture_screen.dart';
@@ -12,8 +13,6 @@ import '../features/diagnostics/presentation/shizuku_screen.dart';
 import '../features/mcp/presentation/mcp_server_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/key_management_screen.dart';
-import '../features/remote_desktop/presentation/rdp_screen.dart';
-import '../features/terminal/presentation/terminal_workspace_screen.dart';
 import 'app_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -38,11 +37,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/terminals',
-                builder: (context, state) => TerminalWorkspaceScreen(
+                path: '/connections',
+                builder: (context, state) => ConnectionsWorkspaceScreen(
                   requestedTabId: state.uri.queryParameters['tab'],
-                  openShizukuShell:
-                      state.uri.queryParameters['mode'] == 'shizuku',
                 ),
               ),
             ],
@@ -50,17 +47,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/desktop',
-                builder: (context, state) => const ConnectionListScreen(
-                  mode: ConnectionListMode.desktop,
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/ftp',
+                path: '/files',
                 builder: (context, state) => const FtpManagerScreen(),
               ),
             ],
@@ -98,6 +85,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        path: '/terminals',
+        redirect: (context, state) => Uri(
+          path: '/connections',
+          queryParameters: {'tab': ?state.uri.queryParameters['tab']},
+        ).toString(),
+      ),
+      GoRoute(path: '/desktop', redirect: (context, state) => '/connections'),
+      GoRoute(path: '/ftp', redirect: (context, state) => '/files'),
+      GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/connections/new',
         builder: (context, state) {
@@ -110,6 +106,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ? const {ConnectionType.rdp, ConnectionType.vnc}
                 : const {
                     ConnectionType.ssh,
+                    ConnectionType.mosh,
                     ConnectionType.rdp,
                     ConnectionType.vnc,
                   },
@@ -121,12 +118,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/connections/:id/edit',
         builder: (context, state) =>
             ConnectionEditorScreen(profileId: state.pathParameters['id']),
-      ),
-      GoRoute(
-        parentNavigatorKey: rootNavigatorKey,
-        path: '/rdp/:id',
-        builder: (context, state) =>
-            RdpScreen(profileId: state.pathParameters['id']!),
       ),
     ],
   );

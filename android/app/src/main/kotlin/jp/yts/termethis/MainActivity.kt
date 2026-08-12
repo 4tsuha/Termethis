@@ -43,6 +43,7 @@ class MainActivity : FlutterActivity() {
     private var pendingPrivateKeyResult: MethodChannel.Result? = null
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
     private var shizukuDiagnosticsChannel: ShizukuDiagnosticsChannel? = null
+    private var vaultProtectionChannel: VaultProtectionChannel? = null
 
     @Suppress("DEPRECATION")
     override fun getFlutterShellArgs(): FlutterShellArgs {
@@ -67,6 +68,10 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         shizukuDiagnosticsChannel = ShizukuDiagnosticsChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+        vaultProtectionChannel = VaultProtectionChannel(
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -254,6 +259,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        vaultProtectionChannel?.dispose()
+        vaultProtectionChannel = null
         pendingBackgroundSessionResult?.error(
             "activity_destroyed",
             "Activity was destroyed before notification permission completed",
