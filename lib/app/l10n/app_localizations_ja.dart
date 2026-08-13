@@ -740,7 +740,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.8.0';
+  String get settingsVersionValue => '0.8.1';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';
