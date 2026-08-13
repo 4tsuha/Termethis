@@ -608,6 +608,7 @@ class SshSessionController extends ChangeNotifier {
     if (_closing || _disposed) {
       return;
     }
+    if (status == SshSessionStatus.reconnectPrompt) return;
     _flushTerminalWrites();
     failure = const SshFailure(SshFailureCode.remoteClosed);
     _setStatus(SshSessionStatus.reconnectPrompt);

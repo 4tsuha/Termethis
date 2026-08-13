@@ -589,11 +589,11 @@ class AppLocalizationsJa extends AppLocalizations {
       '複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。';
 
   @override
-  String get terminalRendererAlacritty => 'Flutter Alacritty';
+  String get terminalRendererXtermDart => 'xterm.dart';
 
   @override
-  String get terminalRendererAlacrittyDescription =>
-      'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。';
+  String get terminalRendererXtermDartDescription =>
+      'Flutter上で動くDart製ターミナルです。CJK、絵文字、日本語IMEに対応し、WebViewを使用しません。';
 
   @override
   String get terminalRendererConnectBot => 'termlib';
@@ -740,7 +740,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.8.0-alpha6';
+  String get settingsVersionValue => '0.8.0-alpha7';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

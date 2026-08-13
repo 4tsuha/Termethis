@@ -146,6 +146,7 @@ class _RdpScreenState extends ConsumerState<RdpScreen> {
   }
 
   Future<void> _connect(RdpSessionController session) async {
+    FocusScope.of(context).unfocus();
     final logicalSize = MediaQuery.sizeOf(context);
     final width = logicalSize.width.round().clamp(800, 1920);
     final height = (logicalSize.height - 120).round().clamp(600, 1080);
@@ -166,15 +167,19 @@ class _RdpScreenState extends ConsumerState<RdpScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              RdpVulkanView(
-                sessionId: sessionId,
-                onRendererReady: (renderer) {
-                  session.updateRenderer(renderer);
-                },
-                onRendererError: (error) {
-                  session.updateError(error);
-                },
-              ),
+              if (session.state == 'ready')
+                RdpVulkanView(
+                  key: ValueKey('rdp-vulkan-$sessionId'),
+                  sessionId: sessionId,
+                  onRendererReady: (renderer) {
+                    session.updateRenderer(renderer);
+                  },
+                  onRendererError: (error) {
+                    session.updateError(error);
+                  },
+                )
+              else
+                const ColoredBox(color: Colors.black),
               if (session.state == 'connecting')
                 const IgnorePointer(
                   child: ColoredBox(
@@ -216,13 +221,16 @@ class _RdpScreenState extends ConsumerState<RdpScreen> {
             padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
             child: TextField(
               controller: _textInput,
-              onSubmitted: (_) => _submitText(session),
+              enabled: session.state == 'ready',
+              onSubmitted: (_) => unawaited(_submitText(session)),
               decoration: InputDecoration(
                 hintText: 'リモートへ文字入力',
                 prefixIcon: const Icon(Icons.keyboard_outlined),
                 suffixIcon: IconButton(
                   tooltip: '送信',
-                  onPressed: () => _submitText(session),
+                  onPressed: session.state == 'ready'
+                      ? () => unawaited(_submitText(session))
+                      : null,
                   icon: const Icon(Icons.send),
                 ),
               ),
@@ -236,7 +244,6 @@ class _RdpScreenState extends ConsumerState<RdpScreen> {
   Future<void> _submitText(RdpSessionController session) async {
     final text = _textInput.text;
     if (text.isEmpty) return;
-    _textInput.clear();
-    await session.sendText(text);
+    if (await session.sendText(text)) _textInput.clear();
   }
 }

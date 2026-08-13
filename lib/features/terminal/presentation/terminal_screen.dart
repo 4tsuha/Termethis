@@ -24,8 +24,9 @@ import '../application/ssh_session_controller.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
 import '../../../infrastructure/display/android_terminal_window_controller.dart';
-import 'widgets/alacritty_terminal_view.dart';
 import 'widgets/native_terminal_view.dart';
+import 'widgets/terminal_shortcut_bar.dart';
+import 'widgets/xterm_dart_terminal.dart';
 import 'widgets/xterm_web_terminal.dart';
 
 class TerminalScreen extends ConsumerStatefulWidget {
@@ -52,7 +53,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     with WidgetsBindingObserver {
   var _webTerminalKey = GlobalKey<XtermWebTerminalState>();
   var _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
-  var _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
+  var _dartTerminalKey = GlobalKey<XtermDartTerminalState>();
   final _windowController = const AndroidTerminalWindowController();
   ConnectionProfile? _profile;
   SshSessionController? _session;
@@ -61,7 +62,6 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   late String _activeTabId;
   bool _webTerminalFailed = false;
   bool _nativeTerminalFailed = false;
-  bool _alacrittyTerminalFailed = false;
   bool _switchingTab = false;
   bool _agentMode = false;
   final List<SshTunnelStatus> _tunnels = [];
@@ -94,7 +94,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
     unawaited(_nativeTerminalKey.currentState?.setActive(false));
-    unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
+    _dartTerminalKey.currentState?.setActive(false);
     _performancePulseTimer?.cancel();
     _session?.removeTerminalActivityListener(_pulseHighFrameRate);
     _session?.setViewportVisible(false);
@@ -109,13 +109,13 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     if (visible) {
       _webTerminalKey.currentState?.resume();
       unawaited(_nativeTerminalKey.currentState?.setActive(true));
-      unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
+      _dartTerminalKey.currentState?.setActive(true);
     } else {
       unawaited(
         _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
       );
       unawaited(_nativeTerminalKey.currentState?.setActive(false));
-      unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
+      _dartTerminalKey.currentState?.setActive(false);
     }
   }
 
@@ -147,18 +147,15 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         setState(() {
           _webTerminalFailed = false;
           _nativeTerminalFailed = false;
-          _alacrittyTerminalFailed = false;
           _webTerminalKey = GlobalKey<XtermWebTerminalState>();
           _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
-          _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
+          _dartTerminalKey = GlobalKey<XtermDartTerminalState>();
         });
       }
       unawaited(_applyTerminalWindowSettings(next));
     });
     final useWebRenderer = _usesWebRenderer(performance.rendererMode);
-    final useAlacrittyRenderer = _usesAlacrittyRenderer(
-      performance.rendererMode,
-    );
+    final useDartRenderer = _usesDartRenderer(performance.rendererMode);
     final tabs =
         ref.watch(connectionTabsProvider).value ?? const <ConnectionTab>[];
     final session = _session;
@@ -196,17 +193,14 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
                   behavior: HitTestBehavior.translucent,
                   onPointerDown: (_) => _pulseHighFrameRate(),
                   onPointerMove: (_) => _pulseHighFrameRate(),
-                  child: useAlacrittyRenderer
-                      ? AlacrittyTerminalView(
-                          key: _alacrittyTerminalKey,
+                  child: useDartRenderer
+                      ? XtermDartTerminal(
+                          key: _dartTerminalKey,
                           session: session,
                           scrollbackLines: performance.scrollbackLines,
                           terminalFontFamily: performance.terminalFont.family,
                           japaneseFontFamily: appFont.family,
                           fontSize: fontSize,
-                          hardwareAccelerationMode:
-                              performance.hardwareAccelerationMode,
-                          onFatalError: _fallbackFromAlacrittyTerminal,
                         )
                       : useWebRenderer
                       ? XtermWebTerminal(
@@ -269,7 +263,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         ),
         ListenableBuilder(
           listenable: session,
-          builder: (context, _) => _SpecialKeyBar(
+          builder: (context, _) => TerminalShortcutBar(
             session: session,
             supportsTunnels: _profile?.connectionType == ConnectionType.ssh,
             pasteLabel: l10n.paste,
@@ -298,7 +292,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
           unawaited(
             _webTerminalKey.currentState?.suspend() ?? Future<void>.value(),
           );
-          unawaited(_alacrittyTerminalKey.currentState?.setActive(false));
+          _dartTerminalKey.currentState?.setActive(false);
         }
       },
       child: Scaffold(
@@ -321,7 +315,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     try {
       await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
       await _nativeTerminalKey.currentState?.setActive(false);
-      await _alacrittyTerminalKey.currentState?.setActive(false);
+      _dartTerminalKey.currentState?.setActive(false);
       if (!mounted) return;
       _session?.removeTerminalActivityListener(_pulseHighFrameRate);
       _session?.setViewportVisible(false);
@@ -332,7 +326,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         if (!mounted || _activeTabId != tab.id) return;
         _webTerminalKey.currentState?.resume();
         unawaited(_nativeTerminalKey.currentState?.setActive(true));
-        unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
+        _dartTerminalKey.currentState?.setActive(true);
         _focusTerminal();
       });
     } finally {
@@ -350,10 +344,9 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       _session = session;
       _webTerminalKey = GlobalKey<XtermWebTerminalState>();
       _nativeTerminalKey = GlobalKey<NativeTerminalViewState>();
-      _alacrittyTerminalKey = GlobalKey<AlacrittyTerminalViewState>();
+      _dartTerminalKey = GlobalKey<XtermDartTerminalState>();
       _webTerminalFailed = false;
       _nativeTerminalFailed = false;
-      _alacrittyTerminalFailed = false;
     });
   }
 
@@ -477,25 +470,12 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     );
   }
 
-  void _fallbackFromAlacrittyTerminal(String _) {
-    if (!mounted || _alacrittyTerminalFailed) return;
-    setState(() => _alacrittyTerminalFailed = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Flutter Alacrittyを利用できないためxterm.js WebGLへ切り替えました。'),
-      ),
-    );
-  }
-
-  bool _usesAlacrittyRenderer(TerminalRendererMode renderer) =>
-      renderer == TerminalRendererMode.alacritty && !_alacrittyTerminalFailed;
+  bool _usesDartRenderer(TerminalRendererMode renderer) =>
+      renderer == TerminalRendererMode.xtermDart;
 
   bool _usesWebRenderer(TerminalRendererMode renderer) =>
       !_webTerminalFailed &&
-      (renderer == TerminalRendererMode.webgl ||
-          renderer == TerminalRendererMode.alacritty &&
-              _alacrittyTerminalFailed ||
-          _nativeTerminalFailed);
+      (renderer == TerminalRendererMode.webgl || _nativeTerminalFailed);
 
   void _pulseHighFrameRate() {
     final mode = ref.read(terminalPerformanceSettingsProvider).refreshRateMode;
@@ -810,8 +790,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
     if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.paste(text);
-    } else if (_usesAlacrittyRenderer(renderer)) {
-      await _alacrittyTerminalKey.currentState?.paste(text);
+    } else if (_usesDartRenderer(renderer)) {
+      _dartTerminalKey.currentState?.paste(text);
     } else {
       await _nativeTerminalKey.currentState?.paste(text);
     }
@@ -822,8 +802,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
     final renderer = ref.read(terminalPerformanceSettingsProvider).rendererMode;
     if (_usesWebRenderer(renderer)) {
       _webTerminalKey.currentState?.focus();
-    } else if (_usesAlacrittyRenderer(renderer)) {
-      unawaited(_alacrittyTerminalKey.currentState?.focus());
+    } else if (_usesDartRenderer(renderer)) {
+      _dartTerminalKey.currentState?.focus();
     } else {
       unawaited(_nativeTerminalKey.currentState?.focus());
     }
@@ -845,9 +825,9 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
               alt: modifiers.alt,
             ) ??
             false;
-      } else if (_usesAlacrittyRenderer(renderer)) {
+      } else if (_usesDartRenderer(renderer)) {
         handled =
-            await _alacrittyTerminalKey.currentState?.sendKey(
+            _dartTerminalKey.currentState?.sendKey(
               key,
               control: modifiers.control,
               alt: modifiers.alt,
@@ -909,7 +889,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       await session.disconnect();
     }
     await (_webTerminalKey.currentState?.suspend() ?? Future<void>.value());
-    await _alacrittyTerminalKey.currentState?.setActive(false);
+    _dartTerminalKey.currentState?.setActive(false);
     session.removeTerminalActivityListener(_pulseHighFrameRate);
     session.setViewportVisible(false);
     final closingTabId = _activeTabId;
@@ -933,7 +913,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _activeTabId != next.id) return;
         _webTerminalKey.currentState?.resume();
-        unawaited(_alacrittyTerminalKey.currentState?.setActive(true));
+        _dartTerminalKey.currentState?.setActive(true);
         _focusTerminal();
       });
     } else {
@@ -1288,111 +1268,6 @@ Color _sessionStatusColor(ColorScheme colors, SshSessionStatus status) =>
       SshSessionStatus.reconnectPrompt => colors.error,
       SshSessionStatus.idle || SshSessionStatus.closed => colors.outline,
     };
-
-class _SpecialKeyBar extends StatelessWidget {
-  const _SpecialKeyBar({
-    required this.session,
-    required this.supportsTunnels,
-    required this.pasteLabel,
-    required this.onPaste,
-    required this.onKey,
-    required this.onCommandPalette,
-    required this.onTunnels,
-    required this.agentMode,
-    required this.onToggleAgentMode,
-  });
-
-  final SshSessionController session;
-  final bool supportsTunnels;
-  final String pasteLabel;
-  final VoidCallback onPaste;
-  final void Function(TerminalKey key, int repeat) onKey;
-  final VoidCallback onCommandPalette;
-  final VoidCallback onTunnels;
-  final bool agentMode;
-  final VoidCallback? onToggleAgentMode;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
-      child: SizedBox(
-        height: 52,
-        child: Scrollbar(
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            children: [
-              FilterChip(
-                label: const Text('Ctrl'),
-                selected: session.controlArmed,
-                onSelected: (_) => session.toggleControl(),
-              ),
-              const SizedBox(width: 4),
-              FilterChip(
-                label: const Text('Alt'),
-                selected: session.altArmed,
-                onSelected: (_) => session.toggleAlt(),
-              ),
-              const SizedBox(width: 4),
-              _keyButton('Esc', TerminalKey.escape),
-              _keyButton('Tab', TerminalKey.tab),
-              _keyButton('↵', TerminalKey.enter),
-              _keyButton('↑', TerminalKey.arrowUp),
-              _keyButton('↓', TerminalKey.arrowDown),
-              _keyButton('←', TerminalKey.arrowLeft),
-              _keyButton('→', TerminalKey.arrowRight),
-              const SizedBox(width: 4),
-              TextButton.icon(
-                onPressed: session.isConnected ? onPaste : null,
-                icon: const Icon(Icons.content_paste, size: 18),
-                label: Text(pasteLabel),
-              ),
-              IconButton(
-                tooltip: agentMode ? 'Agentモードを終了' : 'Agentモード',
-                isSelected: agentMode,
-                onPressed: session.isConnected ? onToggleAgentMode : null,
-                icon: const Icon(Icons.smart_toy_outlined),
-                selectedIcon: const Icon(Icons.smart_toy),
-              ),
-              IconButton(
-                tooltip: 'コマンドパレット',
-                onPressed: session.isConnected ? onCommandPalette : null,
-                icon: const Icon(Icons.terminal_outlined),
-              ),
-              IconButton(
-                tooltip: 'SSHトンネル',
-                onPressed: session.isConnected && supportsTunnels
-                    ? onTunnels
-                    : null,
-                icon: const Icon(Icons.route_outlined),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _keyButton(String label, TerminalKey key) {
-    final button = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: OutlinedButton(
-        onPressed: session.isConnected ? () => onKey(key, 1) : null,
-        onLongPress: session.isConnected && key == TerminalKey.tab
-            ? () => onKey(key, 2)
-            : null,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(48, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-        ),
-        child: Text(label),
-      ),
-    );
-    if (key != TerminalKey.tab) return button;
-    return Tooltip(message: 'タップで補完、長押しで候補一覧', child: button);
-  }
-}
 
 class _TunnelSheetAction {
   const _TunnelSheetAction.start(this.request) : stopId = null;

@@ -731,7 +731,7 @@ class SettingsScreen extends ConsumerWidget {
   String _rendererLabel(AppLocalizations l10n, TerminalRendererMode mode) =>
       switch (mode) {
         TerminalRendererMode.webgl => l10n.terminalRendererWebgl,
-        TerminalRendererMode.alacritty => l10n.terminalRendererAlacritty,
+        TerminalRendererMode.xtermDart => l10n.terminalRendererXtermDart,
         TerminalRendererMode.connectBot => l10n.terminalRendererConnectBot,
         TerminalRendererMode.termux => l10n.terminalRendererTermux,
       };
@@ -774,7 +774,7 @@ class SettingsScreen extends ConsumerWidget {
     TerminalRendererMode mode,
   ) => switch (mode) {
     TerminalRendererMode.webgl => l10n.terminalRendererWebglDescription,
-    TerminalRendererMode.alacritty => l10n.terminalRendererAlacrittyDescription,
+    TerminalRendererMode.xtermDart => l10n.terminalRendererXtermDartDescription,
     TerminalRendererMode.connectBot =>
       l10n.terminalRendererConnectBotDescription,
     TerminalRendererMode.termux => l10n.terminalRendererTermuxDescription,
@@ -882,48 +882,53 @@ class _SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Card(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-      color: colors.surfaceContainerLow,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        key: PageStorageKey('settings-group-$storageKey'),
-        maintainState: true,
-        tilePadding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        collapsedShape: const Border(),
-        shape: const Border(),
-        leading: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.primaryContainer,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: Icon(icon, color: colors.onPrimaryContainer),
-          ),
-        ),
-        title: Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(
-          summary,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+    return Semantics(
+      container: true,
+      label: '$title。$summary',
+      child: Column(
+        key: ValueKey('settings-group-$storageKey'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Divider(height: 1, color: colors.outlineVariant),
-          for (var index = 0; index < children.length; index++) ...[
-            children[index],
-            if (index != children.length - 1)
-              Divider(height: 1, indent: 56, color: colors.outlineVariant),
-          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: colors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            color: colors.surfaceContainerLow,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var index = 0; index < children.length; index++) ...[
+                  children[index],
+                  if (index != children.length - 1)
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: colors.outlineVariant,
+                    ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

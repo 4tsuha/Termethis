@@ -1,7 +1,0 @@
-# Cargokit precompiled-binary configuration.
-# See docs/PRECOMPILED_BINARIES.md for CI setup and secret management.
-#
-# Binaries are published to GitHub Releases under tags `precompiled_<crate-hash>`.
-precompiled_binaries:
-  url_prefix: https://github.com/hhoao/rust_lib_flutter_alacritty/releases/download/precompiled_
-  public_key: b1d2307c82294272c2b97bd358a43d71b7e323e2fd8eb0728d2e94b726210171

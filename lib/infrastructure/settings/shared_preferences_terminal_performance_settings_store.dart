@@ -13,6 +13,16 @@ TerminalRendererMode selectRendererAfterNativeSurfaceMigration({
   return savedRenderer ?? TerminalRendererMode.connectBot;
 }
 
+TerminalRendererMode? terminalRendererModeFromStorage(String? value) =>
+    switch (value) {
+      'flutter' || 'native' => TerminalRendererMode.connectBot,
+      'alacritty' => TerminalRendererMode.xtermDart,
+      _ =>
+        TerminalRendererMode.values
+            .where((renderer) => renderer.name == value)
+            .firstOrNull,
+    };
+
 class SharedPreferencesTerminalPerformanceSettingsStore
     implements TerminalPerformanceSettingsStore {
   SharedPreferencesTerminalPerformanceSettingsStore({
@@ -54,11 +64,7 @@ class SharedPreferencesTerminalPerformanceSettingsStore
     final mode = RefreshRateMode.values
         .where((value) => value.name == savedMode)
         .firstOrNull;
-    var renderer = savedRenderer == 'flutter' || savedRenderer == 'native'
-        ? TerminalRendererMode.connectBot
-        : TerminalRendererMode.values
-              .where((value) => value.name == savedRenderer)
-              .firstOrNull;
+    var renderer = terminalRendererModeFromStorage(savedRenderer);
     final nativeSurfaceMigrated =
         await _preferences.getBool(_nativeSurfaceMigrationKey) ?? false;
     renderer = selectRendererAfterNativeSurfaceMigration(

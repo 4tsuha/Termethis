@@ -1192,17 +1192,17 @@ abstract class AppLocalizations {
   /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
 
-  /// No description provided for @terminalRendererAlacritty.
+  /// No description provided for @terminalRendererXtermDart.
   ///
   /// In ja, this message translates to:
-  /// **'Flutter Alacritty'**
-  String get terminalRendererAlacritty;
+  /// **'xterm.dart'**
+  String get terminalRendererXtermDart;
 
-  /// No description provided for @terminalRendererAlacrittyDescription.
+  /// No description provided for @terminalRendererXtermDartDescription.
   ///
   /// In ja, this message translates to:
-  /// **'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。'**
-  String get terminalRendererAlacrittyDescription;
+  /// **'Flutter上で動くDart製ターミナルです。CJK、絵文字、日本語IMEに対応し、WebViewを使用しません。'**
+  String get terminalRendererXtermDartDescription;
 
   /// No description provided for @terminalRendererConnectBot.
   ///
@@ -1471,7 +1471,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.8.0-alpha6'**
+  /// **'0.8.0-alpha7'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

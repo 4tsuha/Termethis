@@ -159,299 +159,307 @@ class _ConnectionEditorScreenState
         body: SafeArea(
           child: Form(
             key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (_existing == null) ...[
-                  _ConnectionTypeSelector(
-                    selectedType: _connectionType,
-                    allowedTypes: widget.allowedConnectionTypes,
-                    onSelected: _selectConnectionType,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                TextFormField(
-                  controller: _hostController,
-                  decoration: InputDecoration(
-                    labelText: l10n.host,
-                    hintText: l10n.hostHint,
-                    border: const OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.next,
-                  autocorrect: false,
-                  validator: (value) => _required(value, l10n),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: l10n.connectionName,
-                    hintText: l10n.connectionNameHint,
-                    border: const OutlineInputBorder(),
-                  ),
-                  textInputAction: TextInputAction.next,
-                  validator: (value) => _required(value, l10n),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _portController,
-                  decoration: InputDecoration(
-                    labelText: l10n.port,
-                    border: const OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.next,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    final port = int.tryParse(value ?? '');
-                    if (port == null || port < 1 || port > 65535) {
-                      return l10n.invalidPort;
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: InputDecoration(
-                    labelText: _connectionType == ConnectionType.vnc
-                        ? l10n.usernameOptional
-                        : l10n.username,
-                    border: const OutlineInputBorder(),
-                  ),
-                  textInputAction: _wakeOnLanEnabled
-                      ? TextInputAction.next
-                      : TextInputAction.done,
-                  autocorrect: false,
-                  validator: _connectionType == ConnectionType.vnc
-                      ? null
-                      : (value) => _required(value, l10n),
-                  onFieldSubmitted: (_) {
-                    if (!_wakeOnLanEnabled) {
-                      _save();
-                    }
-                  },
-                ),
-                if (_connectionType.usesSshAuthentication) ...[
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<AuthenticationType>(
-                    initialValue: _authenticationType,
-                    decoration: InputDecoration(
-                      labelText: l10n.authentication,
-                      border: const OutlineInputBorder(),
-                    ),
-                    items: [
-                      DropdownMenuItem(
-                        value: AuthenticationType.passwordOrInteractive,
-                        child: Text(l10n.passwordAuthentication),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_existing == null) ...[
+                      _ConnectionTypeSelector(
+                        selectedType: _connectionType,
+                        allowedTypes: widget.allowedConnectionTypes,
+                        onSelected: _selectConnectionType,
                       ),
-                      DropdownMenuItem(
-                        value: AuthenticationType.privateKey,
-                        child: Text(l10n.privateKeyAuthentication),
-                      ),
+                      const SizedBox(height: 16),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _authenticationType = value;
-                          _dirty = true;
-                        });
-                      }
-                    },
-                  ),
-                ] else ...[
-                  const SizedBox(height: 16),
-                  Card.outlined(
-                    child: ListTile(
-                      leading: const Icon(Icons.verified_user_outlined),
-                      title: Text(l10n.authentication),
-                      subtitle: Text(
-                        _connectionType == ConnectionType.rdp
-                            ? l10n.internalRdpAuthenticationNotice
-                            : _connectionType == ConnectionType.vnc
-                            ? 'VNC認証は接続開始時にアプリ内で行います。パスワードは接続中だけ保持します。'
-                            : l10n.externalAuthenticationNotice,
+                    TextFormField(
+                      controller: _hostController,
+                      decoration: InputDecoration(
+                        labelText: l10n.host,
+                        hintText: l10n.hostHint,
+                        border: const OutlineInputBorder(),
                       ),
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      validator: (value) => _required(value, l10n),
                     ),
-                  ),
-                ],
-                if (_connectionType.usesSshAuthentication &&
-                    _authenticationType == AuthenticationType.privateKey) ...[
-                  const SizedBox(height: 16),
-                  _PrivateKeySection(
-                    label:
-                        _selectedPrivateKey?.label ??
-                        _existing?.privateKeyLabel,
-                    hasExistingKey:
-                        _existing?.authenticationType ==
-                            AuthenticationType.privateKey &&
-                        _existing?.credentialReference != null,
-                    isEncrypted: _selectedPrivateKey?.isEncrypted ?? false,
-                    passphraseController: _keyPassphraseController,
-                    savePassphrase: _saveKeyPassphrase,
-                    onSavePassphraseChanged: (value) {
-                      setState(() {
-                        _saveKeyPassphrase = value;
-                        _dirty = true;
-                      });
-                    },
-                    onPick: _pickPrivateKey,
-                  ),
-                ] else if (_connectionType.usesSshAuthentication &&
-                    saveSshPasswords) ...[
-                  const SizedBox(height: 16),
-                  Card.outlined(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: TextFormField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        enableSuggestions: false,
-                        autocorrect: false,
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        labelText: l10n.connectionName,
+                        hintText: l10n.connectionNameHint,
+                        border: const OutlineInputBorder(),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      validator: (value) => _required(value, l10n),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _portController,
+                      decoration: InputDecoration(
+                        labelText: l10n.port,
+                        border: const OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      validator: (value) {
+                        final port = int.tryParse(value ?? '');
+                        if (port == null || port < 1 || port > 65535) {
+                          return l10n.invalidPort;
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: InputDecoration(
+                        labelText: _connectionType == ConnectionType.vnc
+                            ? l10n.usernameOptional
+                            : l10n.username,
+                        border: const OutlineInputBorder(),
+                      ),
+                      textInputAction: _wakeOnLanEnabled
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      autocorrect: false,
+                      validator: _connectionType == ConnectionType.vnc
+                          ? null
+                          : (value) => _required(value, l10n),
+                      onFieldSubmitted: (_) {
+                        if (!_wakeOnLanEnabled) {
+                          _save();
+                        }
+                      },
+                    ),
+                    if (_connectionType.usesSshAuthentication) ...[
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<AuthenticationType>(
+                        initialValue: _authenticationType,
                         decoration: InputDecoration(
-                          labelText:
-                              _existing?.authenticationType !=
-                                      AuthenticationType
-                                          .passwordOrInteractive ||
-                                  _existing?.credentialReference == null
-                              ? '保存するパスワード'
-                              : '新しいパスワード（空欄なら変更しない）',
-                          helperText: '設定でパスワード保存が有効です。暗号化Vaultへ保存します。',
+                          labelText: l10n.authentication,
                           border: const OutlineInputBorder(),
                         ),
-                        validator: (value) {
-                          if (_existing?.authenticationType ==
-                                  AuthenticationType.passwordOrInteractive &&
-                              _existing?.credentialReference != null) {
-                            return null;
+                        items: [
+                          DropdownMenuItem(
+                            value: AuthenticationType.passwordOrInteractive,
+                            child: Text(l10n.passwordAuthentication),
+                          ),
+                          DropdownMenuItem(
+                            value: AuthenticationType.privateKey,
+                            child: Text(l10n.privateKeyAuthentication),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _authenticationType = value;
+                              _dirty = true;
+                            });
                           }
-                          return _required(value, l10n);
                         },
                       ),
-                    ),
-                  ),
-                ],
-                if (_connectionType.usesSshAuthentication) ...[
-                  const SizedBox(height: 16),
-                  Card.outlined(
-                    child: ListTile(
-                      leading: const Icon(Icons.route_outlined),
-                      title: const Text('踏み台'),
-                      subtitle: Text(
-                        _jumpProfileIds.isEmpty
-                            ? '直接接続'
-                            : '${_jumpProfileIds.length}段のProxyJump',
+                    ] else ...[
+                      const SizedBox(height: 16),
+                      Card.outlined(
+                        child: ListTile(
+                          leading: const Icon(Icons.verified_user_outlined),
+                          title: Text(l10n.authentication),
+                          subtitle: Text(
+                            _connectionType == ConnectionType.rdp
+                                ? l10n.internalRdpAuthenticationNotice
+                                : _connectionType == ConnectionType.vnc
+                                ? 'VNC認証は接続開始時にアプリ内で行います。パスワードは接続中だけ保持します。'
+                                : l10n.externalAuthenticationNotice,
+                          ),
+                        ),
                       ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: _selectJumpHosts,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                Card.outlined(
-                  child: Column(
-                    children: [
-                      SwitchListTile.adaptive(
-                        value: _wakeOnLanEnabled,
-                        title: Text(l10n.wakeOnLanTitle),
-                        subtitle: Text(l10n.wakeOnLanDescription),
-                        secondary: const Icon(Icons.power_settings_new),
-                        onChanged: (value) {
+                    ],
+                    if (_connectionType.usesSshAuthentication &&
+                        _authenticationType ==
+                            AuthenticationType.privateKey) ...[
+                      const SizedBox(height: 16),
+                      _PrivateKeySection(
+                        label:
+                            _selectedPrivateKey?.label ??
+                            _existing?.privateKeyLabel,
+                        hasExistingKey:
+                            _existing?.authenticationType ==
+                                AuthenticationType.privateKey &&
+                            _existing?.credentialReference != null,
+                        isEncrypted: _selectedPrivateKey?.isEncrypted ?? false,
+                        passphraseController: _keyPassphraseController,
+                        savePassphrase: _saveKeyPassphrase,
+                        onSavePassphraseChanged: (value) {
                           setState(() {
-                            _wakeOnLanEnabled = value;
+                            _saveKeyPassphrase = value;
                             _dirty = true;
                           });
                         },
+                        onPick: _pickPrivateKey,
                       ),
-                      if (_wakeOnLanEnabled)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: _wakeOnLanMacController,
-                                decoration: InputDecoration(
-                                  labelText: l10n.wakeOnLanMacAddress,
-                                  hintText: l10n.wakeOnLanMacHint,
-                                  border: const OutlineInputBorder(),
-                                ),
-                                textCapitalization:
-                                    TextCapitalization.characters,
-                                textInputAction: TextInputAction.next,
-                                autocorrect: false,
-                                validator: (value) {
-                                  if (!_wakeOnLanEnabled) {
-                                    return null;
-                                  }
-                                  return WakeOnLanConfiguration.parseMacAddress(
-                                            value ?? '',
-                                          ) ==
-                                          null
-                                      ? l10n.invalidMacAddress
-                                      : null;
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _wakeOnLanBroadcastController,
-                                decoration: InputDecoration(
-                                  labelText: l10n.wakeOnLanBroadcastAddress,
-                                  hintText: l10n.wakeOnLanBroadcastHint,
-                                  border: const OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.next,
-                                autocorrect: false,
-                                validator: (value) {
-                                  if (!_wakeOnLanEnabled) {
-                                    return null;
-                                  }
-                                  return WakeOnLanConfiguration.isValidIpv4Address(
-                                        value ?? '',
-                                      )
-                                      ? null
-                                      : l10n.invalidIpv4Address;
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _wakeOnLanPortController,
-                                decoration: InputDecoration(
-                                  labelText: l10n.wakeOnLanPort,
-                                  border: const OutlineInputBorder(),
-                                ),
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.done,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                validator: (value) {
-                                  if (!_wakeOnLanEnabled) {
-                                    return null;
-                                  }
-                                  final port = int.tryParse(value ?? '');
-                                  return port == null ||
-                                          port < 1 ||
-                                          port > 65535
-                                      ? l10n.invalidPort
-                                      : null;
-                                },
-                                onFieldSubmitted: (_) => _save(),
-                              ),
-                            ],
+                    ] else if (_connectionType.usesSshAuthentication &&
+                        saveSshPasswords) ...[
+                      const SizedBox(height: 16),
+                      Card.outlined(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            decoration: InputDecoration(
+                              labelText:
+                                  _existing?.authenticationType !=
+                                          AuthenticationType
+                                              .passwordOrInteractive ||
+                                      _existing?.credentialReference == null
+                                  ? '保存するパスワード'
+                                  : '新しいパスワード（空欄なら変更しない）',
+                              helperText: '設定でパスワード保存が有効です。暗号化Vaultへ保存します。',
+                              border: const OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (_existing?.authenticationType ==
+                                      AuthenticationType
+                                          .passwordOrInteractive &&
+                                  _existing?.credentialReference != null) {
+                                return null;
+                              }
+                              return _required(value, l10n);
+                            },
                           ),
                         ),
+                      ),
                     ],
-                  ),
+                    if (_connectionType.usesSshAuthentication) ...[
+                      const SizedBox(height: 16),
+                      Card.outlined(
+                        child: ListTile(
+                          leading: const Icon(Icons.route_outlined),
+                          title: const Text('踏み台'),
+                          subtitle: Text(
+                            _jumpProfileIds.isEmpty
+                                ? '直接接続'
+                                : '${_jumpProfileIds.length}段のProxyJump',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _selectJumpHosts,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Card.outlined(
+                      child: Column(
+                        children: [
+                          SwitchListTile.adaptive(
+                            value: _wakeOnLanEnabled,
+                            title: Text(l10n.wakeOnLanTitle),
+                            subtitle: Text(l10n.wakeOnLanDescription),
+                            secondary: const Icon(Icons.power_settings_new),
+                            onChanged: (value) {
+                              setState(() {
+                                _wakeOnLanEnabled = value;
+                                _dirty = true;
+                              });
+                            },
+                          ),
+                          if (_wakeOnLanEnabled)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Column(
+                                children: [
+                                  TextFormField(
+                                    controller: _wakeOnLanMacController,
+                                    decoration: InputDecoration(
+                                      labelText: l10n.wakeOnLanMacAddress,
+                                      hintText: l10n.wakeOnLanMacHint,
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.next,
+                                    autocorrect: false,
+                                    validator: (value) {
+                                      if (!_wakeOnLanEnabled) {
+                                        return null;
+                                      }
+                                      return WakeOnLanConfiguration.parseMacAddress(
+                                                value ?? '',
+                                              ) ==
+                                              null
+                                          ? l10n.invalidMacAddress
+                                          : null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _wakeOnLanBroadcastController,
+                                    decoration: InputDecoration(
+                                      labelText: l10n.wakeOnLanBroadcastAddress,
+                                      hintText: l10n.wakeOnLanBroadcastHint,
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.next,
+                                    autocorrect: false,
+                                    validator: (value) {
+                                      if (!_wakeOnLanEnabled) {
+                                        return null;
+                                      }
+                                      return WakeOnLanConfiguration.isValidIpv4Address(
+                                            value ?? '',
+                                          )
+                                          ? null
+                                          : l10n.invalidIpv4Address;
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextFormField(
+                                    controller: _wakeOnLanPortController,
+                                    decoration: InputDecoration(
+                                      labelText: l10n.wakeOnLanPort,
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.done,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    validator: (value) {
+                                      if (!_wakeOnLanEnabled) {
+                                        return null;
+                                      }
+                                      final port = int.tryParse(value ?? '');
+                                      return port == null ||
+                                              port < 1 ||
+                                              port > 65535
+                                          ? l10n.invalidPort
+                                          : null;
+                                    },
+                                    onFieldSubmitted: (_) => _save(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(l10n.save),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(l10n.save),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -809,119 +817,92 @@ class _ConnectionTypeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          l10n.connectionMethod,
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-        const SizedBox(height: 8),
-        for (final type in ConnectionType.values) ...[
-          if (allowedTypes.contains(type))
-            _ConnectionTypeChoice(
-              key: ValueKey('connection-type-${type.name}'),
-              title: switch (type) {
-                ConnectionType.ssh => l10n.connectionTypeSsh,
-                ConnectionType.mosh => 'Mosh',
-                ConnectionType.rdp => l10n.connectionTypeRdp,
-                ConnectionType.vnc => l10n.connectionTypeVnc,
-              },
-              description: switch (type) {
-                ConnectionType.ssh => l10n.connectionTypeSshCompactDescription,
-                ConnectionType.mosh => 'ネットワーク切り替えに強いモバイルシェル',
-                ConnectionType.rdp => l10n.connectionTypeRdpCompactDescription,
-                ConnectionType.vnc => l10n.connectionTypeVncCompactDescription,
-              },
-              selected: type == selectedType,
-              onTap: () => onSelected(type),
+    final types = ConnectionType.values
+        .where(allowedTypes.contains)
+        .toList(growable: false);
+    return DropdownButtonFormField<ConnectionType>(
+      key: ValueKey('connection-type-selector-${selectedType.name}'),
+      initialValue: selectedType,
+      isExpanded: true,
+      menuMaxHeight: 320,
+      decoration: InputDecoration(
+        labelText: l10n.connectionMethod,
+        prefixIcon: Icon(_connectionTypeIcon(selectedType)),
+        border: const OutlineInputBorder(),
+      ),
+      selectedItemBuilder: (context) => [
+        for (final type in types)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${_connectionTypeLabel(l10n, type)}  ${_connectionTypeDescription(l10n, type)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          if (allowedTypes.contains(type) &&
-              type != ConnectionType.values.lastWhere(allowedTypes.contains))
-            const SizedBox(height: 6),
-        ],
+          ),
       ],
-    );
-  }
-}
-
-class _ConnectionTypeChoice extends StatelessWidget {
-  const _ConnectionTypeChoice({
-    super.key,
-    required this.title,
-    required this.description,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '$title $description',
-      child: Material(
-        color: selected ? colors.primaryContainer : colors.surfaceContainerLow,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 52),
+      items: [
+        for (final type in types)
+          DropdownMenuItem(
+            key: ValueKey('connection-type-${type.name}'),
+            value: type,
             child: Row(
               children: [
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 44,
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: selected
-                          ? colors.onPrimaryContainer
-                          : colors.onSurface,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
+                Icon(_connectionTypeIcon(type), size: 22),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: selected
-                          ? colors.onPrimaryContainer
-                          : colors.onSurfaceVariant,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _connectionTypeLabel(l10n, type),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      Text(
+                        _connectionTypeDescription(l10n, type),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 24,
-                  child: selected
-                      ? Icon(
-                          Icons.check,
-                          size: 20,
-                          color: colors.onPrimaryContainer,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
               ],
             ),
           ),
-        ),
-      ),
+      ],
+      onChanged: (type) {
+        if (type != null) onSelected(type);
+      },
     );
   }
 }
+
+String _connectionTypeLabel(AppLocalizations l10n, ConnectionType type) =>
+    switch (type) {
+      ConnectionType.ssh => l10n.connectionTypeSsh,
+      ConnectionType.mosh => 'Mosh',
+      ConnectionType.rdp => l10n.connectionTypeRdp,
+      ConnectionType.vnc => l10n.connectionTypeVnc,
+    };
+
+String _connectionTypeDescription(AppLocalizations l10n, ConnectionType type) =>
+    switch (type) {
+      ConnectionType.ssh => l10n.connectionTypeSshCompactDescription,
+      ConnectionType.mosh => 'モバイルシェル',
+      ConnectionType.rdp => l10n.connectionTypeRdpCompactDescription,
+      ConnectionType.vnc => l10n.connectionTypeVncCompactDescription,
+    };
+
+IconData _connectionTypeIcon(ConnectionType type) => switch (type) {
+  ConnectionType.ssh => Icons.terminal,
+  ConnectionType.mosh => Icons.swap_horiz,
+  ConnectionType.rdp => Icons.desktop_windows_outlined,
+  ConnectionType.vnc => Icons.monitor_outlined,
+};
 
 class _PrivateKeySection extends StatelessWidget {
   const _PrivateKeySection({

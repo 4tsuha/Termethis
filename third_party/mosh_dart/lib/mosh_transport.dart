@@ -41,6 +41,7 @@ class MoshTransport {
   int _lastRecvOldNum = 0;
   int _lastRecvNewNum = 0;
   int _throwawayNum = 0;
+  int _receivedPackets = 0;
 
   /// The oldNum from the most recently received diff.
   int get lastRecvOldNum => _lastRecvOldNum;
@@ -50,6 +51,13 @@ class MoshTransport {
 
   /// States below this number are no longer referenced by the server.
   int get throwawayNum => _throwawayNum;
+
+  /// Number of authenticated datagrams accepted from the remote endpoint.
+  ///
+  /// A valid acknowledgement may not contain a state diff, so callers cannot
+  /// use [recv]'s return value alone to determine whether the handshake is
+  /// alive.
+  int get receivedPackets => _receivedPackets;
 
   // Crypto.
   int _seqOut = 0;
@@ -83,6 +91,13 @@ class MoshTransport {
         ocb: ocb,
         toRemote: _dirToServer,
         toLocal: _dirToClient,
+      );
+
+  /// Server-side transport used by protocol tests and embedded peers.
+  factory MoshTransport.server(AesOcb ocb) => MoshTransport._(
+        ocb: ocb,
+        toRemote: _dirToClient,
+        toLocal: _dirToServer,
       );
 
   /// Highest state the server has acked.
@@ -191,6 +206,7 @@ class MoshTransport {
 
     _seqInMax = seq;
     _seqInMaxSet = true;
+    _receivedPackets++;
     _lastRecv = DateTime.now();
     _lastTS = remoteTS;
 

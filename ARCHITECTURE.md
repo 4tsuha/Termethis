@@ -2,7 +2,7 @@
 
 最終更新：2026年8月12日
 
-状態：Termethis 0.8.0-alpha6企画として、統合接続画面とSSH／SFTP基盤を開発中
+状態：Termethis 0.8.0-alpha7企画として、統合接続画面とSSH／SFTP基盤を開発中
 
 ## 2026年8月 統合接続アーキテクチャ
 
@@ -216,11 +216,11 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 既定の描画系はConnectBot `termlib`のHaven系forkとJNI経由の`libvterm`を使う。独自`TerminalSurfaceView`は持たず、termlibが提供するCompose `Terminal`のCanvas、`ImeInputView`、`KeyboardHandler`を再利用する。PTY解析は表示優先のHandlerThreadへ分離し、端末更新はフレーム単位の不変スナップショットへまとめる。可視行のASCII連続セルと背景色は同一スタイル単位で描画命令を束ね、CJK、絵文字、結合文字、全角セルはセル単位で描画する。非表示タブはCompositionを停止し、再選択時に同じ端末状態から描画を再開する。
 
-互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacrittyを選択可能にする。WebGLを保存していた既存利用者はtermlib描画へ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
+互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter製の`xterm.dart`を選択可能にする。廃止したFlutter Alacrittyの保存値は`xterm.dart`へ移行する。WebGLを保存していた既存利用者はtermlib描画へ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
 
 WebViewは外部URLを開かず、Content Security Policyでスクリプト、CSS、フォントを同梱アセットに限定する。SSH出力はUTF-8を最大64Ki文字に分割してBase64へ変換し、xterm.jsの`Terminal.write`完了ACKを受け取ってから次を送る。端末入力とPTY寸法はJSONメッセージでDart側へ戻す。
 
-SSH出力は`SessionRegistry`内の共通セッション履歴へ一度だけ追加し、現在選択されている描画系だけが購読する。WebGL、ConnectBot、Termuxを同一セッションで同時に動かさず、Flutter版`xterm`は描画と出力解析に使用しない。
+SSH出力は`SessionRegistry`内の共通セッション履歴へ一度だけ追加し、現在選択されている描画系だけが購読する。WebGL、xterm.dart、ConnectBot、Termuxを同一セッションで同時に動かさない。xterm.dartは表示単位の上限付き履歴を持ち、分割されたUTF-8をストリームとして復号する。
 
 タブを離れるときはSerialize Addonで画面、スクロールバック、端末モードをANSI文字列へ直列化し、セッションへ保存してWebViewを破棄する。非表示中の受信差分には単調増加する世代番号を付け、再表示時はスナップショット以降だけを再生する。これにより非表示タブのWebGL描画を止め、複数WebViewを同時保持しない。
 
@@ -683,7 +683,7 @@ Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力�
 | Dart・Rust連携 | `flutter_rust_bridge` | 実装済み | 生成APIをInfrastructure Adapterに閉じ込め、UIとネイティブ処理を分離する |
 | SSHとPTY | Rust `russh` | 実装済み | パケット解析、鍵交換、認証、チャンネル、PTY、keepaliveをRust側で処理する |
 | SFTP | Rust `russh-sftp` | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
-| 端末エミュレーター | ConnectBot `termlib`＋`libvterm` Native Surface、`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacritty | 実装済み | Native Surfaceを既定とし、最新スナップショット優先で描画キューとWebView固定費を削減する |
+| 端末エミュレーター | ConnectBot `termlib`＋`libvterm` Native Surface、`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、`xterm.dart` | 実装済み | Native Surfaceを既定とし、最新スナップショット優先で描画キューとWebView固定費を削減する |
 | Android端末ブリッジ | Flutter PlatformView＋MethodChannel | 実装済み | UTF-8バイト列、入力、PTY寸法だけを交換し、端末状態と描画はAndroid側に閉じ込める |
 | WebViewブリッジ | `webview_flutter` | 実装済み | 外部通信を許可せず、Base64 UTF-8出力とJSON入力だけを交換する |
 | 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |

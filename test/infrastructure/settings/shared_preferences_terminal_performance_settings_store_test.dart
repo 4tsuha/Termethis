@@ -3,6 +3,13 @@ import 'package:termethis/features/settings/domain/terminal_performance_settings
 import 'package:termethis/infrastructure/settings/shared_preferences_terminal_performance_settings_store.dart';
 
 void main() {
+  test('廃止したAlacritty設定値をxterm.dartへ移行する', () {
+    expect(
+      terminalRendererModeFromStorage('alacritty'),
+      TerminalRendererMode.xtermDart,
+    );
+  });
+
   group('native terminal renderer migration', () {
     test('moves the previous WebGL default to the native renderer once', () {
       final renderer = selectRendererAfterNativeSurfaceMigration(

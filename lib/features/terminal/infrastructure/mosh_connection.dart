@@ -27,11 +27,28 @@ class MoshBootstrap {
     if (match == null) {
       throw const FormatException('mosh-server did not return MOSH CONNECT');
     }
+    final port = int.parse(match.group(1)!);
+    if (port <= 0 || port > 65535) {
+      throw const FormatException('Mosh UDP port is outside the valid range');
+    }
+    final key = _decodeKey(match.group(2)!);
     return MoshBootstrap(
       host: fallbackHost,
-      port: int.parse(match.group(1)!),
-      key: match.group(2)!,
+      port: port,
+      key: base64Encode(key),
     );
+  }
+
+  static Uint8List _decodeKey(String encoded) {
+    var normalized = encoded;
+    while (normalized.length % 4 != 0) {
+      normalized += '=';
+    }
+    final decoded = base64Decode(normalized);
+    if (decoded.length != 16) {
+      throw const FormatException('Mosh connection key must be 128 bits');
+    }
+    return decoded;
   }
 }
 
@@ -40,7 +57,7 @@ class MoshConnection implements SshConnection {
     _subscription = _socket.listen(
       _onSocketEvent,
       onError: _fail,
-      onDone: _complete,
+      onDone: () => unawaited(_shutdown()),
     );
     _transport.forceNextSend();
     _flush();
@@ -49,9 +66,10 @@ class MoshConnection implements SshConnection {
   final MoshBootstrap _bootstrap;
   final RawDatagramSocket _socket;
   final MoshTransport _transport;
-  final StreamController<Uint8List> _stdout = StreamController.broadcast();
-  final StreamController<Uint8List> _stderr = StreamController.broadcast();
+  final StreamController<Uint8List> _stdout = StreamController();
+  final StreamController<Uint8List> _stderr = StreamController();
   final Completer<void> _done = Completer<void>();
+  final Completer<void> _ready = Completer<void>();
   BytesBuilder _pendingKeys = BytesBuilder(copy: false);
   StreamSubscription<RawSocketEvent>? _subscription;
   Timer? _pumpTimer;
@@ -64,12 +82,18 @@ class MoshConnection implements SshConnection {
   int _lastHeight = 0;
   bool _closed = false;
   bool _receivedPacket = false;
+  Future<void>? _shutdownFuture;
 
-  static Future<MoshConnection> connect(MoshBootstrap bootstrap) async {
-    var key = bootstrap.key;
-    while (key.length % 4 != 0) {
-      key += '=';
+  static const _maximumPendingInputBytes = 1024 * 1024;
+
+  static Future<MoshConnection> connect(
+    MoshBootstrap bootstrap, {
+    Duration handshakeTimeout = const Duration(seconds: 10),
+  }) async {
+    if (bootstrap.port <= 0 || bootstrap.port > 65535) {
+      throw const FormatException('Mosh UDP port is outside the valid range');
     }
+    final key = MoshBootstrap._decodeKey(bootstrap.key);
     final address = (await InternetAddress.lookup(bootstrap.host)).first;
     final socket = await RawDatagramSocket.bind(
       address.type == InternetAddressType.IPv6
@@ -80,19 +104,23 @@ class MoshConnection implements SshConnection {
     final connection = MoshConnection._(
       bootstrap,
       socket,
-      MoshTransport.client(AesOcb(base64Decode(key))),
+      MoshTransport.client(AesOcb(key)),
     );
     connection._address = address;
-    connection._handshakeTimer = Timer(const Duration(seconds: 10), () {
+    connection._handshakeTimer = Timer(handshakeTimeout, () {
       if (!connection._receivedPacket && !connection._closed) {
         connection._fail(
-          const SocketException(
-            'MoshのUDP応答を受信できません。UDPポートとファイアウォールを確認してください。',
-          ),
+          const SocketException('MoshのUDP応答を受信できません。UDPポートとファイアウォールを確認してください。'),
         );
       }
     });
     connection._flush();
+    try {
+      await connection._ready.future;
+    } catch (_) {
+      await connection._shutdown();
+      rethrow;
+    }
     return connection;
   }
 
@@ -108,6 +136,10 @@ class MoshConnection implements SshConnection {
   @override
   void write(Uint8List data) {
     if (_closed || data.isEmpty) return;
+    if (_pendingKeys.length + data.length > _maximumPendingInputBytes) {
+      _fail(const SocketException('Moshの未送信入力が上限を超えました。接続状態を確認して再接続してください。'));
+      return;
+    }
     _pendingKeys.add(data);
     _flush();
   }
@@ -126,10 +158,14 @@ class MoshConnection implements SshConnection {
     Datagram? datagram;
     while ((datagram = _socket.receive()) != null) {
       try {
-        _receivedPacket = true;
-        _handshakeTimer?.cancel();
-        _handshakeTimer = null;
+        final receivedBefore = _transport.receivedPackets;
         final diff = _transport.recv(datagram!.data);
+        if (_transport.receivedPackets > receivedBefore) {
+          _receivedPacket = true;
+          _handshakeTimer?.cancel();
+          _handshakeTimer = null;
+          if (!_ready.isCompleted) _ready.complete();
+        }
         if (diff == null || diff.isEmpty) continue;
         final output = BytesBuilder(copy: false);
         for (final instruction in unmarshalHostMessage(diff)) {
@@ -140,6 +176,7 @@ class MoshConnection implements SshConnection {
         if (data.isNotEmpty) _stdout.add(data);
       } catch (error, stackTrace) {
         _fail(error, stackTrace);
+        break;
       }
     }
     _flush();
@@ -181,7 +218,6 @@ class MoshConnection implements SshConnection {
       return;
     }
     _pumpTimer?.cancel();
-    _handshakeTimer?.cancel();
     _pumpDeadline = deadline;
     _pumpTimer = Timer(delay, () {
       _pumpTimer = null;
@@ -192,7 +228,12 @@ class MoshConnection implements SshConnection {
 
   void _fail(Object error, [StackTrace? stackTrace]) {
     if (_closed) return;
-    _stderr.addError(error, stackTrace);
+    if (!_ready.isCompleted) {
+      _ready.completeError(error, stackTrace);
+    } else {
+      _stderr.addError(error, stackTrace);
+    }
+    unawaited(_shutdown());
   }
 
   void _complete() {
@@ -201,13 +242,26 @@ class MoshConnection implements SshConnection {
 
   @override
   Future<void> close() async {
-    if (_closed) return;
+    await _shutdown();
+  }
+
+  Future<void> _shutdown() => _shutdownFuture ??= _performShutdown();
+
+  Future<void> _performShutdown() async {
     _closed = true;
+    if (!_ready.isCompleted) {
+      _ready.completeError(const SocketException('MoshのUDPソケットが接続前に終了しました。'));
+    }
     _pumpTimer?.cancel();
-    await _subscription?.cancel();
+    _handshakeTimer?.cancel();
+    _pumpTimer = null;
+    _handshakeTimer = null;
+    final subscription = _subscription;
+    _subscription = null;
     _socket.close();
-    await _stdout.close();
-    await _stderr.close();
+    await subscription?.cancel();
+    unawaited(_stdout.close());
+    unawaited(_stderr.close());
     _complete();
   }
 }

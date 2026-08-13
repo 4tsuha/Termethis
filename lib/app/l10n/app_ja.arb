@@ -207,8 +207,8 @@
   "settingsSelectTerminalRenderer": "ターミナルエミュレータを選択",
   "terminalRendererWebgl": "xterm.js WebGL",
   "terminalRendererWebglDescription": "複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。",
-  "terminalRendererAlacritty": "Flutter Alacritty",
-  "terminalRendererAlacrittyDescription": "AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。",
+  "terminalRendererXtermDart": "xterm.dart",
+  "terminalRendererXtermDartDescription": "Flutter上で動くDart製ターミナルです。CJK、絵文字、日本語IMEに対応し、WebViewを使用しません。",
   "terminalRendererConnectBot": "termlib",
   "terminalRendererConnectBotDescription": "termlibとlibvtermの標準描画を使用します。IME、文字選択、スクロール、マウス入力をAndroid上で処理し、WebViewを使用しません。",
   "terminalRendererTermux": "Termux",
@@ -256,6 +256,6 @@
   "settingsFtpSecurityMessage": "平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。",
   "settingsAboutSection": "Termethisについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.8.0-alpha6",
+  "settingsVersionValue": "0.8.0-alpha7",
   "settingsLicenses": "オープンソースライセンス"
 }

@@ -84,7 +84,7 @@ class _ConnectionsWorkspaceScreenState
           color: Theme.of(context).colorScheme.surfaceContainerLowest,
           child: Column(
             children: [
-              _ConnectionTabBar(
+              ConnectionTabBar(
                 tabs: items,
                 activeTabId: active.id,
                 onSelect: _select,
@@ -234,8 +234,10 @@ class _ConnectionContentHost extends StatelessWidget {
   }
 }
 
-class _ConnectionTabBar extends StatelessWidget {
-  const _ConnectionTabBar({
+@visibleForTesting
+class ConnectionTabBar extends StatelessWidget {
+  const ConnectionTabBar({
+    super.key,
     required this.tabs,
     required this.activeTabId,
     required this.onSelect,
@@ -287,8 +289,8 @@ class _ConnectionTabBar extends StatelessWidget {
                             key: ValueKey('connection-tab-${tab.id}'),
                             duration: const Duration(milliseconds: 140),
                             constraints: const BoxConstraints(
-                              minWidth: 128,
-                              maxWidth: 196,
+                              minWidth: 104,
+                              maxWidth: 320,
                             ),
                             margin: const EdgeInsets.only(right: 4),
                             padding: const EdgeInsets.only(left: 12),
@@ -301,10 +303,11 @@ class _ConnectionTabBar extends StatelessWidget {
                               ),
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(_protocolIcon(tab.protocol), size: 17),
                                 const SizedBox(width: 7),
-                                Expanded(
+                                Flexible(
                                   child: Text(
                                     tab.title,
                                     maxLines: 1,

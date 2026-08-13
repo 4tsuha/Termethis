@@ -418,6 +418,8 @@ void main() {
   });
 
   testWidgets('追加時にSSH・RDP・VNCを選択できる', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const MainApp());
     await tester.pumpAndSettle();
 
@@ -426,17 +428,21 @@ void main() {
 
     expect(find.text('接続先を追加'), findsOneWidget);
     expect(find.text('接続方式'), findsOneWidget);
-    expect(find.text('SSH'), findsOneWidget);
+    expect(find.text('ホスト名またはIPアドレス'), findsOneWidget);
+    expect(
+      find.byType(DropdownButtonFormField<ConnectionType>),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('connection-type-selector-ssh')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('SSH'), findsWidgets);
+    expect(find.text('Mosh'), findsOneWidget);
     expect(find.text('RDP'), findsOneWidget);
     expect(find.text('VNC'), findsOneWidget);
-    expect(find.text('ターミナル接続'), findsOneWidget);
-    expect(find.text('Windowsリモート'), findsOneWidget);
-    expect(find.text('リモート画面'), findsOneWidget);
-    expect(find.text('ホスト名またはIPアドレス'), findsOneWidget);
-
-    final rdpChoice = find.byKey(const ValueKey('connection-type-rdp'));
-    await tester.ensureVisible(rdpChoice);
-    await tester.tap(rdpChoice);
+    await tester.tap(find.text('RDP'));
     await tester.pumpAndSettle();
 
     expect(find.text('接続先を追加'), findsOneWidget);

@@ -1,4 +1,15 @@
-# Termethis 0.8.0-alpha5 検証記録
+# Termethis 0.8.0-alpha7 検証記録
+
+## 0.8.0-alpha7
+
+- Flutter対象テスト: 39件成功、QEMU Mosh実接続1件は環境変数未設定のためスキップ
+- UI回帰: 320dp／450dp／800dpの可変幅タブ、320dp設定一覧、接続先追加フォームを確認
+- AVD: 縦画面と横画面で設定、接続一覧、接続タブ、接続先追加フォームにRenderFlex例外なし
+- 静的解析: `flutter analyze`成功
+- Rust: `cargo fmt --check`、`cargo check --manifest-path rust/Cargo.toml`成功
+- APK: `versionName=0.8.0-alpha7`、`versionCode=2014`、arm64-v8a、署名v2検証済み
+- APK SHA-256: `E19F0AD16A9DB4D76498C3CD605627176805CE31B789A0C541E774A2C680C67F`
+- 未確認: Mosh実サーバー接続、RDP実接続性能、生体認証、SVE/SVE2実機経路
 
 ## 自動検証
 
@@ -14,7 +25,7 @@
 ## 0.8.0-alpha4
 
 - ReleaseビルドでtermlibのJNI境界がR8により難読化されないよう修正
-- AVDからQEMU DebianへED25519公開鍵認証で接続し、xterm.js WebGL、Flutter Alacritty、termlib、Termuxの4方式でPTY表示とコマンド往復を確認
+- AVDからQEMU DebianへED25519公開鍵認証で接続し、xterm.js WebGL、xterm.dart、termlib、Termuxの4方式でPTY表示とコマンド往復を確認
 - termlib選択時の`NoSuchFieldError`が再発しないことと、アプリプロセスの生存を確認
 - APK: `versionName=0.8.0-alpha4`、`versionCode=11`、arm64-v8a、署名v2検証済み
 

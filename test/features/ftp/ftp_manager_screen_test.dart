@@ -103,13 +103,8 @@ void main() {
     await tester.tap(find.text('設定'));
     await tester.pumpAndSettle();
 
-    expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsNothing);
-    await tester.tap(find.text('ターミナル操作'));
-    await tester.pumpAndSettle();
+    expect(find.byType(ExpansionTile), findsNothing);
     expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsOneWidget);
-    await tester.tap(find.text('ターミナル操作'));
-    await tester.pumpAndSettle();
-    expect(find.text('タブバーに検索ボタンを表示').hitTestable(), findsNothing);
 
     for (final group in const [
       (key: 'terminal-operation', label: 'ターミナル操作'),
@@ -120,9 +115,8 @@ void main() {
       (key: 'file-transfer', label: 'ファイル転送'),
       (key: 'about', label: 'Termethisについて'),
     ]) {
-      final groupFinder = find.byKey(
-        PageStorageKey('settings-group-${group.key}'),
-      );
+      await tester.scrollUntilVisible(find.text(group.label), 300);
+      final groupFinder = find.byKey(ValueKey('settings-group-${group.key}'));
       expect(groupFinder, findsWidgets);
       expect(
         find.descendant(
@@ -133,21 +127,36 @@ void main() {
       );
     }
 
-    await tester.ensureVisible(find.text('表示と描画'));
-    await tester.tap(find.text('表示と描画'));
-    await tester.pumpAndSettle();
-    expect(find.text('ターミナルエミュレータ'), findsOneWidget);
-    await tester.tap(find.text('表示と描画'));
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('鍵と認証'));
-    await tester.tap(find.text('鍵と認証'));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('秘密鍵と信頼済みホスト鍵'), -300);
     await tester.tap(find.text('秘密鍵と信頼済みホスト鍵'));
     await tester.pumpAndSettle();
     expect(find.text('認証情報はこの端末内に保存'), findsOneWidget);
     expect(find.text('秘密鍵'), findsOneWidget);
     expect(find.text('信頼済みホスト鍵'), findsOneWidget);
+  });
+
+  testWidgets('320dp幅でも設定一覧の末尾までレイアウトが破綻しない', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('設定'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    for (final label in const [
+      '表示と描画',
+      '動作とバックグラウンド',
+      '鍵と認証',
+      '連携と診断',
+      'ファイル転送',
+      'Termethisについて',
+    ]) {
+      await tester.scrollUntilVisible(find.text(label), 300);
+      expect(tester.takeException(), isNull);
+    }
+    expect(find.text('Termethisについて'), findsOneWidget);
   });
 
   testWidgets('接続タブ履歴はホームではなく接続画面に表示する', (tester) async {
