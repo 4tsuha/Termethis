@@ -1,6 +1,6 @@
 import 'connection_profile.dart';
 
-enum ConnectionProtocol { ssh, mosh, rdp, vnc, shizukuShell }
+enum ConnectionProtocol { ssh, mosh, rdp, vnc, opencode, shizukuShell }
 
 enum ConnectionTabState {
   disconnected,
@@ -39,7 +39,9 @@ class ConnectionTab {
     ConnectionProtocol.ssh ||
     ConnectionProtocol.mosh ||
     ConnectionProtocol.shizukuShell => true,
-    ConnectionProtocol.rdp || ConnectionProtocol.vnc => false,
+    ConnectionProtocol.rdp ||
+    ConnectionProtocol.vnc ||
+    ConnectionProtocol.opencode => false,
   };
 
   ConnectionTab copyWith({
@@ -107,6 +109,7 @@ class ConnectionTab {
         ConnectionType.mosh => ConnectionProtocol.mosh,
         ConnectionType.rdp => ConnectionProtocol.rdp,
         ConnectionType.vnc => ConnectionProtocol.vnc,
+        ConnectionType.opencode => ConnectionProtocol.opencode,
       };
 }
 

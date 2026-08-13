@@ -6,6 +6,7 @@ import '../../../infrastructure/ftp/ftp_connect_gateway.dart';
 import '../../../infrastructure/ftp/rust_sftp_gateway.dart';
 import '../../terminal/application/session_registry.dart';
 import '../domain/ftp_gateway.dart';
+import 'sftp_transfer_manager.dart';
 
 final ftpGatewayProvider = Provider<FtpGateway>(
   (ref) => RoutingFtpGateway(
@@ -116,6 +117,7 @@ class FtpTabsController extends Notifier<List<FtpTabState>> {
 
   Future<void> closeTab(String id) async {
     final tab = _find(id);
+    await ref.read(sftpTransferManagerProvider.notifier).cancelForTab(id);
     state = state.where((item) => item.id != id).toList(growable: false);
     final connection = tab?.connection;
     if (connection != null) {
@@ -149,9 +151,96 @@ class FtpTabsController extends Notifier<List<FtpTabState>> {
     await _runOperation(
       id,
       (connection) => entry.isDirectory
-          ? connection.deleteEmptyDirectory(entry.name)
+          ? connection is SftpFileConnection
+                ? connection.deleteDirectoryRecursive(entry.name)
+                : connection.deleteEmptyDirectory(entry.name)
           : connection.deleteFile(entry.name),
     );
+  }
+
+  Future<void> changePermissions(String id, String name, int mode) =>
+      _runSftpOperation(
+        id,
+        (connection) => connection.changePermissions(name, mode),
+      );
+
+  Future<void> downloadFile(String id, String remoteName, String localPath) =>
+      _runSftpOperation(
+        id,
+        (connection) => connection.downloadFile(remoteName, localPath),
+        refreshDirectory: false,
+      );
+
+  Future<void> uploadFile(String id, String localPath, String remoteName) =>
+      _runSftpOperation(
+        id,
+        (connection) => connection.uploadFile(localPath, remoteName),
+      );
+
+  Future<void> uploadDirectory(
+    String id,
+    String localPath,
+    String remoteName,
+  ) => _runSftpOperation(
+    id,
+    (connection) => connection.uploadDirectory(localPath, remoteName),
+  );
+
+  Future<String?> startDownloadFile({
+    required String id,
+    required String remoteName,
+    required String localPath,
+    required Future<void> Function() cleanup,
+  }) async {
+    final connection = _find(id)?.connection;
+    if (connection is! SftpFileConnection) return null;
+    return ref
+        .read(sftpTransferManagerProvider.notifier)
+        .startDownload(
+          tabId: id,
+          name: remoteName,
+          localPath: localPath,
+          start: () => connection.startDownloadFile(remoteName, localPath),
+          cleanup: cleanup,
+        );
+  }
+
+  Future<String?> startUploadFile({
+    required String id,
+    required String localPath,
+    required String remoteName,
+    required Future<void> Function() cleanup,
+  }) async {
+    final connection = _find(id)?.connection;
+    if (connection is! SftpFileConnection) return null;
+    return ref
+        .read(sftpTransferManagerProvider.notifier)
+        .startUpload(
+          tabId: id,
+          name: remoteName,
+          start: () => connection.startUploadFile(localPath, remoteName),
+          cleanup: cleanup,
+          onCompleted: () => _loadDirectory(id),
+        );
+  }
+
+  Future<String?> startUploadDirectory({
+    required String id,
+    required String localPath,
+    required String remoteName,
+    required Future<void> Function() cleanup,
+  }) async {
+    final connection = _find(id)?.connection;
+    if (connection is! SftpFileConnection) return null;
+    return ref
+        .read(sftpTransferManagerProvider.notifier)
+        .startUpload(
+          tabId: id,
+          name: remoteName,
+          start: () => connection.startUploadDirectory(localPath, remoteName),
+          cleanup: cleanup,
+          onCompleted: () => _loadDirectory(id),
+        );
   }
 
   void clearOperationError(String id) {
@@ -199,6 +288,29 @@ class FtpTabsController extends Notifier<List<FtpTabState>> {
     try {
       await operation(connection);
       await _loadDirectory(id, markBusy: false);
+    } catch (_) {
+      _replace(
+        id,
+        (tab) => tab.copyWith(isBusy: false, hasOperationError: true),
+      );
+    }
+  }
+
+  Future<void> _runSftpOperation(
+    String id,
+    Future<void> Function(SftpFileConnection connection) operation, {
+    bool refreshDirectory = true,
+  }) async {
+    final connection = _find(id)?.connection;
+    if (connection is! SftpFileConnection) return;
+    _replace(id, (tab) => tab.copyWith(isBusy: true, hasOperationError: false));
+    try {
+      await operation(connection);
+      if (refreshDirectory) {
+        await _loadDirectory(id, markBusy: false);
+      } else {
+        _replace(id, (tab) => tab.copyWith(isBusy: false));
+      }
     } catch (_) {
       _replace(
         id,

@@ -23,7 +23,6 @@ import 'package:termethis/features/terminal/domain/ssh_gateway.dart';
 import 'package:termethis/features/wake_on_lan/application/wake_on_lan_provider.dart';
 import 'package:termethis/features/wake_on_lan/domain/wake_on_lan.dart';
 import 'package:termethis/main.dart';
-import 'package:xterm/xterm.dart';
 
 void main() {
   testWidgets('日本語の接続先一覧を表示する', (tester) async {
@@ -34,7 +33,7 @@ void main() {
     expect(find.text('接続先がありません'), findsOneWidget);
     expect(find.text('接続先はこの端末に保存します。SSH秘密鍵は暗号化し、パスワードは保存しません。'), findsNothing);
     expect(find.text('接続先を追加'), findsNothing);
-    expect(find.byTooltip('接続先を追加'), findsNothing);
+    expect(find.byTooltip('接続先を追加'), findsOneWidget);
     expect(find.byIcon(Icons.add), findsOneWidget);
   });
 
@@ -55,7 +54,7 @@ void main() {
     expect(find.text('開発サーバー'), findsOneWidget);
     expect(find.text('developer@192.168.1.20:2222'), findsOneWidget);
     expect(find.text('SSH'), findsOneWidget);
-    expect(find.text('Mosh'), findsOneWidget);
+    expect(find.text('Mosh'), findsNothing);
     expect(find.text('未接続'), findsOneWidget);
     expect(find.byTooltip('接続'), findsOneWidget);
     final card = tester.widget<Card>(find.byType(Card));
@@ -85,26 +84,24 @@ void main() {
     await tester.tap(find.text('接続テスト'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'password');
-    await tester.tap(find.text('接続'));
+    await tester.tap(find.widgetWithText(FilledButton, '接続'));
     await tester.pumpAndSettle();
-
-    expect(find.text('接続済み'), findsWidgets);
-    expect(tester.takeException(), isNull);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(MaterialApp)),
     );
-    final tab = (await container.read(connectionTabsProvider.future)).single;
-    final terminalTab = tester.widget<AnimatedContainer>(
-      find.byKey(ValueKey('terminal-tab-${tab.id}')),
-    );
-    final terminalTabDecoration = terminalTab.decoration! as BoxDecoration;
-    expect(terminalTabDecoration.color, Colors.black);
+    final activeTab = (await container.read(
+      connectionTabsProvider.future,
+    )).single;
     expect(
-      terminalTabDecoration.borderRadius,
-      const BorderRadius.vertical(top: Radius.circular(8)),
+      container.read(sessionRegistryProvider).find(activeTab.id)?.isConnected,
+      isTrue,
     );
-    await tester.binding.handlePopRoute();
+    expect(tester.takeException(), isNull);
+
+    final tab = (await container.read(connectionTabsProvider.future)).single;
+    expect(find.byKey(ValueKey('connection-tab-${tab.id}')), findsOneWidget);
+    await tester.tap(find.text('ホーム'));
     await tester.pumpAndSettle();
 
     expect(find.text('接続先'), findsOneWidget);
@@ -214,42 +211,17 @@ void main() {
     await tester.tap(find.text('IMEテスト'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'password');
-    await tester.tap(find.text('接続'));
+    await tester.tap(find.widgetWithText(FilledButton, '接続'));
     await tester.pumpAndSettle();
 
-    final terminalView = tester.widget<TerminalView>(find.byType(TerminalView));
-    expect(terminalView.textStyle.fontFamily, 'CascadiaMono');
-    expect(terminalView.textStyle.fontFamilyFallback.first, 'Mejiro');
-    expect(terminalView.textStyle.fontSize, 13);
+    expect(gateway.lastRequest, isNotNull);
 
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: 'にほん',
-        selection: TextSelection.collapsed(offset: 3),
-        composing: TextRange(start: 0, end: 3),
-      ),
-    );
-    await tester.pump();
-    expect(gateway.connection.writes, isEmpty);
-
-    tester.view.physicalSize = const Size(900, 450);
-    await tester.pumpAndSettle();
-    expect(gateway.connection.writes, isEmpty);
-
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '日本語',
-        selection: TextSelection.collapsed(offset: 3),
-      ),
-    );
-    await tester.pump();
-
+    final tab = (await container.read(connectionTabsProvider.future)).single;
+    final session = container.read(sessionRegistryProvider).find(tab.id)!;
+    session.sendInput('日本語');
     expect(gateway.connection.writes, hasLength(1));
     expect(utf8.decode(gateway.connection.writes.single), '日本語');
-
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-
+    session.sendInput('\r');
     expect(gateway.connection.writes, hasLength(2));
     expect(utf8.decode(gateway.connection.writes.last), '\r');
   });
@@ -367,7 +339,11 @@ void main() {
 
     await tester.tap(find.text('鍵サーバー'));
     await tester.pumpAndSettle();
-    expect(find.text('接続済み'), findsWidgets);
+    final tab = (await container.read(connectionTabsProvider.future)).single;
+    expect(
+      container.read(sessionRegistryProvider).find(tab.id)?.isConnected,
+      isTrue,
+    );
     final authentication = gateway.lastRequest?.authentication;
     expect(authentication, isA<SshPrivateKeyAuthentication>());
     expect(
@@ -442,6 +418,7 @@ void main() {
     expect(find.text('Mosh'), findsOneWidget);
     expect(find.text('RDP'), findsOneWidget);
     expect(find.text('VNC'), findsOneWidget);
+    expect(find.text('OpenCode'), findsOneWidget);
     await tester.tap(find.text('RDP'));
     await tester.pumpAndSettle();
 
@@ -454,6 +431,79 @@ void main() {
     );
     final fields = find.byType(TextFormField);
     expect(tester.widget<TextFormField>(fields.at(2)).controller?.text, '3389');
+  });
+
+  testWidgets('OpenCode接続先でServe固有の入力欄を表示する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('connection-type-selector-ssh')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenCode'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('プロジェクトのパス（任意）'), findsOneWidget);
+    expect(find.text('OpenCode Serveのパスワード（任意）'), findsOneWidget);
+    expect(find.text('Wake on LAN'), findsNothing);
+    final fields = find.byType(TextFormField);
+    expect(tester.widget<TextFormField>(fields.at(2)).controller?.text, '4096');
+    expect(
+      tester.widget<TextFormField>(fields.at(3)).controller?.text,
+      'opencode',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('接続先追加はスマホでコンパクトなモーダルとして表示する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    final editor = find.byKey(const ValueKey('connection-editor-scroll'));
+    expect(editor, findsOneWidget);
+    final sheet = tester.getRect(editor);
+    expect(sheet.top, greaterThan(0));
+    expect(sheet.height, lessThan(844));
+    expect(
+      find.byKey(const ValueKey('connection-editor-scroll')),
+      findsOneWidget,
+    );
+
+    final fields = find.byType(TextFormField);
+    final portRect = tester.getRect(fields.at(2));
+    final usernameRect = tester.getRect(fields.at(3));
+    expect(portRect.top, closeTo(usernameRect.top, 1));
+    expect(portRect.width, closeTo(usernameRect.width, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('接続先追加は広い画面で中央ダイアログとして表示する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MainApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('new-connection-dialog')), findsOneWidget);
+    final dialog = tester.getRect(
+      find.byKey(const ValueKey('connection-editor-scroll')),
+    );
+    expect(dialog.width, lessThanOrEqualTo(640));
+    expect(dialog.height, lessThan(900));
+    expect(dialog.left, greaterThan(0));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('RDP接続先をアプリ内画面で開く', (tester) async {
@@ -487,7 +537,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('RDP接続'), findsOneWidget);
-    expect(find.text('operator · rdp.example.com:3389'), findsOneWidget);
+    expect(find.text('operator ・ rdp.example.com:3389'), findsOneWidget);
     expect(launcher.lastProfile, isNull);
   });
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/connection_logs_controller.dart';
 import '../domain/connection_log_entry.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class ConnectionLogsScreen extends ConsumerWidget {
   const ConnectionLogsScreen({super.key});
@@ -10,19 +11,17 @@ class ConnectionLogsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(connectionLogsProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('接続ログ'),
-        actions: [
-          IconButton(
-            tooltip: 'すべて削除',
-            onPressed: logs.value?.isNotEmpty == true
-                ? () => _confirmClear(context, ref)
-                : null,
-            icon: const Icon(Icons.delete_sweep_outlined),
-          ),
-        ],
-      ),
+    return ExpressiveScaffold(
+      title: '接続ログ',
+      actions: [
+        IconButton(
+          tooltip: 'すべて削除',
+          onPressed: logs.value?.isNotEmpty == true
+              ? () => _confirmClear(context, ref)
+              : null,
+          icon: const Icon(Icons.delete_sweep_outlined),
+        ),
+      ],
       body: logs.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) =>
@@ -71,10 +70,7 @@ class _PrivacyNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return Card(
-      elevation: 0,
-      color: colors.surfaceContainerLow,
       child: const ListTile(
         leading: Icon(Icons.shield_outlined),
         title: Text('最大200件を端末内に保存'),
@@ -95,8 +91,6 @@ class _ConnectionLogCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final color = presentation.isError ? colors.error : colors.primary;
     return Card(
-      elevation: 0,
-      color: colors.surfaceContainerLow,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.12),

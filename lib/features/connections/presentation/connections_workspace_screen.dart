@@ -14,6 +14,8 @@ import '../../remote_desktop/presentation/rdp_screen.dart';
 import '../../remote_desktop/presentation/vnc_screen.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/presentation/terminal_screen.dart';
+import '../../opencode/presentation/opencode_chat_screen.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class ConnectionsWorkspaceScreen extends ConsumerStatefulWidget {
   const ConnectionsWorkspaceScreen({this.requestedTabId, super.key});
@@ -81,7 +83,7 @@ class _ConnectionsWorkspaceScreenState
             ? null
             : profiles.where((item) => item.id == active.profileId).firstOrNull;
         return ColoredBox(
-          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+          color: Theme.of(context).colorScheme.surface,
           child: Column(
             children: [
               ConnectionTabBar(
@@ -99,7 +101,7 @@ class _ConnectionsWorkspaceScreenState
                   padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(16),
+                      bottom: Radius.circular(20),
                     ),
                     child: _ConnectionContentHost(
                       tab: active,
@@ -229,6 +231,11 @@ class _ConnectionContentHost extends StatelessWidget {
         profileId: connection.id,
         tabId: tab.id,
       ),
+      ConnectionProtocol.opencode => OpenCodeChatScreen(
+        key: ValueKey('connection-opencode-${tab.id}'),
+        profileId: connection.id,
+        tabId: tab.id,
+      ),
       ConnectionProtocol.shizukuShell => const SizedBox.shrink(),
     };
   }
@@ -261,14 +268,14 @@ class ConnectionTabBar extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: SizedBox(
-          height: 56,
+          height: 64,
           child: Row(
             children: [
               Expanded(
                 child: ReorderableListView.builder(
                   scrollDirection: Axis.horizontal,
                   buildDefaultDragHandles: false,
-                  padding: const EdgeInsets.fromLTRB(8, 6, 0, 0),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 0, 0),
                   itemCount: tabs.length,
                   onReorderItem: (oldIndex, newIndex) {
                     unawaited(onMove(tabs[oldIndex].id, newIndex));
@@ -296,22 +303,39 @@ class ConnectionTabBar extends StatelessWidget {
                             padding: const EdgeInsets.only(left: 12),
                             decoration: BoxDecoration(
                               color: selected
-                                  ? colors.surface
-                                  : colors.surfaceContainerHighest,
+                                  ? colors.primaryContainer
+                                  : colors.surfaceContainerHigh,
                               borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(14),
+                                top: Radius.circular(20),
                               ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(_protocolIcon(tab.protocol), size: 17),
+                                Icon(
+                                  _protocolIcon(tab.protocol),
+                                  size: 18,
+                                  color: selected
+                                      ? colors.onPrimaryContainer
+                                      : colors.onSurfaceVariant,
+                                ),
                                 const SizedBox(width: 7),
                                 Flexible(
                                   child: Text(
                                     tab.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: selected
+                                              ? colors.onPrimaryContainer
+                                              : colors.onSurface,
+                                          fontWeight: selected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                        ),
                                   ),
                                 ),
                                 IconButton(
@@ -416,32 +440,14 @@ class _EmptyConnectionsWorkspace extends StatelessWidget {
   const _EmptyConnectionsWorkspace();
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.lan_outlined,
-            size: 56,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text('接続は開かれていません', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          const Text(
-            'ホームから接続先を開くと、SSH・RDP・VNCをここで切り替えられます。',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => context.go('/ssh'),
-            icon: const Icon(Icons.home_outlined),
-            label: const Text('ホームを開く'),
-          ),
-        ],
-      ),
+  Widget build(BuildContext context) => ExpressiveEmptyState(
+    icon: Icons.lan_outlined,
+    title: '接続は開かれていません',
+    message: 'ホームから接続先を開くと、SSH・Mosh・RDP・VNC・OpenCodeをここで切り替えられます。',
+    action: FilledButton.icon(
+      onPressed: () => context.go('/ssh'),
+      icon: const Icon(Icons.home_outlined),
+      label: const Text('ホームを開く'),
     ),
   );
 }
@@ -465,6 +471,7 @@ IconData _protocolIcon(ConnectionProtocol protocol) => switch (protocol) {
   ConnectionProtocol.shizukuShell => Icons.terminal,
   ConnectionProtocol.rdp => Icons.desktop_windows_outlined,
   ConnectionProtocol.vnc => Icons.monitor_outlined,
+  ConnectionProtocol.opencode => Icons.code_rounded,
 };
 
 String _protocolLabel(ConnectionProtocol protocol) => switch (protocol) {
@@ -472,5 +479,6 @@ String _protocolLabel(ConnectionProtocol protocol) => switch (protocol) {
   ConnectionProtocol.mosh => 'Mosh',
   ConnectionProtocol.rdp => 'RDP',
   ConnectionProtocol.vnc => 'VNC',
+  ConnectionProtocol.opencode => 'OpenCode',
   ConnectionProtocol.shizukuShell => 'ADBシェル',
 };

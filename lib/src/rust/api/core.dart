@@ -6,9 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `apply_vnc_rect`, `authenticate_and_finalize`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `copy_vnc_rect`, `decode_ssh_private_key`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `positive_integer_bits`, `release_excess_capacity`, `resolve_sftp_path`, `rsa_hash_candidates`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`, `start_remote_tunnel`, `validate_rsa_key_size`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `ForwardedTcpIpChannel`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `PendingHostKey`, `SftpSessionState`, `SshSession`, `SshTunnel`, `VncSession`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `server_channel_open_forwarded_tcpip`
+// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `apply_vnc_rect`, `authenticate_and_finalize`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `copy_sftp_stream`, `copy_vnc_rect`, `decode_ssh_private_key`, `delete_sftp_tree`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `finish`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `local_tree_size`, `new`, `next_id`, `percentile`, `positive_integer_bits`, `release_excess_capacity`, `resolve_sftp_path`, `rsa_hash_candidates`, `run_sftp_download`, `run_sftp_upload_tree`, `run_sftp_upload`, `runtime_key_decode_features`, `sftp_connect_error`, `snapshot`, `ssh_client_config`, `ssh_connect_via_jumps`, `start_remote_tunnel`, `upload_sftp_tree`, `validate_rsa_key_size`, `validate_sftp_child_name`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `ForwardedTcpIpChannel`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `PendingHostKey`, `SftpSessionState`, `SftpTransferState`, `SshSession`, `SshTunnel`, `VncSession`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `server_channel_open_forwarded_tcpip`
 
 Future<RustSshConnectResult> sshConnect({
   required RustSshConnectRequest request,
@@ -156,6 +156,96 @@ Future<void> sftpDeleteEmptyDirectory({
 }) => RustLib.instance.api.crateApiCoreSftpDeleteEmptyDirectory(
   sessionId: sessionId,
   name: name,
+);
+
+Future<void> sftpDeleteDirectoryRecursive({
+  required PlatformInt64 sessionId,
+  required String name,
+}) => RustLib.instance.api.crateApiCoreSftpDeleteDirectoryRecursive(
+  sessionId: sessionId,
+  name: name,
+);
+
+Future<void> sftpSetPermissions({
+  required PlatformInt64 sessionId,
+  required String name,
+  required int mode,
+}) => RustLib.instance.api.crateApiCoreSftpSetPermissions(
+  sessionId: sessionId,
+  name: name,
+  mode: mode,
+);
+
+Future<void> sftpDownloadFile({
+  required PlatformInt64 sessionId,
+  required String remoteName,
+  required String localPath,
+}) => RustLib.instance.api.crateApiCoreSftpDownloadFile(
+  sessionId: sessionId,
+  remoteName: remoteName,
+  localPath: localPath,
+);
+
+Future<PlatformInt64> sftpStartDownloadFile({
+  required PlatformInt64 sessionId,
+  required String remoteName,
+  required String localPath,
+}) => RustLib.instance.api.crateApiCoreSftpStartDownloadFile(
+  sessionId: sessionId,
+  remoteName: remoteName,
+  localPath: localPath,
+);
+
+Future<void> sftpUploadFile({
+  required PlatformInt64 sessionId,
+  required String localPath,
+  required String remoteName,
+}) => RustLib.instance.api.crateApiCoreSftpUploadFile(
+  sessionId: sessionId,
+  localPath: localPath,
+  remoteName: remoteName,
+);
+
+Future<PlatformInt64> sftpStartUploadFile({
+  required PlatformInt64 sessionId,
+  required String localPath,
+  required String remoteName,
+}) => RustLib.instance.api.crateApiCoreSftpStartUploadFile(
+  sessionId: sessionId,
+  localPath: localPath,
+  remoteName: remoteName,
+);
+
+Future<RustSftpTransferProgress> sftpTransferProgress({
+  required PlatformInt64 transferId,
+}) => RustLib.instance.api.crateApiCoreSftpTransferProgress(
+  transferId: transferId,
+);
+
+Future<void> sftpCancelTransfer({required PlatformInt64 transferId}) =>
+    RustLib.instance.api.crateApiCoreSftpCancelTransfer(transferId: transferId);
+
+Future<void> sftpForgetTransfer({required PlatformInt64 transferId}) =>
+    RustLib.instance.api.crateApiCoreSftpForgetTransfer(transferId: transferId);
+
+Future<void> sftpUploadDirectory({
+  required PlatformInt64 sessionId,
+  required String localPath,
+  required String remoteName,
+}) => RustLib.instance.api.crateApiCoreSftpUploadDirectory(
+  sessionId: sessionId,
+  localPath: localPath,
+  remoteName: remoteName,
+);
+
+Future<PlatformInt64> sftpStartUploadDirectory({
+  required PlatformInt64 sessionId,
+  required String localPath,
+  required String remoteName,
+}) => RustLib.instance.api.crateApiCoreSftpStartUploadDirectory(
+  sessionId: sessionId,
+  localPath: localPath,
+  remoteName: remoteName,
 );
 
 Future<void> sftpClose({required PlatformInt64 sessionId}) =>
@@ -463,17 +553,23 @@ class RustSftpEntry {
   final String kind;
   final PlatformInt64? size;
   final PlatformInt64? modifiedSeconds;
+  final int? permissions;
 
   const RustSftpEntry({
     required this.name,
     required this.kind,
     this.size,
     this.modifiedSeconds,
+    this.permissions,
   });
 
   @override
   int get hashCode =>
-      name.hashCode ^ kind.hashCode ^ size.hashCode ^ modifiedSeconds.hashCode;
+      name.hashCode ^
+      kind.hashCode ^
+      size.hashCode ^
+      modifiedSeconds.hashCode ^
+      permissions.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -483,7 +579,51 @@ class RustSftpEntry {
           name == other.name &&
           kind == other.kind &&
           size == other.size &&
-          modifiedSeconds == other.modifiedSeconds;
+          modifiedSeconds == other.modifiedSeconds &&
+          permissions == other.permissions;
+}
+
+class RustSftpTransferProgress {
+  final PlatformInt64 transferId;
+  final String name;
+  final String direction;
+  final String state;
+  final BigInt bytesTransferred;
+  final BigInt? totalBytes;
+  final String? errorMessage;
+
+  const RustSftpTransferProgress({
+    required this.transferId,
+    required this.name,
+    required this.direction,
+    required this.state,
+    required this.bytesTransferred,
+    this.totalBytes,
+    this.errorMessage,
+  });
+
+  @override
+  int get hashCode =>
+      transferId.hashCode ^
+      name.hashCode ^
+      direction.hashCode ^
+      state.hashCode ^
+      bytesTransferred.hashCode ^
+      totalBytes.hashCode ^
+      errorMessage.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RustSftpTransferProgress &&
+          runtimeType == other.runtimeType &&
+          transferId == other.transferId &&
+          name == other.name &&
+          direction == other.direction &&
+          state == other.state &&
+          bytesTransferred == other.bytesTransferred &&
+          totalBytes == other.totalBytes &&
+          errorMessage == other.errorMessage;
 }
 
 class RustSshConnectRequest {

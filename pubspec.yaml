@@ -1,7 +1,7 @@
 name: termethis
 description: "日本語入力に対応したAndroid向けSSH・SFTPモバイルターミナル。"
 publish_to: 'none'
-version: 0.8.0-alpha7+14
+version: 0.8.0+15
 
 environment:
   sdk: ^3.12.2
@@ -19,9 +19,11 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   ftpconnect: ^2.0.10
   go_router: ^17.4.0
+  http: ^1.6.0
   intl: ^0.20.2
   mosh_dart:
     path: third_party/mosh_dart
+  path: ^1.9.1
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   termethis_core:

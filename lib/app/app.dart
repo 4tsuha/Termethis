@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/settings/application/app_font_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
+import 'termethis_theme.dart';
 
 class TermethisApp extends ConsumerWidget {
   const TermethisApp({super.key});
@@ -25,22 +26,8 @@ class TermethisApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff2457d6),
-          brightness: Brightness.light,
-        ),
-        fontFamily: appFont.family,
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xff8ca9ff),
-          brightness: Brightness.dark,
-        ),
-        fontFamily: appFont.family,
-        useMaterial3: true,
-      ),
+      theme: TermethisTheme.light(appFont.family),
+      darkTheme: TermethisTheme.dark(appFont.family),
       routerConfig: router,
     );
   }

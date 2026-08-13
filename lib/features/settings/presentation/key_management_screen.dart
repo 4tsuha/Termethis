@@ -8,6 +8,7 @@ import '../../connections/domain/connection_profile.dart';
 import '../application/credential_settings_controller.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/domain/ssh_gateway.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class KeyManagementScreen extends ConsumerStatefulWidget {
   const KeyManagementScreen({super.key});
@@ -29,8 +30,8 @@ class _KeyManagementScreenState extends ConsumerState<KeyManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.keyManagementTitle)),
+    return ExpressiveScaffold(
+      title: l10n.keyManagementTitle,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -42,8 +43,8 @@ class _KeyManagementScreenState extends ConsumerState<KeyManagementScreen> {
                 title: const Text('認証情報はこの端末内に保存'),
                 subtitle: Text(
                   ref.watch(credentialSettingsProvider).saveSshPasswords
-                      ? 'SSH秘密鍵、保存したパスフレーズとパスワードは暗号化Vaultで保護します。'
-                      : 'SSH秘密鍵と保存したパスフレーズは暗号化Vaultで保護します。パスワードは保存しません。',
+                      ? 'SSH秘密鍵、保存したパスフレーズと接続パスワードは暗号化Vaultで保護します。'
+                      : 'SSH秘密鍵と保存したパスフレーズは暗号化Vaultで保護します。接続パスワードは保存しません。',
                 ),
               ),
             ],
@@ -202,9 +203,6 @@ class _KeyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.symmetric(horizontal: 12),
-    elevation: 0,
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     clipBehavior: Clip.antiAlias,
     child: Column(
       children: [

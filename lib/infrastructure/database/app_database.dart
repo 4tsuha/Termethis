@@ -29,6 +29,8 @@ class ConnectionProfileRows extends Table {
 
   IntColumn get wakeOnLanPort => integer().nullable()();
 
+  TextColumn get remotePath => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime()();
 
   DateTimeColumn get updatedAt => dateTime()();
@@ -104,6 +106,7 @@ class AppDatabase extends _$AppDatabase {
       connectionProfileRows.wakeOnLanBroadcastAddress,
       connectionProfileRows.wakeOnLanPort,
       connectionProfileRows.connectionType,
+      connectionProfileRows.remotePath,
     ];
     for (final column in requiredColumns) {
       if (!columns.contains(column.$name)) {

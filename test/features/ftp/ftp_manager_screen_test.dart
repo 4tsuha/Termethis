@@ -26,15 +26,9 @@ void main() {
     expect(find.text('ファイル'), findsWidgets);
     expect(find.text('ファイル接続がありません'), findsOneWidget);
 
-    await tester.tap(find.text('設定'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('ターミナル操作'));
+    await tester.tap(find.text('設定').last);
     await tester.pumpAndSettle();
     expect(find.text('タブバーに検索ボタンを表示'), findsOneWidget);
-    await tester.tap(find.text('ターミナル操作'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('表示と描画'));
-    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('ターミナルフォント'), 500);
     await tester.pumpAndSettle();
     await tester.tap(find.text('ターミナルフォント'));
@@ -100,7 +94,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: TermethisApp()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('設定'));
+    await tester.tap(find.text('設定').last);
     await tester.pumpAndSettle();
 
     expect(find.byType(ExpansionTile), findsNothing);
@@ -127,8 +121,15 @@ void main() {
       );
     }
 
-    await tester.scrollUntilVisible(find.text('秘密鍵と信頼済みホスト鍵'), -300);
-    await tester.tap(find.text('秘密鍵と信頼済みホスト鍵'));
+    await tester.tap(find.text('設定').last);
+    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (find.text('秘密鍵と信頼済みホスト鍵').evaluate().isNotEmpty) break;
+      await tester.drag(find.byType(ListView).first, const Offset(0, 500));
+      await tester.pumpAndSettle();
+    }
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('秘密鍵と信頼済みホスト鍵').hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('認証情報はこの端末内に保存'), findsOneWidget);
     expect(find.text('秘密鍵'), findsOneWidget);
@@ -270,6 +271,70 @@ void main() {
     expect(gateway.lastRequest?.onUnknownHostKey, isNotNull);
     expect(find.text('SFTPサーバー'), findsOneWidget);
   });
+
+  testWidgets('SFTPで権限変更・削除・アップロード操作を表示する', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final gateway = _SftpManagementGateway();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [ftpGatewayProvider.overrideWithValue(gateway)],
+        child: const TermethisApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ファイル'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ファイル接続'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('FTP（暗号化なし）'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SFTP（SSHファイル転送）').last);
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '管理用SFTP');
+    await tester.enterText(fields.at(1), 'sftp.example.com');
+    await tester.enterText(fields.at(3), 'tester');
+    await tester.enterText(fields.at(4), 'secret');
+    tester.testTextInput.hide();
+    final connectButton = find.widgetWithText(FilledButton, '接続');
+    await tester.ensureVisible(connectButton);
+    await tester.tap(connectButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('アップロード'), findsOneWidget);
+    await tester.tap(find.byTooltip('アップロード'));
+    await tester.pumpAndSettle();
+    expect(find.text('ファイルをアップロード'), findsOneWidget);
+    expect(find.text('フォルダをアップロード'), findsOneWidget);
+    Navigator.of(tester.element(find.text('ファイルをアップロード'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('file-entry-menu-deploy.sh')));
+    await tester.pumpAndSettle();
+    expect(find.text('ダウンロード'), findsOneWidget);
+    expect(find.text('権限を変更'), findsOneWidget);
+    expect(find.text('名前を変更'), findsOneWidget);
+    expect(find.text('削除'), findsOneWidget);
+    await tester.tap(find.text('権限を変更'));
+    await tester.pumpAndSettle();
+    expect(find.text('chmod 755'), findsOneWidget);
+    expect(find.text('所有者'), findsOneWidget);
+    expect(find.text('グループ'), findsOneWidget);
+    expect(find.text('その他'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('適用'));
+    await tester.pumpAndSettle();
+    expect(gateway.connection.changedMode, 0x1ed);
+
+    await tester.tap(find.byKey(const ValueKey('file-entry-menu-cache')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('削除'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('その中にあるすべてのファイル'), findsOneWidget);
+    await tester.tap(find.text('削除'));
+    await tester.pumpAndSettle();
+    expect(gateway.connection.deletedDirectory, 'cache');
+  });
 }
 
 class _FakeFtpGateway implements FtpGateway {
@@ -327,4 +392,89 @@ class _FakeFtpConnection implements FtpConnection {
 
   @override
   Future<void> rename(String oldName, String newName) async {}
+}
+
+class _SftpManagementGateway implements FtpGateway {
+  final connection = _SftpManagementConnection();
+
+  @override
+  Future<FtpConnection> connect(FtpConnectRequest request) async => connection;
+}
+
+class _SftpManagementConnection implements SftpFileConnection {
+  int? changedMode;
+  String? deletedDirectory;
+
+  @override
+  Future<void> changePermissions(String name, int mode) async {
+    changedMode = mode;
+  }
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<void> createDirectory(String name) async {}
+
+  @override
+  Future<String> currentDirectory() async => '/srv';
+
+  @override
+  Future<void> deleteDirectoryRecursive(String name) async {
+    deletedDirectory = name;
+  }
+
+  @override
+  Future<void> deleteEmptyDirectory(String name) async {}
+
+  @override
+  Future<void> deleteFile(String name) async {}
+
+  @override
+  Future<void> downloadFile(String remoteName, String localPath) async {}
+
+  @override
+  Future<SftpTransferTask> startDownloadFile(
+    String remoteName,
+    String localPath,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<void> changeDirectory(String path) async {}
+
+  @override
+  Future<List<FtpEntryInfo>> listDirectory() async => const [
+    FtpEntryInfo(
+      name: 'cache',
+      kind: FtpEntryKind.directory,
+      permissions: 0x1ed,
+    ),
+    FtpEntryInfo(
+      name: 'deploy.sh',
+      kind: FtpEntryKind.file,
+      size: 512,
+      permissions: 0x1ed,
+    ),
+  ];
+
+  @override
+  Future<void> rename(String oldName, String newName) async {}
+
+  @override
+  Future<void> uploadDirectory(String localPath, String remoteName) async {}
+
+  @override
+  Future<SftpTransferTask> startUploadDirectory(
+    String localPath,
+    String remoteName,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<void> uploadFile(String localPath, String remoteName) async {}
+
+  @override
+  Future<SftpTransferTask> startUploadFile(
+    String localPath,
+    String remoteName,
+  ) => throw UnimplementedError();
 }

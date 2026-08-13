@@ -7,6 +7,7 @@ import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../application/rdp_session_registry.dart';
 import 'widgets/rdp_vulkan_view.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class RdpScreen extends ConsumerStatefulWidget {
   const RdpScreen({
@@ -73,75 +74,96 @@ class _RdpScreenState extends ConsumerState<RdpScreen> {
                 : _buildDesktop(session),
           );
     if (widget.embedded) return body;
-    return Scaffold(
-      appBar: AppBar(title: Text(profile?.name ?? 'RDP')),
-      body: body,
-    );
+    return ExpressiveScaffold(title: profile?.name ?? 'RDP', body: body);
   }
 
   Widget _buildConnectForm(
     ConnectionProfile profile,
     RdpSessionController session,
   ) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Icon(
-          Icons.desktop_windows_outlined,
-          size: 56,
-          color: Theme.of(context).colorScheme.primary,
-        ),
-        const SizedBox(height: 16),
-        Text('リモートデスクトップ', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        Text('${profile.username} · ${profile.host}:${profile.port}'),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _domain,
-          decoration: const InputDecoration(
-            labelText: 'ドメイン（任意）',
-            prefixIcon: Icon(Icons.domain_outlined),
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(
+                    Icons.desktop_windows_outlined,
+                    size: 56,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'リモートデスクトップ',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${profile.username} ・ ${profile.host}:${profile.port}',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: _domain,
+                    decoration: const InputDecoration(
+                      labelText: 'ドメイン（任意）',
+                      prefixIcon: Icon(Icons.domain_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    autofocus: true,
+                    onSubmitted: (_) => _connect(session),
+                    decoration: const InputDecoration(
+                      labelText: 'パスワード',
+                      prefixIcon: Icon(Icons.password_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: const ListTile(
+                      leading: Icon(Icons.shield_outlined),
+                      title: Text('信頼できるネットワークで使用'),
+                      subtitle: Text('現在のRDP実装はサーバー証明書を厳格検証しません。接続先を確認してください。'),
+                    ),
+                  ),
+                  if (session.error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      session.error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: session.state == 'connecting'
+                        ? null
+                        : () => _connect(session),
+                    icon: session.state == 'connecting'
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.login),
+                    label: const Text('RDP接続'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _password,
-          obscureText: true,
-          autofocus: true,
-          onSubmitted: (_) => _connect(session),
-          decoration: const InputDecoration(
-            labelText: 'パスワード',
-            prefixIcon: Icon(Icons.password_outlined),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text('画面はアプリ内で表示し、描画データをターミナルUIへ渡さず処理します。'),
-        const SizedBox(height: 8),
-        Text(
-          '現在のIronRDP公開版はRDPサーバー証明書を厳格検証しません。信頼できる接続先とネットワークで使用してください。',
-          style: TextStyle(color: Theme.of(context).colorScheme.error),
-        ),
-        if (session.error != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            session.error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ],
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: session.state == 'connecting'
-              ? null
-              : () => _connect(session),
-          icon: session.state == 'connecting'
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.login),
-          label: const Text('RDP接続'),
-        ),
-      ],
+      ),
     );
   }
 

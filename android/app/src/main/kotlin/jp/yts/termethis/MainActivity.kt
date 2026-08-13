@@ -45,6 +45,8 @@ class MainActivity : FlutterActivity() {
             "jp.yts.termethis/remote_desktop"
         private const val HARDWARE_ACCELERATION_CHANNEL =
             "jp.yts.termethis/hardware_acceleration"
+        private const val APP_ENVIRONMENT_CHANNEL =
+            "jp.yts.termethis/app_environment"
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 4109
     }
 
@@ -55,6 +57,7 @@ class MainActivity : FlutterActivity() {
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
     private var shizukuDiagnosticsChannel: ShizukuDiagnosticsChannel? = null
     private var vaultProtectionChannel: VaultProtectionChannel? = null
+    private var sftpFileTransferChannel: SftpFileTransferChannel? = null
     private val composeLifecycleOwner = FlutterComposeLifecycleOwner()
 
     @Suppress("DEPRECATION")
@@ -84,6 +87,10 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
         )
         vaultProtectionChannel = VaultProtectionChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+        sftpFileTransferChannel = SftpFileTransferChannel(
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -165,6 +172,31 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_ENVIRONMENT_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "getInfo") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            @Suppress("DEPRECATION")
+            val packageInfo = packageManager.getPackageInfo(packageName, 0)
+            val buildNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode.toString()
+            } else {
+                packageInfo.versionCode.toString()
+            }
+            result.success(
+                mapOf(
+                    "appVersion" to packageInfo.versionName,
+                    "buildNumber" to buildNumber,
+                    "osRelease" to Build.VERSION.RELEASE,
+                    "sdkLevel" to Build.VERSION.SDK_INT,
+                    "deviceModel" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+                ),
+            )
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -287,6 +319,8 @@ class MainActivity : FlutterActivity() {
         composeLifecycleOwner.destroy()
         vaultProtectionChannel?.dispose()
         vaultProtectionChannel = null
+        sftpFileTransferChannel?.dispose()
+        sftpFileTransferChannel = null
         pendingBackgroundSessionResult?.error(
             "activity_destroyed",
             "Activity was destroyed before notification permission completed",
@@ -302,6 +336,9 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Android SDK, retained for FlutterActivity compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (sftpFileTransferChannel?.onActivityResult(requestCode, resultCode, data) == true) {
+            return
+        }
         if (requestCode != PRIVATE_KEY_REQUEST_CODE) {
             return
         }

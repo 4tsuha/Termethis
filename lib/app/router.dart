@@ -10,6 +10,8 @@ import '../features/connections/domain/connection_profile.dart';
 import '../features/connection_logs/presentation/connection_logs_screen.dart';
 import '../features/diagnostics/presentation/logcat_capture_screen.dart';
 import '../features/diagnostics/presentation/shizuku_screen.dart';
+import '../features/diagnostics/presentation/connection_diagnostics_screen.dart';
+import '../features/data_management/presentation/data_and_safety_screen.dart';
 import '../features/mcp/presentation/mcp_server_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/key_management_screen.dart';
@@ -78,6 +80,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     path: 'mcp',
                     builder: (context, state) => const McpServerScreen(),
                   ),
+                  GoRoute(
+                    path: 'data-safety',
+                    builder: (context, state) => const DataAndSafetyScreen(),
+                  ),
                 ],
               ),
             ],
@@ -118,6 +124,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/connections/:id/edit',
         builder: (context, state) =>
             ConnectionEditorScreen(profileId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/connections/:id/diagnostics',
+        builder: (context, state) =>
+            ConnectionDiagnosticsScreen(profileId: state.pathParameters['id']!),
       ),
     ],
   );

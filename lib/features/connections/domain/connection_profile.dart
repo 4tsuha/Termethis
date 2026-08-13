@@ -6,7 +6,8 @@ enum ConnectionType {
   ssh(defaultPort: 22),
   mosh(defaultPort: 22),
   rdp(defaultPort: 3389),
-  vnc(defaultPort: 5900);
+  vnc(defaultPort: 5900),
+  opencode(defaultPort: 4096);
 
   const ConnectionType({required this.defaultPort});
 
@@ -28,6 +29,7 @@ class ConnectionProfile {
     this.credentialReference,
     this.privateKeyLabel,
     this.wakeOnLan,
+    this.remotePath,
   });
 
   final String id;
@@ -40,6 +42,7 @@ class ConnectionProfile {
   final String? credentialReference;
   final String? privateKeyLabel;
   final WakeOnLanConfiguration? wakeOnLan;
+  final String? remotePath;
 
   String get target {
     final endpoint = '$host:$port';
@@ -64,6 +67,7 @@ class ConnectionProfile {
       credentialReference: credentialReference,
       privateKeyLabel: privateKeyLabel,
       wakeOnLan: wakeOnLan,
+      remotePath: remotePath,
     );
   }
 
@@ -79,7 +83,8 @@ class ConnectionProfile {
         other.authenticationType == authenticationType &&
         other.credentialReference == credentialReference &&
         other.privateKeyLabel == privateKeyLabel &&
-        other.wakeOnLan == wakeOnLan;
+        other.wakeOnLan == wakeOnLan &&
+        other.remotePath == remotePath;
   }
 
   @override
@@ -94,5 +99,6 @@ class ConnectionProfile {
     credentialReference,
     privateKeyLabel,
     wakeOnLan,
+    remotePath,
   );
 }

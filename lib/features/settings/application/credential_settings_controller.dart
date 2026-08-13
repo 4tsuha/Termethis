@@ -88,8 +88,9 @@ class CredentialSettingsController extends Notifier<CredentialSettings> {
     final profiles = await repository.watchAll().first;
     for (final profile in profiles) {
       final reference = profile.credentialReference;
-      if (profile.authenticationType !=
-              AuthenticationType.passwordOrInteractive ||
+      if ((profile.authenticationType !=
+                  AuthenticationType.passwordOrInteractive &&
+              profile.connectionType != ConnectionType.opencode) ||
           reference == null) {
         continue;
       }

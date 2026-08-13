@@ -74,7 +74,7 @@ void main() {
     final reopenedId = await restoredContainer
         .read(connectionTabsProvider.notifier)
         .open(profile);
-    expect(reopenedId, firstId);
+    expect(reopenedId, isNot(firstId));
     expect(restoredContainer.read(connectionTabsProvider).value, hasLength(1));
     restoredContainer.dispose();
   });

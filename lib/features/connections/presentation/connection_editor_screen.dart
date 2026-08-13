@@ -19,21 +19,76 @@ class ConnectionEditorScreen extends ConsumerStatefulWidget {
     super.key,
     this.profileId,
     this.connectionType = ConnectionType.ssh,
+    this.compactPresentation = false,
     this.allowedConnectionTypes = const {
       ConnectionType.ssh,
       ConnectionType.mosh,
       ConnectionType.rdp,
       ConnectionType.vnc,
+      ConnectionType.opencode,
     },
   });
 
   final String? profileId;
   final ConnectionType connectionType;
+  final bool compactPresentation;
   final Set<ConnectionType> allowedConnectionTypes;
 
   @override
   ConsumerState<ConnectionEditorScreen> createState() =>
       _ConnectionEditorScreenState();
+}
+
+Future<void> showNewConnectionEditor(
+  BuildContext context, {
+  ConnectionType connectionType = ConnectionType.ssh,
+  Set<ConnectionType> allowedConnectionTypes = const {
+    ConnectionType.ssh,
+    ConnectionType.mosh,
+    ConnectionType.rdp,
+    ConnectionType.vnc,
+    ConnectionType.opencode,
+  },
+}) {
+  final size = MediaQuery.sizeOf(context);
+  if (size.width >= 600) {
+    return showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => Dialog(
+        key: const ValueKey('new-connection-dialog'),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 640,
+            maxHeight: size.height * 0.88,
+          ),
+          child: ConnectionEditorScreen(
+            connectionType: connectionType,
+            allowedConnectionTypes: allowedConnectionTypes,
+            compactPresentation: true,
+          ),
+        ),
+      ),
+    );
+  }
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    constraints: BoxConstraints(maxHeight: size.height * 0.84),
+    builder: (context) => KeyedSubtree(
+      key: const ValueKey('new-connection-sheet'),
+      child: ConnectionEditorScreen(
+        connectionType: connectionType,
+        allowedConnectionTypes: allowedConnectionTypes,
+        compactPresentation: true,
+      ),
+    ),
+  );
 }
 
 class _ConnectionEditorScreenState
@@ -43,6 +98,7 @@ class _ConnectionEditorScreenState
   late final TextEditingController _hostController;
   late final TextEditingController _portController;
   late final TextEditingController _usernameController;
+  late final TextEditingController _remotePathController;
   late final TextEditingController _wakeOnLanMacController;
   late final TextEditingController _wakeOnLanBroadcastController;
   late final TextEditingController _wakeOnLanPortController;
@@ -77,7 +133,12 @@ class _ConnectionEditorScreenState
       text: (_existing?.port ?? _connectionType.defaultPort).toString(),
     );
     _usernameController = TextEditingController(
-      text: _existing?.username ?? '',
+      text:
+          _existing?.username ??
+          (_connectionType == ConnectionType.opencode ? 'opencode' : ''),
+    );
+    _remotePathController = TextEditingController(
+      text: _existing?.remotePath ?? '',
     );
     final wakeOnLan = _existing?.wakeOnLan;
     _wakeOnLanMacController = TextEditingController(
@@ -99,6 +160,7 @@ class _ConnectionEditorScreenState
       _hostController,
       _portController,
       _usernameController,
+      _remotePathController,
       _wakeOnLanMacController,
       _wakeOnLanBroadcastController,
       _wakeOnLanPortController,
@@ -128,6 +190,7 @@ class _ConnectionEditorScreenState
     _hostController.dispose();
     _portController.dispose();
     _usernameController.dispose();
+    _remotePathController.dispose();
     _wakeOnLanMacController.dispose();
     _wakeOnLanBroadcastController.dispose();
     _wakeOnLanPortController.dispose();
@@ -155,6 +218,25 @@ class _ConnectionEditorScreenState
       child: Scaffold(
         appBar: AppBar(
           title: Text(_existing == null ? l10n.addConnection : l10n.edit),
+          automaticallyImplyLeading: !widget.compactPresentation,
+          leading: widget.compactPresentation
+              ? IconButton(
+                  tooltip: l10n.close,
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.close),
+                )
+              : null,
+          actions: widget.compactPresentation
+              ? [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilledButton.tonal(
+                      onPressed: _saving ? null : _save,
+                      child: Text(l10n.save),
+                    ),
+                  ),
+                ]
+              : null,
         ),
         body: SafeArea(
           child: Form(
@@ -164,7 +246,13 @@ class _ConnectionEditorScreenState
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
                 child: ListView(
-                  padding: const EdgeInsets.all(16),
+                  key: const ValueKey('connection-editor-scroll'),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    widget.compactPresentation ? 4 : 16,
+                    16,
+                    widget.compactPresentation ? 16 : 24,
+                  ),
                   children: [
                     if (_existing == null) ...[
                       _ConnectionTypeSelector(
@@ -172,7 +260,7 @@ class _ConnectionEditorScreenState
                         allowedTypes: widget.allowedConnectionTypes,
                         onSelected: _selectConnectionType,
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: widget.compactPresentation ? 12 : 16),
                     ],
                     TextFormField(
                       controller: _hostController,
@@ -186,7 +274,7 @@ class _ConnectionEditorScreenState
                       autocorrect: false,
                       validator: (value) => _required(value, l10n),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: widget.compactPresentation ? 12 : 16),
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
@@ -197,50 +285,47 @@ class _ConnectionEditorScreenState
                       textInputAction: TextInputAction.next,
                       validator: (value) => _required(value, l10n),
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _portController,
-                      decoration: InputDecoration(
-                        labelText: l10n.port,
-                        border: const OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      validator: (value) {
-                        final port = int.tryParse(value ?? '');
-                        if (port == null || port < 1 || port > 65535) {
-                          return l10n.invalidPort;
-                        }
-                        return null;
-                      },
+                    SizedBox(height: widget.compactPresentation ? 12 : 16),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _buildPortField(l10n)),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildUsernameField(l10n)),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: _connectionType == ConnectionType.vnc
-                            ? l10n.usernameOptional
-                            : l10n.username,
-                        border: const OutlineInputBorder(),
+                    if (_connectionType == ConnectionType.opencode) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _remotePathController,
+                        decoration: const InputDecoration(
+                          labelText: 'プロジェクトのパス（任意）',
+                          hintText: '/home/user/project',
+                          border: OutlineInputBorder(),
+                        ),
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
                       ),
-                      textInputAction: _wakeOnLanEnabled
-                          ? TextInputAction.next
-                          : TextInputAction.done,
-                      autocorrect: false,
-                      validator: _connectionType == ConnectionType.vnc
-                          ? null
-                          : (value) => _required(value, l10n),
-                      onFieldSubmitted: (_) {
-                        if (!_wakeOnLanEnabled) {
-                          _save();
-                        }
-                      },
-                    ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        enableSuggestions: false,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: 'OpenCode Serveのパスワード（任意）',
+                          helperText: saveSshPasswords
+                              ? '保存したパスワードを暗号化Vaultで保護します。'
+                              : 'パスワードは保存せず、次回の接続時に入力します。',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
                     if (_connectionType.usesSshAuthentication) ...[
                       const SizedBox(height: 16),
                       DropdownButtonFormField<AuthenticationType>(
                         initialValue: _authenticationType,
+                        isExpanded: true,
                         decoration: InputDecoration(
                           labelText: l10n.authentication,
                           border: const OutlineInputBorder(),
@@ -264,7 +349,7 @@ class _ConnectionEditorScreenState
                           }
                         },
                       ),
-                    ] else ...[
+                    ] else if (_connectionType != ConnectionType.opencode) ...[
                       const SizedBox(height: 16),
                       Card.outlined(
                         child: ListTile(
@@ -354,109 +439,119 @@ class _ConnectionEditorScreenState
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    Card.outlined(
-                      child: Column(
-                        children: [
-                          SwitchListTile.adaptive(
-                            value: _wakeOnLanEnabled,
-                            title: Text(l10n.wakeOnLanTitle),
-                            subtitle: Text(l10n.wakeOnLanDescription),
-                            secondary: const Icon(Icons.power_settings_new),
-                            onChanged: (value) {
-                              setState(() {
-                                _wakeOnLanEnabled = value;
-                                _dirty = true;
-                              });
-                            },
-                          ),
-                          if (_wakeOnLanEnabled)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              child: Column(
-                                children: [
-                                  TextFormField(
-                                    controller: _wakeOnLanMacController,
-                                    decoration: InputDecoration(
-                                      labelText: l10n.wakeOnLanMacAddress,
-                                      hintText: l10n.wakeOnLanMacHint,
-                                      border: const OutlineInputBorder(),
-                                    ),
-                                    textCapitalization:
-                                        TextCapitalization.characters,
-                                    textInputAction: TextInputAction.next,
-                                    autocorrect: false,
-                                    validator: (value) {
-                                      if (!_wakeOnLanEnabled) {
-                                        return null;
-                                      }
-                                      return WakeOnLanConfiguration.parseMacAddress(
-                                                value ?? '',
-                                              ) ==
-                                              null
-                                          ? l10n.invalidMacAddress
-                                          : null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextFormField(
-                                    controller: _wakeOnLanBroadcastController,
-                                    decoration: InputDecoration(
-                                      labelText: l10n.wakeOnLanBroadcastAddress,
-                                      hintText: l10n.wakeOnLanBroadcastHint,
-                                      border: const OutlineInputBorder(),
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    textInputAction: TextInputAction.next,
-                                    autocorrect: false,
-                                    validator: (value) {
-                                      if (!_wakeOnLanEnabled) {
-                                        return null;
-                                      }
-                                      return WakeOnLanConfiguration.isValidIpv4Address(
-                                            value ?? '',
-                                          )
-                                          ? null
-                                          : l10n.invalidIpv4Address;
-                                    },
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextFormField(
-                                    controller: _wakeOnLanPortController,
-                                    decoration: InputDecoration(
-                                      labelText: l10n.wakeOnLanPort,
-                                      border: const OutlineInputBorder(),
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                    textInputAction: TextInputAction.done,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                    validator: (value) {
-                                      if (!_wakeOnLanEnabled) {
-                                        return null;
-                                      }
-                                      final port = int.tryParse(value ?? '');
-                                      return port == null ||
-                                              port < 1 ||
-                                              port > 65535
-                                          ? l10n.invalidPort
-                                          : null;
-                                    },
-                                    onFieldSubmitted: (_) => _save(),
-                                  ),
-                                ],
-                              ),
+                    if (_connectionType != ConnectionType.opencode) ...[
+                      const SizedBox(height: 16),
+                      Card.outlined(
+                        child: Column(
+                          children: [
+                            SwitchListTile.adaptive(
+                              value: _wakeOnLanEnabled,
+                              title: Text(l10n.wakeOnLanTitle),
+                              subtitle: Text(l10n.wakeOnLanDescription),
+                              secondary: const Icon(Icons.power_settings_new),
+                              onChanged: (value) {
+                                setState(() {
+                                  _wakeOnLanEnabled = value;
+                                  _dirty = true;
+                                });
+                              },
                             ),
-                        ],
+                            if (_wakeOnLanEnabled)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  16,
+                                ),
+                                child: Column(
+                                  children: [
+                                    TextFormField(
+                                      controller: _wakeOnLanMacController,
+                                      decoration: InputDecoration(
+                                        labelText: l10n.wakeOnLanMacAddress,
+                                        hintText: l10n.wakeOnLanMacHint,
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      textCapitalization:
+                                          TextCapitalization.characters,
+                                      textInputAction: TextInputAction.next,
+                                      autocorrect: false,
+                                      validator: (value) {
+                                        if (!_wakeOnLanEnabled) {
+                                          return null;
+                                        }
+                                        return WakeOnLanConfiguration.parseMacAddress(
+                                                  value ?? '',
+                                                ) ==
+                                                null
+                                            ? l10n.invalidMacAddress
+                                            : null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextFormField(
+                                      controller: _wakeOnLanBroadcastController,
+                                      decoration: InputDecoration(
+                                        labelText:
+                                            l10n.wakeOnLanBroadcastAddress,
+                                        hintText: l10n.wakeOnLanBroadcastHint,
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      textInputAction: TextInputAction.next,
+                                      autocorrect: false,
+                                      validator: (value) {
+                                        if (!_wakeOnLanEnabled) {
+                                          return null;
+                                        }
+                                        return WakeOnLanConfiguration.isValidIpv4Address(
+                                              value ?? '',
+                                            )
+                                            ? null
+                                            : l10n.invalidIpv4Address;
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextFormField(
+                                      controller: _wakeOnLanPortController,
+                                      decoration: InputDecoration(
+                                        labelText: l10n.wakeOnLanPort,
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      textInputAction: TextInputAction.done,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      validator: (value) {
+                                        if (!_wakeOnLanEnabled) {
+                                          return null;
+                                        }
+                                        final port = int.tryParse(value ?? '');
+                                        return port == null ||
+                                                port < 1 ||
+                                                port > 65535
+                                            ? l10n.invalidPort
+                                            : null;
+                                      },
+                                      onFieldSubmitted: (_) => _save(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: _saving ? null : _save,
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text(l10n.save),
-                    ),
+                    ],
+                    if (!widget.compactPresentation) ...[
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: _saving ? null : _save,
+                        icon: const Icon(Icons.save_outlined),
+                        label: Text(l10n.save),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -466,6 +561,46 @@ class _ConnectionEditorScreenState
       ),
     );
   }
+
+  Widget _buildPortField(AppLocalizations l10n) => TextFormField(
+    controller: _portController,
+    decoration: InputDecoration(
+      labelText: l10n.port,
+      border: const OutlineInputBorder(),
+    ),
+    keyboardType: TextInputType.number,
+    textInputAction: TextInputAction.next,
+    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+    validator: (value) {
+      final port = int.tryParse(value ?? '');
+      if (port == null || port < 1 || port > 65535) return l10n.invalidPort;
+      return null;
+    },
+  );
+
+  Widget _buildUsernameField(AppLocalizations l10n) => TextFormField(
+    controller: _usernameController,
+    decoration: InputDecoration(
+      labelText: _connectionType == ConnectionType.vnc
+          ? l10n.usernameOptional
+          : _connectionType == ConnectionType.opencode
+          ? 'ユーザー名'
+          : l10n.username,
+      border: const OutlineInputBorder(),
+    ),
+    textInputAction: _wakeOnLanEnabled
+        ? TextInputAction.next
+        : TextInputAction.done,
+    autocorrect: false,
+    validator:
+        _connectionType == ConnectionType.vnc ||
+            _connectionType == ConnectionType.opencode
+        ? null
+        : (value) => _required(value, l10n),
+    onFieldSubmitted: (_) {
+      if (!_wakeOnLanEnabled) _save();
+    },
+  );
 
   void _markDirty() {
     if (mounted && !_dirty) {
@@ -572,6 +707,11 @@ class _ConnectionEditorScreenState
               : null,
         );
       }
+      if (_connectionType == ConnectionType.opencode &&
+          ref.read(credentialSettingsProvider).saveSshPasswords &&
+          _passwordController.text.isNotEmpty) {
+        replacementPassword = PasswordCredential(_passwordController.text);
+      }
       if (_connectionType.usesSshAuthentication &&
           _authenticationType == AuthenticationType.passwordOrInteractive &&
           ref.read(credentialSettingsProvider).saveSshPasswords &&
@@ -582,18 +722,25 @@ class _ConnectionEditorScreenState
       final id =
           _existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString();
       final keepExistingCredential =
-          _connectionType.usesSshAuthentication &&
-          ((_authenticationType == AuthenticationType.privateKey &&
-                  selectedKey == null &&
-                  _existing?.authenticationType ==
-                      AuthenticationType.privateKey) ||
-              (_authenticationType ==
-                      AuthenticationType.passwordOrInteractive &&
-                  ref.read(credentialSettingsProvider).saveSshPasswords &&
-                  _passwordController.text.isEmpty &&
-                  _existing?.authenticationType ==
-                      AuthenticationType.passwordOrInteractive));
-      final wakeOnLan = _wakeOnLanEnabled
+          (_connectionType == ConnectionType.opencode &&
+              ref.read(credentialSettingsProvider).saveSshPasswords &&
+              _passwordController.text.isEmpty &&
+              _existing?.connectionType == ConnectionType.opencode &&
+              _existing?.credentialReference != null) ||
+          (_connectionType.usesSshAuthentication &&
+              _existing?.connectionType.usesSshAuthentication == true &&
+              ((_authenticationType == AuthenticationType.privateKey &&
+                      selectedKey == null &&
+                      _existing?.authenticationType ==
+                          AuthenticationType.privateKey) ||
+                  (_authenticationType ==
+                          AuthenticationType.passwordOrInteractive &&
+                      ref.read(credentialSettingsProvider).saveSshPasswords &&
+                      _passwordController.text.isEmpty &&
+                      _existing?.authenticationType ==
+                          AuthenticationType.passwordOrInteractive)));
+      final wakeOnLan =
+          _connectionType != ConnectionType.opencode && _wakeOnLanEnabled
           ? WakeOnLanConfiguration(
               macAddress: WakeOnLanConfiguration.normalizeMacAddress(
                 _wakeOnLanMacController.text,
@@ -620,6 +767,9 @@ class _ConnectionEditorScreenState
                   ? _existing?.privateKeyLabel
                   : null,
               wakeOnLan: wakeOnLan,
+              remotePath: _connectionType == ConnectionType.opencode
+                  ? _remotePathController.text.trim().nullIfEmpty
+                  : null,
             ),
             replacementPrivateKey: replacementCredential,
             replacementPassword: replacementPassword,
@@ -694,6 +844,9 @@ class _ConnectionEditorScreenState
     final previousDefaultPort = _connectionType.defaultPort.toString();
     setState(() {
       _connectionType = type;
+      if (type == ConnectionType.opencode && _usernameController.text.isEmpty) {
+        _usernameController.text = 'opencode';
+      }
       if (_portController.text.isEmpty ||
           _portController.text == previousDefaultPort) {
         _portController.text = type.defaultPort.toString();
@@ -824,7 +977,8 @@ class _ConnectionTypeSelector extends StatelessWidget {
       key: ValueKey('connection-type-selector-${selectedType.name}'),
       initialValue: selectedType,
       isExpanded: true,
-      menuMaxHeight: 320,
+      menuMaxHeight: 288,
+      itemHeight: 48,
       decoration: InputDecoration(
         labelText: l10n.connectionMethod,
         prefixIcon: Icon(_connectionTypeIcon(selectedType)),
@@ -835,7 +989,7 @@ class _ConnectionTypeSelector extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '${_connectionTypeLabel(l10n, type)}  ${_connectionTypeDescription(l10n, type)}',
+              _connectionTypeLabel(l10n, type),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -848,26 +1002,16 @@ class _ConnectionTypeSelector extends StatelessWidget {
             value: type,
             child: Row(
               children: [
-                Icon(_connectionTypeIcon(type), size: 22),
-                const SizedBox(width: 12),
+                Text(_connectionTypeLabel(l10n, type)),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _connectionTypeLabel(l10n, type),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      Text(
-                        _connectionTypeDescription(l10n, type),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    _connectionTypeDescription(l10n, type),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -887,6 +1031,7 @@ String _connectionTypeLabel(AppLocalizations l10n, ConnectionType type) =>
       ConnectionType.mosh => 'Mosh',
       ConnectionType.rdp => l10n.connectionTypeRdp,
       ConnectionType.vnc => l10n.connectionTypeVnc,
+      ConnectionType.opencode => 'OpenCode',
     };
 
 String _connectionTypeDescription(AppLocalizations l10n, ConnectionType type) =>
@@ -895,6 +1040,7 @@ String _connectionTypeDescription(AppLocalizations l10n, ConnectionType type) =>
       ConnectionType.mosh => 'モバイルシェル',
       ConnectionType.rdp => l10n.connectionTypeRdpCompactDescription,
       ConnectionType.vnc => l10n.connectionTypeVncCompactDescription,
+      ConnectionType.opencode => 'AIコーディング',
     };
 
 IconData _connectionTypeIcon(ConnectionType type) => switch (type) {
@@ -902,7 +1048,12 @@ IconData _connectionTypeIcon(ConnectionType type) => switch (type) {
   ConnectionType.mosh => Icons.swap_horiz,
   ConnectionType.rdp => Icons.desktop_windows_outlined,
   ConnectionType.vnc => Icons.monitor_outlined,
+  ConnectionType.opencode => Icons.code_rounded,
 };
+
+extension on String {
+  String? get nullIfEmpty => isEmpty ? null : this;
+}
 
 class _PrivateKeySection extends StatelessWidget {
   const _PrivateKeySection({

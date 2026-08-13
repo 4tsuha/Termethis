@@ -48,10 +48,14 @@ class AppShell extends ConsumerWidget {
         final useRail = constraints.maxWidth >= 600;
         if (useRail) {
           return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
             body: Row(
               children: [
                 RepaintBoundary(
                   child: NavigationRail(
+                    minWidth: 88,
+                    minExtendedWidth: 232,
+                    groupAlignment: -0.72,
                     selectedIndex: navigationShell.currentIndex,
                     extended: constraints.maxWidth >= 840,
                     labelType: constraints.maxWidth >= 840
@@ -68,8 +72,18 @@ class AppShell extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const VerticalDivider(width: 1),
-                Expanded(child: RepaintBoundary(child: navigationShell)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(28),
+                    ),
+                    child: ColoredBox(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: RepaintBoundary(child: navigationShell),
+                    ),
+                  ),
+                ),
               ],
             ),
           );
@@ -78,6 +92,7 @@ class AppShell extends ConsumerWidget {
           body: RepaintBoundary(child: navigationShell),
           bottomNavigationBar: RepaintBoundary(
             child: NavigationBar(
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: navigationShell.currentIndex,
               onDestinationSelected: _goToBranch,
               destinations: destinations,

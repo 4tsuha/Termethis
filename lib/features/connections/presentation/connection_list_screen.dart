@@ -7,11 +7,13 @@ import '../application/connection_profiles_controller.dart';
 import '../application/connection_tabs_controller.dart';
 import '../domain/connection_profile.dart';
 import '../domain/remote_desktop_launcher.dart';
+import 'connection_editor_screen.dart';
 import '../../wake_on_lan/application/wake_on_lan_provider.dart';
 import '../../terminal/application/session_registry.dart';
 import '../../terminal/application/ssh_session_controller.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
-enum _ConnectionMenuAction { wakeOnLan, edit, delete }
+enum _ConnectionMenuAction { diagnostics, wakeOnLan, edit, delete }
 
 enum ConnectionListMode { all, desktop }
 
@@ -40,10 +42,8 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         ? const {ConnectionType.rdp, ConnectionType.vnc}
         : ConnectionType.values.toSet();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(desktopOnly ? l10n.desktopTitle : l10n.connectionsTitle),
-      ),
+    return ExpressiveScaffold(
+      title: desktopOnly ? l10n.desktopTitle : l10n.connectionsTitle,
       body: Column(
         children: [
           Expanded(
@@ -73,38 +73,63 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
                             ? Icons.desktop_windows_outlined
                             : Icons.dns_outlined,
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
-                        itemCount: visibleItems.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final profile = visibleItems[index];
-                          final sessions =
-                              [
-                                for (final tab in connectionTabs)
-                                  if (tab.profileId == profile.id)
-                                    sessionRegistry.find(tab.id),
-                              ].whereType<SshSessionController>().toList(
-                                growable: false,
-                              );
-                          return _ConnectionProfileCard(
-                            profile: profile,
-                            typeLabel: _connectionTypeLabel(
-                              l10n,
-                              profile.connectionType,
-                            ),
-                            typeIcon: _connectionTypeIcon(
-                              profile.connectionType,
-                            ),
-                            sessions: sessions,
-                            isLaunching: _launchingProfileIds.contains(
-                              profile.id,
-                            ),
-                            isWaking: _wakingProfileIds.contains(profile.id),
-                            onConnect: () => _openProfile(context, profile),
-                            onMenuSelected: (action) =>
-                                _handleMenuAction(context, profile, action),
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          Widget cardAt(int index) {
+                            final profile = visibleItems[index];
+                            final sessions =
+                                [
+                                  for (final tab in connectionTabs)
+                                    if (tab.profileId == profile.id)
+                                      sessionRegistry.find(tab.id),
+                                ].whereType<SshSessionController>().toList(
+                                  growable: false,
+                                );
+                            return _ConnectionProfileCard(
+                              profile: profile,
+                              typeLabel: _connectionTypeLabel(
+                                l10n,
+                                profile.connectionType,
+                              ),
+                              typeIcon: _connectionTypeIcon(
+                                profile.connectionType,
+                              ),
+                              sessions: sessions,
+                              isLaunching: _launchingProfileIds.contains(
+                                profile.id,
+                              ),
+                              isWaking: _wakingProfileIds.contains(profile.id),
+                              onConnect: () => _openProfile(context, profile),
+                              onMenuSelected: (action) =>
+                                  _handleMenuAction(context, profile, action),
+                            );
+                          }
+
+                          if (constraints.maxWidth < 760) {
+                            return ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                96,
+                              ),
+                              itemCount: visibleItems.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) => cardAt(index),
+                            );
+                          }
+                          return GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  mainAxisExtent: 152,
+                                ),
+                            itemCount: visibleItems.length,
+                            itemBuilder: (context, index) => cardAt(index),
                           );
                         },
                       );
@@ -114,8 +139,19 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(
-          desktopOnly ? '/connections/new?scope=desktop' : '/connections/new',
+        tooltip: '接続先を追加',
+        onPressed: () => showNewConnectionEditor(
+          context,
+          connectionType: desktopOnly ? ConnectionType.rdp : ConnectionType.ssh,
+          allowedConnectionTypes: desktopOnly
+              ? const {ConnectionType.rdp, ConnectionType.vnc}
+              : const {
+                  ConnectionType.ssh,
+                  ConnectionType.mosh,
+                  ConnectionType.rdp,
+                  ConnectionType.vnc,
+                  ConnectionType.opencode,
+                },
         ),
         child: const Icon(Icons.add),
       ),
@@ -145,7 +181,8 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
       }
 
       if (profile.connectionType == ConnectionType.rdp ||
-          profile.connectionType == ConnectionType.vnc) {
+          profile.connectionType == ConnectionType.vnc ||
+          profile.connectionType == ConnectionType.opencode) {
         final tabId = await ref
             .read(connectionTabsProvider.notifier)
             .open(profile);
@@ -223,6 +260,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
         ConnectionType.mosh => 'Mosh',
         ConnectionType.rdp => l10n.connectionTypeRdp,
         ConnectionType.vnc => l10n.connectionTypeVnc,
+        ConnectionType.opencode => 'OpenCode',
       };
 
   IconData _connectionTypeIcon(ConnectionType type) => switch (type) {
@@ -230,6 +268,7 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
     ConnectionType.mosh => Icons.swap_horiz,
     ConnectionType.rdp => Icons.desktop_windows_outlined,
     ConnectionType.vnc => Icons.monitor_outlined,
+    ConnectionType.opencode => Icons.code_rounded,
   };
 
   Future<void> _handleMenuAction(
@@ -238,6 +277,8 @@ class _ConnectionListScreenState extends ConsumerState<ConnectionListScreen> {
     _ConnectionMenuAction action,
   ) async {
     switch (action) {
+      case _ConnectionMenuAction.diagnostics:
+        await context.push('/connections/${profile.id}/diagnostics');
       case _ConnectionMenuAction.wakeOnLan:
         await _wake(profile);
       case _ConnectionMenuAction.edit:
@@ -344,6 +385,7 @@ class _ConnectionProfileCard extends StatelessWidget {
       ConnectionType.mosh => 'アプリ内蔵',
       ConnectionType.rdp => 'アプリ内蔵',
       ConnectionType.vnc => 'アプリ内蔵',
+      ConnectionType.opencode => 'OpenCode Serve',
     };
 
     return Card(
@@ -462,6 +504,14 @@ class _ConnectionProfileCard extends StatelessWidget {
                     tooltip: MaterialLocalizations.of(context).showMenuTooltip,
                     onSelected: onMenuSelected,
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: _ConnectionMenuAction.diagnostics,
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.monitor_heart_outlined),
+                          title: Text('接続診断と安全性'),
+                        ),
+                      ),
                       if (profile.wakeOnLan != null)
                         PopupMenuItem(
                           value: _ConnectionMenuAction.wakeOnLan,
@@ -659,21 +709,6 @@ class _EmptyConnections extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      ExpressiveEmptyState(icon: icon, title: title, message: message);
 }

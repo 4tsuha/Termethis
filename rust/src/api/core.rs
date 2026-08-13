@@ -10,7 +10,7 @@ use russh::client::{self, KeyboardInteractiveAuthResponse};
 use russh::keys::{decode_secret_key, HashAlg, PrivateKey, PrivateKeyWithHashAlg};
 use russh::{ChannelMsg, ChannelWriteHalf, Disconnect};
 use russh_sftp::client::SftpSession;
-use russh_sftp::protocol::FileType;
+use russh_sftp::protocol::{FileAttributes, FileType, OpenFlags};
 use tokio::sync::mpsc;
 use tokio::sync::{Mutex, Notify};
 use tokio::{
@@ -38,6 +38,7 @@ static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::ne
 static PENDING_AUTHS: Lazy<DashMap<i64, PendingAuthentication>> = Lazy::new(DashMap::new);
 static PENDING_HOST_KEYS: Lazy<DashMap<i64, PendingHostKey>> = Lazy::new(DashMap::new);
 static SFTP_SESSIONS: Lazy<DashMap<i64, Arc<SftpSessionState>>> = Lazy::new(DashMap::new);
+static SFTP_TRANSFERS: Lazy<DashMap<i64, Arc<SftpTransferState>>> = Lazy::new(DashMap::new);
 static SSH_EXEC_CANCELLATIONS: Lazy<DashMap<i64, Arc<Notify>>> = Lazy::new(DashMap::new);
 static SSH_TUNNELS: Lazy<DashMap<i64, Arc<SshTunnel>>> = Lazy::new(DashMap::new);
 static VNC_SESSIONS: Lazy<DashMap<i64, Arc<VncSession>>> = Lazy::new(DashMap::new);
@@ -73,6 +74,17 @@ pub struct RustSshJumpHost {
 pub struct RustHostKey {
     pub algorithm: String,
     pub fingerprint_sha256: String,
+}
+
+#[derive(Clone)]
+pub struct RustSftpTransferProgress {
+    pub transfer_id: i64,
+    pub name: String,
+    pub direction: String,
+    pub state: String,
+    pub bytes_transferred: u64,
+    pub total_bytes: Option<u64>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Clone)]
@@ -228,6 +240,7 @@ pub struct RustSftpEntry {
     pub kind: String,
     pub size: Option<i64>,
     pub modified_seconds: Option<i64>,
+    pub permissions: Option<u32>,
 }
 
 #[flutter_rust_bridge::frb(init)]
@@ -1108,6 +1121,7 @@ pub async fn sftp_list_directory(session_id: i64) -> Result<Vec<RustSftpEntry>> 
         .await
         .context("Failed to list SFTP directory")?;
     Ok(entries
+        .filter(|entry| !matches!(entry.file_name().as_str(), "." | ".."))
         .map(|entry| {
             let metadata = entry.metadata();
             RustSftpEntry {
@@ -1121,6 +1135,7 @@ pub async fn sftp_list_directory(session_id: i64) -> Result<Vec<RustSftpEntry>> 
                 .to_owned(),
                 size: metadata.size.and_then(|value| i64::try_from(value).ok()),
                 modified_seconds: metadata.mtime.map(i64::from),
+                permissions: metadata.permissions.map(|value| value & 0o7777),
             }
         })
         .collect())
@@ -1147,6 +1162,7 @@ pub async fn sftp_change_directory(session_id: i64, path: String) -> Result<()> 
 }
 
 pub async fn sftp_create_directory(session_id: i64, name: String) -> Result<()> {
+    validate_sftp_child_name(&name)?;
     let session = get_sftp_session(session_id)?;
     let target = resolve_sftp_path(&session, &name).await;
     session
@@ -1157,6 +1173,8 @@ pub async fn sftp_create_directory(session_id: i64, name: String) -> Result<()> 
 }
 
 pub async fn sftp_rename(session_id: i64, old_name: String, new_name: String) -> Result<()> {
+    validate_sftp_child_name(&old_name)?;
+    validate_sftp_child_name(&new_name)?;
     let session = get_sftp_session(session_id)?;
     let old_path = resolve_sftp_path(&session, &old_name).await;
     let new_path = resolve_sftp_path(&session, &new_name).await;
@@ -1168,6 +1186,7 @@ pub async fn sftp_rename(session_id: i64, old_name: String, new_name: String) ->
 }
 
 pub async fn sftp_delete_file(session_id: i64, name: String) -> Result<()> {
+    validate_sftp_child_name(&name)?;
     let session = get_sftp_session(session_id)?;
     let target = resolve_sftp_path(&session, &name).await;
     session
@@ -1178,6 +1197,7 @@ pub async fn sftp_delete_file(session_id: i64, name: String) -> Result<()> {
 }
 
 pub async fn sftp_delete_empty_directory(session_id: i64, name: String) -> Result<()> {
+    validate_sftp_child_name(&name)?;
     let session = get_sftp_session(session_id)?;
     let target = resolve_sftp_path(&session, &name).await;
     session
@@ -1187,7 +1207,192 @@ pub async fn sftp_delete_empty_directory(session_id: i64, name: String) -> Resul
         .context("Failed to delete SFTP directory")
 }
 
+pub async fn sftp_delete_directory_recursive(session_id: i64, name: String) -> Result<()> {
+    validate_sftp_child_name(&name)?;
+    let session = get_sftp_session(session_id)?;
+    let target = resolve_sftp_path(&session, &name).await;
+    delete_sftp_tree(&session.sftp, target).await
+}
+
+pub async fn sftp_set_permissions(session_id: i64, name: String, mode: u32) -> Result<()> {
+    if mode > 0o7777 {
+        return Err(anyhow!("Invalid SFTP permission mode"));
+    }
+    validate_sftp_child_name(&name)?;
+    let session = get_sftp_session(session_id)?;
+    let target = resolve_sftp_path(&session, &name).await;
+    session
+        .sftp
+        .set_metadata(
+            target,
+            FileAttributes {
+                permissions: Some(mode),
+                ..FileAttributes::default()
+            },
+        )
+        .await
+        .context("Failed to change SFTP permissions")
+}
+
+pub async fn sftp_download_file(
+    session_id: i64,
+    remote_name: String,
+    local_path: String,
+) -> Result<()> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    let mut remote = session
+        .sftp
+        .open(remote_path)
+        .await
+        .context("Failed to open remote SFTP file")?;
+    let mut local = tokio::fs::File::create(local_path)
+        .await
+        .context("Failed to create local download file")?;
+    tokio::io::copy(&mut remote, &mut local)
+        .await
+        .context("Failed to download SFTP file")?;
+    local
+        .flush()
+        .await
+        .context("Failed to flush local download file")
+}
+
+pub async fn sftp_start_download_file(
+    session_id: i64,
+    remote_name: String,
+    local_path: String,
+) -> Result<i64> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    let total_bytes = session
+        .sftp
+        .metadata(remote_path.clone())
+        .await
+        .ok()
+        .and_then(|metadata| metadata.size);
+    let transfer = SftpTransferState::new(session_id, remote_name, "download", total_bytes);
+    let transfer_id = transfer.id;
+    SFTP_TRANSFERS.insert(transfer_id, Arc::clone(&transfer));
+    tokio::spawn(async move {
+        let result =
+            run_sftp_download(&session.sftp, remote_path, local_path.into(), &transfer).await;
+        transfer.finish(result);
+    });
+    Ok(transfer_id)
+}
+
+pub async fn sftp_upload_file(
+    session_id: i64,
+    local_path: String,
+    remote_name: String,
+) -> Result<()> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    let mut local = tokio::fs::File::open(local_path)
+        .await
+        .context("Failed to open local upload file")?;
+    let mut remote = session
+        .sftp
+        .open_with_flags(
+            remote_path,
+            OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE,
+        )
+        .await
+        .context("Failed to create remote SFTP file")?;
+    tokio::io::copy(&mut local, &mut remote)
+        .await
+        .context("Failed to upload SFTP file")?;
+    remote
+        .shutdown()
+        .await
+        .context("Failed to close remote SFTP file")
+}
+
+pub async fn sftp_start_upload_file(
+    session_id: i64,
+    local_path: String,
+    remote_name: String,
+) -> Result<i64> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    let total_bytes = tokio::fs::metadata(&local_path)
+        .await
+        .context("Failed to inspect local upload file")?
+        .len();
+    let transfer = SftpTransferState::new(session_id, remote_name, "upload", Some(total_bytes));
+    let transfer_id = transfer.id;
+    SFTP_TRANSFERS.insert(transfer_id, Arc::clone(&transfer));
+    tokio::spawn(async move {
+        let result =
+            run_sftp_upload(&session.sftp, local_path.into(), remote_path, &transfer).await;
+        transfer.finish(result);
+    });
+    Ok(transfer_id)
+}
+
+pub fn sftp_transfer_progress(transfer_id: i64) -> Result<RustSftpTransferProgress> {
+    let transfer = SFTP_TRANSFERS
+        .get(&transfer_id)
+        .ok_or_else(|| anyhow!("Unknown SFTP transfer"))?;
+    Ok(transfer.snapshot())
+}
+
+pub fn sftp_cancel_transfer(transfer_id: i64) -> Result<()> {
+    let transfer = SFTP_TRANSFERS
+        .get(&transfer_id)
+        .ok_or_else(|| anyhow!("Unknown SFTP transfer"))?;
+    transfer.cancel.store(true, Ordering::Release);
+    transfer.cancelled.notify_one();
+    Ok(())
+}
+
+pub fn sftp_forget_transfer(transfer_id: i64) {
+    SFTP_TRANSFERS.remove(&transfer_id);
+}
+
+pub async fn sftp_upload_directory(
+    session_id: i64,
+    local_path: String,
+    remote_name: String,
+) -> Result<()> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    upload_sftp_tree(&session.sftp, local_path.into(), remote_path).await
+}
+
+pub async fn sftp_start_upload_directory(
+    session_id: i64,
+    local_path: String,
+    remote_name: String,
+) -> Result<i64> {
+    validate_sftp_child_name(&remote_name)?;
+    let session = get_sftp_session(session_id)?;
+    let remote_path = resolve_sftp_path(&session, &remote_name).await;
+    let local_path = std::path::PathBuf::from(local_path);
+    let total_bytes = local_tree_size(&local_path).await?;
+    let transfer = SftpTransferState::new(session_id, remote_name, "upload", Some(total_bytes));
+    let transfer_id = transfer.id;
+    SFTP_TRANSFERS.insert(transfer_id, Arc::clone(&transfer));
+    tokio::spawn(async move {
+        let result = run_sftp_upload_tree(&session.sftp, local_path, remote_path, &transfer).await;
+        transfer.finish(result);
+    });
+    Ok(transfer_id)
+}
+
 pub async fn sftp_close(session_id: i64) -> Result<()> {
+    for transfer in SFTP_TRANSFERS.iter() {
+        if transfer.session_id == session_id {
+            transfer.cancel.store(true, Ordering::Release);
+            transfer.cancelled.notify_one();
+        }
+    }
     let Some((_, session)) = SFTP_SESSIONS.remove(&session_id) else {
         return Ok(());
     };
@@ -1562,6 +1767,72 @@ struct SftpSessionState {
     client: Mutex<Option<client::Handle<HostKeyHandler>>>,
     sftp: SftpSession,
     path: Mutex<String>,
+}
+
+struct SftpTransferState {
+    id: i64,
+    session_id: i64,
+    name: String,
+    direction: &'static str,
+    total_bytes: Option<u64>,
+    bytes_transferred: AtomicU64,
+    cancel: AtomicBool,
+    cancelled: Notify,
+    outcome: StdMutex<Option<Result<(), String>>>,
+}
+
+impl SftpTransferState {
+    fn new(
+        session_id: i64,
+        name: String,
+        direction: &'static str,
+        total_bytes: Option<u64>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            session_id,
+            name,
+            direction,
+            total_bytes,
+            bytes_transferred: AtomicU64::new(0),
+            cancel: AtomicBool::new(false),
+            cancelled: Notify::new(),
+            outcome: StdMutex::new(None),
+        })
+    }
+
+    fn finish(&self, result: Result<()>) {
+        let outcome = match result {
+            Ok(()) => Ok(()),
+            Err(error) => Err(error.to_string()),
+        };
+        *self
+            .outcome
+            .lock()
+            .expect("transfer outcome mutex poisoned") = Some(outcome);
+    }
+
+    fn snapshot(&self) -> RustSftpTransferProgress {
+        let outcome = self
+            .outcome
+            .lock()
+            .expect("transfer outcome mutex poisoned");
+        let (state, error_message) = match outcome.as_ref() {
+            None => ("running", None),
+            Some(Ok(())) => ("completed", None),
+            Some(Err(message)) if message == "transfer_cancelled" => ("cancelled", None),
+            Some(Err(message)) => ("failed", Some(message.clone())),
+        };
+        RustSftpTransferProgress {
+            transfer_id: self.id,
+            name: self.name.clone(),
+            direction: self.direction.to_owned(),
+            state: state.to_owned(),
+            bytes_transferred: self.bytes_transferred.load(Ordering::Acquire),
+            total_bytes: self.total_bytes,
+            error_message,
+        }
+    }
 }
 
 async fn connect_client(
@@ -2134,6 +2405,19 @@ fn get_sftp_session(id: i64) -> Result<Arc<SftpSessionState>> {
         .ok_or_else(|| anyhow!("SFTP session not found"))
 }
 
+fn validate_sftp_child_name(value: &str) -> Result<()> {
+    if value.is_empty()
+        || value == "."
+        || value == ".."
+        || value.contains('/')
+        || value.contains('\\')
+        || value.contains('\0')
+    {
+        return Err(anyhow!("Invalid SFTP entry name"));
+    }
+    Ok(())
+}
+
 async fn resolve_sftp_path(session: &SftpSessionState, value: &str) -> String {
     if value.starts_with('/') {
         return value.to_owned();
@@ -2144,6 +2428,327 @@ async fn resolve_sftp_path(session: &SftpSessionState, value: &str) -> String {
     } else {
         format!("{current}/{value}")
     }
+}
+
+async fn run_sftp_download(
+    sftp: &SftpSession,
+    remote_path: String,
+    local_path: std::path::PathBuf,
+    transfer: &SftpTransferState,
+) -> Result<()> {
+    let temporary_path = local_path.with_extension(format!("termethis-{}.part", transfer.id));
+    let result = async {
+        let mut remote = sftp
+            .open(remote_path)
+            .await
+            .context("Failed to open remote SFTP file")?;
+        let mut local = tokio::fs::File::create(&temporary_path)
+            .await
+            .context("Failed to create local download file")?;
+        copy_sftp_stream(&mut remote, &mut local, transfer).await?;
+        local
+            .flush()
+            .await
+            .context("Failed to flush local download file")?;
+        drop(local);
+        tokio::fs::rename(&temporary_path, &local_path)
+            .await
+            .context("Failed to finalize local download")
+    }
+    .await;
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&temporary_path).await;
+    }
+    result
+}
+
+async fn run_sftp_upload(
+    sftp: &SftpSession,
+    local_path: std::path::PathBuf,
+    remote_path: String,
+    transfer: &SftpTransferState,
+) -> Result<()> {
+    let temporary_path = format!("{remote_path}.termethis-{}.part", transfer.id);
+    let backup_path = format!("{remote_path}.termethis-{}.backup", transfer.id);
+    let mut original_was_moved = false;
+    let result = async {
+        let mut local = tokio::fs::File::open(local_path)
+            .await
+            .context("Failed to open local upload file")?;
+        let mut remote = sftp
+            .open_with_flags(
+                temporary_path.clone(),
+                OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE,
+            )
+            .await
+            .context("Failed to create remote SFTP file")?;
+        copy_sftp_stream(&mut local, &mut remote, transfer).await?;
+        remote
+            .shutdown()
+            .await
+            .context("Failed to close remote SFTP file")?;
+        if sftp.metadata(remote_path.clone()).await.is_ok() {
+            sftp.rename(remote_path.clone(), backup_path.clone())
+                .await
+                .context("Failed to protect existing remote file")?;
+            original_was_moved = true;
+        }
+        sftp.rename(temporary_path.clone(), remote_path.clone())
+            .await
+            .context("Failed to finalize remote upload")
+    }
+    .await;
+    if result.is_err() {
+        let _ = sftp.remove_file(temporary_path).await;
+        if original_was_moved {
+            let _ = sftp.rename(backup_path, remote_path).await;
+        }
+    } else if original_was_moved {
+        let _ = sftp.remove_file(backup_path).await;
+    }
+    result
+}
+
+async fn local_tree_size(root: &std::path::Path) -> Result<u64> {
+    let mut total = 0_u64;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(directory) = stack.pop() {
+        let mut entries = tokio::fs::read_dir(directory)
+            .await
+            .context("Failed to read local upload directory")?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .context("Failed to read local upload entry")?
+        {
+            let file_type = entry
+                .file_type()
+                .await
+                .context("Failed to inspect local upload entry")?;
+            if file_type.is_symlink() {
+                return Err(anyhow!("Symbolic links cannot be uploaded recursively"));
+            }
+            if file_type.is_dir() {
+                stack.push(entry.path());
+            } else if file_type.is_file() {
+                total = total.saturating_add(
+                    entry
+                        .metadata()
+                        .await
+                        .context("Failed to inspect local upload file")?
+                        .len(),
+                );
+            }
+        }
+    }
+    Ok(total)
+}
+
+async fn run_sftp_upload_tree(
+    sftp: &SftpSession,
+    local_root: std::path::PathBuf,
+    remote_root: String,
+    transfer: &SftpTransferState,
+) -> Result<()> {
+    let temporary_root = format!("{remote_root}.termethis-{}.part", transfer.id);
+    let backup_root = format!("{remote_root}.termethis-{}.backup", transfer.id);
+    let mut original_was_moved = false;
+    let result = async {
+        sftp.create_dir(temporary_root.clone())
+            .await
+            .context("Failed to create remote SFTP directory")?;
+        let mut stack = vec![(local_root, temporary_root.clone())];
+        while let Some((local_dir, remote_dir)) = stack.pop() {
+            if transfer.cancel.load(Ordering::Acquire) {
+                return Err(anyhow!("transfer_cancelled"));
+            }
+            let mut entries = tokio::fs::read_dir(&local_dir)
+                .await
+                .context("Failed to read local upload directory")?;
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .context("Failed to read local upload entry")?
+            {
+                if transfer.cancel.load(Ordering::Acquire) {
+                    return Err(anyhow!("transfer_cancelled"));
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let remote_path = format!("{remote_dir}/{name}");
+                let file_type = entry
+                    .file_type()
+                    .await
+                    .context("Failed to inspect local upload entry")?;
+                if file_type.is_symlink() {
+                    return Err(anyhow!("Symbolic links cannot be uploaded recursively"));
+                }
+                if file_type.is_dir() {
+                    sftp.create_dir(remote_path.clone())
+                        .await
+                        .context("Failed to create remote SFTP directory")?;
+                    stack.push((entry.path(), remote_path));
+                } else if file_type.is_file() {
+                    let mut local = tokio::fs::File::open(entry.path())
+                        .await
+                        .context("Failed to open local upload file")?;
+                    let mut remote = sftp
+                        .open_with_flags(
+                            remote_path,
+                            OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE,
+                        )
+                        .await
+                        .context("Failed to create remote SFTP file")?;
+                    copy_sftp_stream(&mut local, &mut remote, transfer).await?;
+                    remote
+                        .shutdown()
+                        .await
+                        .context("Failed to close remote SFTP file")?;
+                }
+            }
+        }
+        if sftp.metadata(remote_root.clone()).await.is_ok() {
+            sftp.rename(remote_root.clone(), backup_root.clone())
+                .await
+                .context("Failed to protect existing remote directory")?;
+            original_was_moved = true;
+        }
+        sftp.rename(temporary_root.clone(), remote_root.clone())
+            .await
+            .context("Failed to finalize remote upload directory")
+    }
+    .await;
+    if result.is_err() {
+        let _ = delete_sftp_tree(sftp, temporary_root).await;
+        if original_was_moved {
+            let _ = sftp.rename(backup_root, remote_root).await;
+        }
+    } else if original_was_moved {
+        if let Ok(metadata) = sftp.metadata(backup_root.clone()).await {
+            if metadata.is_dir() {
+                let _ = delete_sftp_tree(sftp, backup_root).await;
+            } else {
+                let _ = sftp.remove_file(backup_root).await;
+            }
+        }
+    }
+    result
+}
+
+async fn copy_sftp_stream<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    transfer: &SftpTransferState,
+) -> Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        if transfer.cancel.load(Ordering::Acquire) {
+            return Err(anyhow!("transfer_cancelled"));
+        }
+        let read = tokio::select! {
+            _ = transfer.cancelled.notified() => return Err(anyhow!("transfer_cancelled")),
+            result = reader.read(&mut buffer) => result.context("Failed to read transfer data")?,
+        };
+        if read == 0 {
+            return Ok(());
+        }
+        tokio::select! {
+            _ = transfer.cancelled.notified() => return Err(anyhow!("transfer_cancelled")),
+            result = writer.write_all(&buffer[..read]) => {
+                result.context("Failed to write transfer data")?;
+            }
+        }
+        transfer
+            .bytes_transferred
+            .fetch_add(read as u64, Ordering::Release);
+    }
+}
+
+async fn delete_sftp_tree(sftp: &SftpSession, root: String) -> Result<()> {
+    let mut stack = vec![(root, false)];
+    while let Some((path, visited)) = stack.pop() {
+        if visited {
+            sftp.remove_dir(path)
+                .await
+                .context("Failed to delete SFTP directory")?;
+            continue;
+        }
+        stack.push((path.clone(), true));
+        let entries = sftp
+            .read_dir(path)
+            .await
+            .context("Failed to list SFTP directory for deletion")?;
+        for entry in entries {
+            let child = entry.path();
+            if entry.file_type() == FileType::Dir {
+                stack.push((child, false));
+            } else {
+                sftp.remove_file(child)
+                    .await
+                    .context("Failed to delete SFTP file")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn upload_sftp_tree(
+    sftp: &SftpSession,
+    local_root: std::path::PathBuf,
+    remote_root: String,
+) -> Result<()> {
+    sftp.create_dir(remote_root.clone())
+        .await
+        .context("Failed to create remote SFTP directory")?;
+    let mut stack = vec![(local_root, remote_root)];
+    while let Some((local_dir, remote_dir)) = stack.pop() {
+        let mut entries = tokio::fs::read_dir(&local_dir)
+            .await
+            .context("Failed to read local upload directory")?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .context("Failed to read local upload entry")?
+        {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let remote_path = format!("{remote_dir}/{name}");
+            let file_type = entry
+                .file_type()
+                .await
+                .context("Failed to inspect local upload entry")?;
+            if file_type.is_symlink() {
+                return Err(anyhow!("Symbolic links cannot be uploaded recursively"));
+            }
+            if file_type.is_dir() {
+                sftp.create_dir(remote_path.clone())
+                    .await
+                    .context("Failed to create remote SFTP directory")?;
+                stack.push((entry.path(), remote_path));
+            } else if file_type.is_file() {
+                let mut local = tokio::fs::File::open(entry.path())
+                    .await
+                    .context("Failed to open local upload file")?;
+                let mut remote = sftp
+                    .open_with_flags(
+                        remote_path,
+                        OpenFlags::CREATE | OpenFlags::TRUNCATE | OpenFlags::WRITE,
+                    )
+                    .await
+                    .context("Failed to create remote SFTP file")?;
+                tokio::io::copy(&mut local, &mut remote)
+                    .await
+                    .context("Failed to upload SFTP file")?;
+                remote
+                    .shutdown()
+                    .await
+                    .context("Failed to close remote SFTP file")?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn connect_error(
@@ -2187,7 +2792,8 @@ fn next_id() -> i64 {
 mod tests {
     use super::{
         positive_integer_bits, rsa_hash_candidates, ssh_close, ssh_connect, ssh_continue_host_key,
-        ssh_execute, RustSshConnectRequest, RustSshExecRequest, MIN_RSA_KEY_BITS,
+        ssh_execute, validate_sftp_child_name, RustSftpTransferProgress, RustSshConnectRequest,
+        RustSshExecRequest, SftpTransferState, MIN_RSA_KEY_BITS,
     };
     use russh::keys::HashAlg;
     use std::{env, fs};
@@ -2219,6 +2825,49 @@ mod tests {
             vec![HashAlg::Sha512, HashAlg::Sha256]
         );
         assert!(rsa_hash_candidates(Some(None)).is_err());
+    }
+
+    #[test]
+    fn rejects_sftp_names_that_escape_the_current_directory() {
+        for invalid in [
+            "",
+            ".",
+            "..",
+            "../secret",
+            "folder/file",
+            "folder\\file",
+            "a\0b",
+        ] {
+            assert!(validate_sftp_child_name(invalid).is_err(), "{invalid:?}");
+        }
+        for valid in ["README.txt", "日本語.txt", ".env", "folder name"] {
+            assert!(validate_sftp_child_name(valid).is_ok(), "{valid:?}");
+        }
+    }
+
+    #[test]
+    fn reports_sftp_transfer_completion_and_cancellation() {
+        let completed = SftpTransferState::new(7, "report.txt".to_owned(), "download", Some(128));
+        completed
+            .bytes_transferred
+            .store(128, std::sync::atomic::Ordering::Release);
+        completed.finish(Ok(()));
+        assert_transfer_state(completed.snapshot(), "completed", 128, None);
+
+        let cancelled = SftpTransferState::new(7, "archive.zip".to_owned(), "upload", None);
+        cancelled.finish(Err(anyhow::anyhow!("transfer_cancelled")));
+        assert_transfer_state(cancelled.snapshot(), "cancelled", 0, None);
+    }
+
+    fn assert_transfer_state(
+        value: RustSftpTransferProgress,
+        state: &str,
+        bytes: u64,
+        error: Option<&str>,
+    ) {
+        assert_eq!(value.state, state);
+        assert_eq!(value.bytes_transferred, bytes);
+        assert_eq!(value.error_message.as_deref(), error);
     }
 
     #[test]

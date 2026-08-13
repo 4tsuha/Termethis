@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/mcp_providers.dart';
 import '../application/mcp_server_controller.dart';
 import '../domain/mcp_server_settings.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class McpServerScreen extends ConsumerStatefulWidget {
   const McpServerScreen({super.key});
@@ -110,8 +111,8 @@ class _McpServerScreenState extends ConsumerState<McpServerScreen> {
   @override
   Widget build(BuildContext context) {
     final asyncController = ref.watch(mcpServerControllerProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('SSH MCPサーバー')),
+    return ExpressiveScaffold(
+      title: 'SSH MCPサーバー',
       body: asyncController.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('MCP設定を読み込めませんでした: $error')),
@@ -131,7 +132,6 @@ class _McpServerScreenState extends ConsumerState<McpServerScreen> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
         Card(
-          elevation: 0,
           color: running ? colors.primaryContainer : colors.surfaceContainerLow,
           child: ListTile(
             leading: Icon(running ? Icons.hub : Icons.hub_outlined),
@@ -167,7 +167,6 @@ class _McpServerScreenState extends ConsumerState<McpServerScreen> {
         ],
         const _SectionLabel('公開範囲と認証'),
         Card(
-          elevation: 0,
           color: colors.surfaceContainerLow,
           child: Column(
             children: [
@@ -249,7 +248,6 @@ class _McpServerScreenState extends ConsumerState<McpServerScreen> {
         ),
         const _SectionLabel('公開するSSH Tool'),
         Card(
-          elevation: 0,
           color: colors.surfaceContainerLow,
           child: const Column(
             children: [
@@ -275,7 +273,6 @@ class _McpServerScreenState extends ConsumerState<McpServerScreen> {
         ),
         const SizedBox(height: 12),
         Card(
-          elevation: 0,
           color: colors.surfaceContainerLow,
           child: const ListTile(
             leading: Icon(Icons.security_outlined),

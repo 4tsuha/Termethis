@@ -53,6 +53,7 @@ class DriftConnectionProfileRepository implements ConnectionProfileRepository {
               profile.wakeOnLan?.broadcastAddress,
             ),
             wakeOnLanPort: Value(profile.wakeOnLan?.port),
+            remotePath: Value(profile.remotePath),
             createdAt: existing?.createdAt ?? now,
             updatedAt: now,
           ),
@@ -78,6 +79,7 @@ class DriftConnectionProfileRepository implements ConnectionProfileRepository {
       credentialReference: row.credentialReference,
       privateKeyLabel: row.privateKeyLabel,
       wakeOnLan: _wakeOnLan(row),
+      remotePath: row.remotePath,
     );
   }
 

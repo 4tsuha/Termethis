@@ -2,7 +2,7 @@
 
 <img src="assets/branding/termethis-icon-source.png" alt="Termethis app icon" width="128">
 
-完全日本語対応のAndroid向けSSH・RDP・VNC・FTPクライアントです。
+完全日本語対応のAndroid向けSSH・RDP・VNC・FTP・OpenCodeクライアントです。
 
 [Android CI](.github/workflows/android.yml)
 
@@ -18,7 +18,7 @@
 - Cascadia MonoとJetBrains Monoから選べるターミナルフォント
 - DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
 - 同じ接続先も並行利用できるSSH複数タブ・複数セッション
-- SSH・Mosh・RDP・VNC・Shizuku Shellを同じ接続タブで管理
+- SSH・Mosh・RDP・VNC・Shizuku Shell・OpenCodeを同じ接続タブで管理
 - アプリ再起動後に切断状態で復元する接続タブ
 - シェル／tmux／zellij／screen向け検索ボタンとOSC 133対応の出力コピー
 - TUIマウス、長押し右クリック、対応プロンプト内のタップ移動
@@ -29,11 +29,15 @@
 - 変数・秘密変数・送信前確認に対応したコマンドパレット
 - RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
 - RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
-- ホームの接続先としてSSH・RDP・VNCを一元管理
+- ホームの接続先としてSSH・RDP・VNC・OpenCode Serveを一元管理
+- OpenCode Serveのセッション一覧、履歴、メッセージ送信、停止、権限確認に対応したMaterial 3チャット
 - IronRDPとネイティブVulkan SurfaceによるRDP、Rust RFBクライアントによるアプリ内VNC
 - 接続先ごとのWake on LAN設定とMagic Packet送信
 - ホーム、接続、ファイル、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
+- SFTP転送の実進捗、キャンセル、再試行、失敗時の一時ファイル保護
+- 資格情報を含めないバックアップ／復元と、匿名化できる診断情報の書き出し
+- DNS、ポート、SSHホスト鍵、Vault状態を確認する接続診断と方式別の安全性表示
 - パンくずによる階層移動、フォルダー優先の一覧表示
 - フォルダー作成、名前変更、ファイルと空フォルダーの削除
 - 適応・バランス・最大から選べるAndroidネイティブのリフレッシュレート制御
@@ -48,6 +52,8 @@ SSHセッションの保存対象はタブID、接続先ID、表示名だけで�
 MoshはSSHで`mosh-server`を起動し、アプリ内SSP transportからUDP接続します。SSHリモートポートフォワーディングはserver-openedチャネルをRust側で処理します。秘密鍵デコードはCPU機能を実行時診断しますが、SVE/SVE2の採用基準を満たす実機測定がないため現在はportable経路を使用します。
 
 RDPはIronRDPでアプリ内接続し、AndroidのネイティブVulkan Surfaceへ提示します。VNCはRustでRFBを処理し、選択中タブへ最新フレームを表示します。接続時に入力したパスワードは保存しません。
+
+OpenCode接続は`opencode serve`のHTTP APIとSSEイベントを使用します。インターネットへ直接公開せず、信頼できるネットワーク、VPN、またはSSHトンネル経由で利用してください。Basic認証のパスワード保存はアプリ共通の設定に従い、保存する場合だけCredential Vaultで保護します。
 
 ## 開発
 

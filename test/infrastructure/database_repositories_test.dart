@@ -11,6 +11,25 @@ import 'package:termethis/infrastructure/database/drift_host_key_repository.dart
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
+  test('OpenCode接続先とプロジェクトパスを保存して復元する', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = DriftConnectionProfileRepository(database);
+    const profile = ConnectionProfile(
+      id: 'opencode-server',
+      name: 'OpenCode Serve',
+      host: '192.168.1.20',
+      port: 4096,
+      username: 'opencode',
+      connectionType: ConnectionType.opencode,
+      remotePath: '/srv/project',
+    );
+
+    await repository.save(profile);
+
+    expect(await repository.findById(profile.id), profile);
+  });
+
   late Directory temporaryDirectory;
   late File databaseFile;
 

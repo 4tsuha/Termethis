@@ -11,6 +11,7 @@ import '../application/terminal_performance_settings_controller.dart';
 import '../domain/app_font.dart';
 import '../domain/hardware_acceleration_controller.dart';
 import '../domain/terminal_performance_settings.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -24,8 +25,8 @@ class SettingsScreen extends ConsumerWidget {
     final hardwareAcceleration = ref.watch(
       hardwareAccelerationCapabilitiesProvider,
     );
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsTitle)),
+    return ExpressiveScaffold(
+      title: l10n.settingsTitle,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
@@ -336,11 +337,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
               SwitchListTile(
                 secondary: const Icon(Icons.password_outlined),
-                title: const Text('SSHパスワードを保存'),
+                title: const Text('接続パスワードを保存'),
                 subtitle: Text(
                   credentialSettings.saveSshPasswords
-                      ? '接続編集で入力したパスワードを暗号化Vaultへ保存し、SSHとMCP Toolで使用します。'
-                      : 'パスワードは保存せず、SSH接続のたびに入力します。',
+                      ? '保存を選んだSSHとOpenCode Serveのパスワードを暗号化Vaultで保護します。'
+                      : 'パスワードは保存せず、SSHまたはOpenCodeへの接続時に入力します。',
                 ),
                 value: credentialSettings.saveSshPasswords,
                 onChanged: ref
@@ -355,6 +356,13 @@ class SettingsScreen extends ConsumerWidget {
             title: '連携と診断',
             summary: 'Shizuku、ログ、MCPサーバー',
             children: [
+              ListTile(
+                leading: const Icon(Icons.settings_backup_restore),
+                title: const Text('データと安全性'),
+                subtitle: const Text('バックアップ、復元、安全な診断情報の書き出しを管理します。'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/settings/data-safety'),
+              ),
               ListTile(
                 leading: const Icon(Icons.admin_panel_settings_outlined),
                 title: const Text('Shizuku連携'),
@@ -880,57 +888,13 @@ class _SettingsGroup extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      container: true,
-      label: '$title。$summary',
-      child: Column(
-        key: ValueKey('settings-group-$storageKey'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Row(
-              children: [
-                Icon(icon, size: 20, color: colors.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            color: colors.surfaceContainerLow,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (var index = 0; index < children.length; index++) ...[
-                  children[index],
-                  if (index != children.length - 1)
-                    Divider(
-                      height: 1,
-                      indent: 56,
-                      color: colors.outlineVariant,
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => KeyedSubtree(
+    key: ValueKey('settings-group-$storageKey'),
+    child: ExpressiveSection(
+      icon: icon,
+      title: title,
+      description: summary,
+      children: children,
+    ),
+  );
 }

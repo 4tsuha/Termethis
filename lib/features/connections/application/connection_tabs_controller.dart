@@ -44,6 +44,26 @@ class ConnectionTabsController extends AsyncNotifier<List<ConnectionTab>> {
               : latest,
         );
     if (existing != null) {
+      if (existing.restored) {
+        final now = DateTime.now().toUtc();
+        final id = _nextTabId();
+        final updated = [
+          for (final tab in tabs)
+            if (tab.id != existing.id) tab,
+          ConnectionTab(
+            id: id,
+            profileId: profile.id,
+            protocol: protocol,
+            title: profile.name,
+            createdAt: now,
+            lastActivatedAt: now,
+          ),
+        ];
+        _selectedTabId = id;
+        state = AsyncData(updated);
+        await _store.save(updated);
+        return id;
+      }
       await _markActive(tabs, existing.id);
       return existing.id;
     }
