@@ -2,14 +2,14 @@
 
 <img src="assets/branding/termethis-icon-source.png" alt="Termethis app icon" width="128">
 
-完全日本語対応のAndroid向けSSH・RDP・VNC・FTPクライアントです。
+完全日本語対応のAndroid向けSSH・RDP・VNC・FTP・OpenCodeクライアントです。
 
 [Android CI](.github/workflows/android.yml)
 
 ## 主な機能
 
-- xterm.js WebGLを既定にした、vim・neovim・tmux・htop・ncurses向けSSHターミナル
-- libvtermを使うAndroidネイティブ省メモリ描画へ切り替え可能
+- termlibとlibvtermの標準Android描画を使う、vim・neovim・tmux・htop・ncurses向けSSHターミナル
+- xterm.js WebGL、xterm.dart、Termuxへ切り替え可能
 - releaseビルドのネイティブ描画で接続中150MiB以下を目標とするメモリ設計
 - 日本語IME、UTF-8、CJK文字幅に対応した入出力
 - 非表示タブの描画ビューを解放し、ANSIスナップショットと受信差分から画面を復元
@@ -18,18 +18,26 @@
 - Cascadia MonoとJetBrains Monoから選べるターミナルフォント
 - DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
 - 同じ接続先も並行利用できるSSH複数タブ・複数セッション
-- アプリ再起動後に切断状態で復元するSSHセッションタブ
+- SSH・Mosh・RDP・VNC・Shizuku Shell・OpenCodeを同じ接続タブで管理
+- アプリ再起動後に切断状態で復元する接続タブ
 - シェル／tmux／zellij／screen向け検索ボタンとOSC 133対応の出力コピー
 - TUIマウス、長押し右クリック、対応プロンプト内のタップ移動
 - タブバー、画面スリープ抑止、IME表示時リサイズの個別設定
 - Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
+- 端末認証で保護できるCredential Vaultと、独立したSSHパスワード保存設定
+- 複数段ProxyJump、ローカルポート転送、SOCKS5動的転送
+- 変数・秘密変数・送信前確認に対応したコマンドパレット
 - RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
 - RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
-- ホームの接続先としてSSH・RDP・VNCを一元管理
-- IronRDPとネイティブVulkan Surfaceによるアプリ内RDP、対応アプリへVNC URIを渡すリモートデスクトップ連携
+- ホームの接続先としてSSH・RDP・VNC・OpenCode Serveを一元管理
+- OpenCode Serveのセッション一覧、履歴、メッセージ送信、停止、権限確認に対応したMaterial 3チャット
+- IronRDPとネイティブVulkan SurfaceによるRDP、Rust RFBクライアントによるアプリ内VNC
 - 接続先ごとのWake on LAN設定とMagic Packet送信
-- ホーム、FTP、設定を切り替えるボトムナビゲーション
+- ホーム、接続、ファイル、設定を切り替えるボトムナビゲーション
 - FTP、FTPES、FTPS、SFTP接続と複数タブ
+- SFTP転送の実進捗、キャンセル、再試行、失敗時の一時ファイル保護
+- 資格情報を含めないバックアップ／復元と、匿名化できる診断情報の書き出し
+- DNS、ポート、SSHホスト鍵、Vault状態を確認する接続診断と方式別の安全性表示
 - パンくずによる階層移動、フォルダー優先の一覧表示
 - フォルダー作成、名前変更、ファイルと空フォルダーの削除
 - 適応・バランス・最大から選べるAndroidネイティブのリフレッシュレート制御
@@ -41,13 +49,17 @@
 
 SSHセッションの保存対象はタブID、接続先ID、表示名だけです。SSH通信、端末の表示内容、パスワード、秘密鍵は保存せず、アプリのプロセス再生成後は切断状態から利用者が再接続します。
 
-RDPはIronRDPでアプリ内接続し、デコード画面を中間フレームへ複製したりDartへ渡したりせず、AndroidのネイティブVulkan Surfaceへ提示します。接続時に入力したパスワードは保存しません。VNCはAndroidの対応クライアントを起動し、接続先とユーザー名だけを渡します。
+MoshはSSHで`mosh-server`を起動し、アプリ内SSP transportからUDP接続します。SSHリモートポートフォワーディングはserver-openedチャネルをRust側で処理します。秘密鍵デコードはCPU機能を実行時診断しますが、SVE/SVE2の採用基準を満たす実機測定がないため現在はportable経路を使用します。
+
+RDPはIronRDPでアプリ内接続し、AndroidのネイティブVulkan Surfaceへ提示します。VNCはRustでRFBを処理し、選択中タブへ最新フレームを表示します。接続時に入力したパスワードは保存しません。
+
+OpenCode接続は`opencode serve`のHTTP APIとSSEイベントを使用します。インターネットへ直接公開せず、信頼できるネットワーク、VPN、またはSSHトンネル経由で利用してください。Basic認証のパスワード保存はアプリ共通の設定に従い、保存する場合だけCredential Vaultで保護します。
 
 ## 開発
 
 Flutter 3.44.9とDart 3.12.2を使用します。
 SSH・SFTPコアにはRust 1.96.0を使用し、`flutter_rust_bridge`でFlutterへ接続します。
-ネイティブ端末はConnectBot termlib＋libvtermと、Termux terminal-emulator＋terminal-viewを選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`へ固定しています。
+既定のAndroid端末はConnectBot termlib＋libvtermの標準Compose描画を使います。PTY解析は専用スレッドへ分離し、同一スタイルのASCII連続セルと背景色をまとめて描画します。Termux terminal-emulator＋terminal-view、xterm.js WebGL、Flutter製のxterm.dartも選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`、xterm.dartはローカルの`4.0.0`へ固定しています。
 AndroidビルドにはSDK版CMake 3.31.6とNDK 29.0.14206865が必要です。CIではSDK Managerから導入します。
 
 ```powershell

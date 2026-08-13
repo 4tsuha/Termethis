@@ -10,7 +10,7 @@ class AndroidRemoteDesktopLauncher implements RemoteDesktopLauncher {
 
   @override
   Future<void> launch(ConnectionProfile profile) async {
-    if (profile.connectionType == ConnectionType.ssh) {
+    if (profile.connectionType.usesSshAuthentication) {
       throw const RemoteDesktopLaunchFailure(
         RemoteDesktopLaunchFailureCode.unsupportedType,
       );

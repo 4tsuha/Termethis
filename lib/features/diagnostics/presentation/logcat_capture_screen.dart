@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/shizuku_diagnostics_controller.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class LogcatCaptureScreen extends ConsumerStatefulWidget {
   const LogcatCaptureScreen({super.key});
@@ -92,30 +93,28 @@ class _LogcatCaptureScreenState extends ConsumerState<LogcatCaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Logcatキャプチャ'),
-        actions: [
-          IconButton(
-            tooltip: '表示を更新',
-            onPressed: _busy ? null : _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-          IconButton(
-            tooltip: 'コピー',
-            onPressed: _lines.isEmpty
-                ? null
-                : () =>
-                      Clipboard.setData(ClipboardData(text: _lines.join('\n'))),
-            icon: const Icon(Icons.copy_outlined),
-          ),
-          IconButton(
-            tooltip: '消去',
-            onPressed: _lines.isEmpty ? null : _clear,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
-      ),
+    return ExpressiveScaffold(
+      title: 'Logcatキャプチャ',
+      maxContentWidth: double.infinity,
+      actions: [
+        IconButton(
+          tooltip: '表示を更新',
+          onPressed: _busy ? null : _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+        IconButton(
+          tooltip: 'コピー',
+          onPressed: _lines.isEmpty
+              ? null
+              : () => Clipboard.setData(ClipboardData(text: _lines.join('\n'))),
+          icon: const Icon(Icons.copy_outlined),
+        ),
+        IconButton(
+          tooltip: '消去',
+          onPressed: _lines.isEmpty ? null : _clear,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
       body: Column(
         children: [
           Material(

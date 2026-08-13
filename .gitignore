@@ -34,6 +34,9 @@ migrate_working_dir/
 /coverage/
 /tool/web_terminal/node_modules/
 /tool/web_terminal/build/
+/.codex-remote-attachments/
+/.codex-ui-audit/
+/gcm-diagnose.log
 
 # Symbolication related
 app.*.symbols

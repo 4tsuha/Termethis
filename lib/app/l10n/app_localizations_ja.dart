@@ -310,6 +310,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navHome => 'ホーム';
 
   @override
+  String get navConnections => '接続';
+
+  @override
+  String get navFiles => 'ファイル';
+
+  @override
   String get navTerminal => 'ターミナル';
 
   @override
@@ -428,13 +434,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get ftpTitle => 'FTPマネージャー';
 
   @override
-  String get ftpAddTab => 'FTP接続';
+  String get ftpAddTab => 'ファイル接続';
 
   @override
-  String get ftpEmptyTitle => 'FTPタブがありません';
+  String get ftpEmptyTitle => 'ファイル接続がありません';
 
   @override
-  String get ftpEmptyMessage => '接続先を追加すると、サーバー内のフォルダーを階層表示できます。';
+  String get ftpEmptyMessage => 'FTP、FTPS、SFTPの接続先を追加すると、サーバー内のファイルを管理できます。';
 
   @override
   String get ftpConnectionTitle => 'FTP接続を追加';
@@ -570,7 +576,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get terminalFontJetBrainsMono => 'JetBrains Mono';
 
   @override
-  String get settingsTerminalRenderer => 'ターミナル描画エンジン';
+  String get settingsTerminalRenderer => 'ターミナルエミュレータ';
 
   @override
   String get settingsSelectTerminalRenderer => 'ターミナルエミュレータを選択';
@@ -583,18 +589,18 @@ class AppLocalizationsJa extends AppLocalizations {
       '複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。';
 
   @override
-  String get terminalRendererAlacritty => 'Flutter Alacritty';
+  String get terminalRendererXtermDart => 'xterm.dart';
 
   @override
-  String get terminalRendererAlacrittyDescription =>
-      'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。';
+  String get terminalRendererXtermDartDescription =>
+      'Flutter上で動くDart製ターミナルです。CJK、絵文字、日本語IMEに対応し、WebViewを使用しません。';
 
   @override
-  String get terminalRendererConnectBot => 'ConnectBot';
+  String get terminalRendererConnectBot => 'termlib';
 
   @override
   String get terminalRendererConnectBotDescription =>
-      'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。';
+      'termlibとlibvtermの標準描画を使用します。IME、文字選択、スクロール、マウス入力をAndroid上で処理し、WebViewを使用しません。';
 
   @override
   String get terminalRendererTermux => 'Termux';
@@ -734,7 +740,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsVersion => 'バージョン';
 
   @override
-  String get settingsVersionValue => '0.5.0';
+  String get settingsVersionValue => '0.8.0';
 
   @override
   String get settingsLicenses => 'オープンソースライセンス';

@@ -29,6 +29,8 @@ class ConnectionProfileRows extends Table {
 
   IntColumn get wakeOnLanPort => integer().nullable()();
 
+  TextColumn get remotePath => text().nullable()();
+
   DateTimeColumn get createdAt => dateTime()();
 
   DateTimeColumn get updatedAt => dateTime()();
@@ -65,48 +67,66 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.defaults() : super(driftDatabase(name: 'termethis'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) => migrator.createAll(),
-    onUpgrade: (migrator, from, to) async {
-      if (from < 2) {
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.credentialReference,
-        );
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.privateKeyLabel,
-        );
-      }
-      if (from < 3) {
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.wakeOnLanMacAddress,
-        );
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.wakeOnLanBroadcastAddress,
-        );
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.wakeOnLanPort,
-        );
-      }
-      if (from < 4) {
-        await migrator.addColumn(
-          connectionProfileRows,
-          connectionProfileRows.connectionType,
-        );
-      }
-      if (from < 5) {
-        await customStatement(
-          "UPDATE connection_profile_rows SET connection_type = 'rdp' "
-          "WHERE connection_type = 'rds'",
-        );
+    onUpgrade: (migrator, _, _) => _repairSchema(migrator),
+    beforeOpen: (details) async {
+      if (!details.wasCreated) {
+        await _repairSchema(Migrator(this));
       }
     },
   );
+
+  Future<void> _repairSchema(Migrator migrator) async {
+    final tables = await _tableNames();
+    if (!tables.contains(connectionProfileRows.actualTableName)) {
+      await migrator.createTable(connectionProfileRows);
+    } else {
+      await _addMissingConnectionProfileColumns(migrator);
+    }
+    if (!tables.contains(knownHostRecords.actualTableName)) {
+      await migrator.createTable(knownHostRecords);
+    }
+
+    await customStatement(
+      "UPDATE connection_profile_rows SET connection_type = 'rdp' "
+      "WHERE connection_type = 'rds'",
+    );
+  }
+
+  Future<void> _addMissingConnectionProfileColumns(Migrator migrator) async {
+    final columns = await _columnNames(connectionProfileRows.actualTableName);
+    final requiredColumns = <GeneratedColumn<Object>>[
+      connectionProfileRows.credentialReference,
+      connectionProfileRows.privateKeyLabel,
+      connectionProfileRows.wakeOnLanMacAddress,
+      connectionProfileRows.wakeOnLanBroadcastAddress,
+      connectionProfileRows.wakeOnLanPort,
+      connectionProfileRows.connectionType,
+      connectionProfileRows.remotePath,
+    ];
+    for (final column in requiredColumns) {
+      if (!columns.contains(column.$name)) {
+        await migrator.addColumn(connectionProfileRows, column);
+      }
+    }
+  }
+
+  Future<Set<String>> _tableNames() async {
+    final rows = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    ).get();
+    return rows.map((row) => row.read<String>('name')).toSet();
+  }
+
+  Future<Set<String>> _columnNames(String tableName) async {
+    final escapedTableName = tableName.replaceAll("'", "''");
+    final rows = await customSelect(
+      "PRAGMA table_info('$escapedTableName')",
+    ).get();
+    return rows.map((row) => row.read<String>('name')).toSet();
+  }
 }

@@ -10,6 +10,8 @@ import android.graphics.Typeface
 import android.os.SystemClock
 import android.text.Editable
 import android.text.InputType
+import android.text.Selection
+import android.text.SpannableStringBuilder
 import android.util.TypedValue
 import android.view.Choreographer
 import android.view.GestureDetector
@@ -345,33 +347,43 @@ private class TermuxCanvasView(
     override fun onCheckIsTextEditor(): Boolean = true
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        outAttrs.inputType = InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
-            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_ACTION_NONE
+        val composingBuffer = SpannableStringBuilder().apply {
+            Selection.setSelection(this, 0)
+        }
+        val commitTracker = TermuxImeCommitTracker()
         return object : BaseInputConnection(this, true) {
+            override fun getEditable(): Editable = composingBuffer
+
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                super.commitText(text, newCursorPosition)
-                flushEditable()
+                commitTracker.commit(text)?.let(::sendCommittedBytes)
+                clearComposingBuffer()
                 return true
             }
 
             override fun finishComposingText(): Boolean {
-                super.finishComposingText()
-                flushEditable()
+                commitTracker.finish(composingBuffer)?.let(::sendCommittedBytes)
+                clearComposingBuffer()
                 return true
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+                if (composingBuffer.isNotEmpty()) {
+                    return super.deleteSurroundingText(beforeLength, afterLength)
+                }
                 repeat(beforeLength.coerceAtLeast(0)) { output.write(byteArrayOf(0x7f), 0, 1) }
                 return true
             }
 
-            private fun flushEditable() {
-                val content: Editable = editable ?: return
-                if (content.isEmpty()) return
-                val bytes = content.toString().toByteArray(StandardCharsets.UTF_8)
-                content.clear()
+            private fun sendCommittedBytes(bytes: ByteArray) {
                 output.write(bytes, 0, bytes.size)
+            }
+
+            private fun clearComposingBuffer() {
+                composingBuffer.clearSpans()
+                composingBuffer.clear()
+                Selection.setSelection(composingBuffer, 0)
             }
         }
     }
@@ -482,6 +494,17 @@ private class TermuxCanvasView(
     private companion object {
         const val MOUSE_RIGHT_BUTTON = 2
     }
+}
+
+internal class TermuxImeCommitTracker {
+    fun commit(text: CharSequence?): ByteArray? {
+        return encode(text?.toString().orEmpty())
+    }
+
+    fun finish(composing: CharSequence): ByteArray? = encode(composing.toString())
+
+    private fun encode(text: String): ByteArray? =
+        text.takeIf(String::isNotEmpty)?.toByteArray(StandardCharsets.UTF_8)
 }
 
 private data class TermuxTerminalOptions(

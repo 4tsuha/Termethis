@@ -128,8 +128,6 @@ pub async fn rdp_connect(request: RustRdpConnectRequest) -> Result<RustRdpConnec
             );
         }))
     };
-    RDP_SESSIONS.insert(id, Arc::clone(&session));
-
     std::thread::Builder::new()
         .name(format!("ironrdp-{id}"))
         .spawn(move || {
@@ -140,6 +138,8 @@ pub async fn rdp_connect(request: RustRdpConnectRequest) -> Result<RustRdpConnec
             runtime.block_on(client.run());
         })
         .context("Failed to start IronRDP thread")?;
+
+    RDP_SESSIONS.insert(id, Arc::clone(&session));
 
     tokio::spawn(async move {
         while let Some(event) = output_receiver.recv().await {
@@ -152,6 +152,7 @@ pub async fn rdp_connect(request: RustRdpConnectRequest) -> Result<RustRdpConnec
                 break;
             }
         }
+        finalize_output_stream(&session).await;
         session.closed.store(true, Ordering::Release);
         session.changed.notify_waiters();
     });
@@ -332,18 +333,52 @@ async fn apply_output_event(session: &RdpSession, event: RdpOutputEvent) {
         }
         RdpOutputEvent::ConnectionFailure(error) => {
             frame.state = "failed".to_owned();
-            frame.error_message = Some(error.to_string());
+            frame.error_message = Some(rdp_error_message(&error.to_string()));
             session.closed.store(true, Ordering::Release);
         }
         RdpOutputEvent::Terminated(result) => {
             frame.state = "closed".to_owned();
-            frame.error_message = result.err().map(|error| error.to_string());
+            frame.error_message = result
+                .err()
+                .map(|error| rdp_error_message(&error.to_string()));
             session.closed.store(true, Ordering::Release);
         }
         _ => {}
     }
     drop(frame);
     session.changed.notify_waiters();
+}
+
+fn rdp_error_message(raw: &str) -> String {
+    let normalized = raw.to_ascii_lowercase();
+    if normalized.contains("tcp connect")
+        || normalized.contains("connection refused")
+        || normalized.contains("connection timed out")
+    {
+        return "RDPサーバーへ接続できません。接続先、ポート、ネットワークを確認してください。"
+            .to_owned();
+    }
+    if normalized.contains("authentication")
+        || normalized.contains("credentials")
+        || normalized.contains("credssp")
+        || normalized.contains("logon")
+    {
+        return "RDP認証に失敗しました。ユーザー名、パスワード、ドメインを確認してください。"
+            .to_owned();
+    }
+    if normalized.contains("certificate") || normalized.contains("tls") {
+        return "RDPの暗号化接続を確立できませんでした。サーバー設定を確認してください。"
+            .to_owned();
+    }
+    "RDP接続が終了しました。接続先の状態を確認して再接続してください。".to_owned()
+}
+
+async fn finalize_output_stream(session: &RdpSession) {
+    let mut frame = session.frame.lock().await;
+    if frame.state != "failed" && frame.state != "closed" {
+        frame.state = "closed".to_owned();
+        frame.error_message = Some("RDP client stopped unexpectedly".to_owned());
+    }
 }
 
 fn get_session(session_id: i64) -> Result<Arc<RdpSession>> {
@@ -432,9 +467,18 @@ pub(crate) fn android_surface_mouse(
 
 #[cfg(test)]
 mod tests {
+    use std::net::TcpListener;
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::Mutex as StdMutex;
+    use std::time::Duration;
 
-    use super::{copy_frame_after, RdpFrameData};
+    use super::{
+        copy_frame_after, finalize_output_stream, get_session, rdp_close, rdp_connect,
+        rdp_error_message, rdp_read_status, RdpFrameData, RdpSession, RustRdpConnectRequest,
+    };
+    use ironrdp::input::Database;
+    use tokio::sync::{mpsc, Mutex, Notify};
 
     #[test]
     fn unchanged_frame_does_not_cross_the_bridge_again() {
@@ -452,5 +496,97 @@ mod tests {
         assert!(result.rgba.is_empty());
         assert_eq!(result.sequence, 4);
         assert_eq!(result.state, "ready");
+    }
+
+    #[test]
+    fn unexpected_output_end_transitions_connecting_session_to_closed() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        runtime.block_on(async {
+            let (input, _receiver) = mpsc::unbounded_channel();
+            let session = RdpSession {
+                input,
+                input_state: StdMutex::new(Database::new()),
+                frame: Mutex::new(RdpFrameData {
+                    sequence: 0,
+                    width: 800,
+                    height: 600,
+                    pixels: Arc::new(Vec::new()),
+                    state: "connecting".to_owned(),
+                    error_message: None,
+                }),
+                changed: Notify::new(),
+                closed: AtomicBool::new(false),
+            };
+
+            finalize_output_stream(&session).await;
+
+            let frame = session.frame.lock().await;
+            assert_eq!(frame.state, "closed");
+            assert_eq!(
+                frame.error_message.as_deref(),
+                Some("RDP client stopped unexpectedly")
+            );
+        });
+    }
+
+    #[test]
+    fn refused_connections_reach_terminal_state_and_can_be_released_repeatedly() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        runtime.block_on(async {
+            for attempt in 1..=3 {
+                let listener = TcpListener::bind("127.0.0.1:0").expect("reserve test port");
+                let port = listener.local_addr().expect("test address").port();
+                drop(listener);
+
+                let connected = rdp_connect(RustRdpConnectRequest {
+                    host: "127.0.0.1".to_owned(),
+                    port,
+                    username: "test".to_owned(),
+                    password: String::new(),
+                    domain: String::new(),
+                    width: 800,
+                    height: 600,
+                })
+                .await
+                .expect("create RDP client");
+
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+                loop {
+                    let status = rdp_read_status(connected.session_id)
+                        .await
+                        .expect("read RDP status");
+                    if status.state == "failed" || status.state == "closed" {
+                        assert!(status.error_message.is_some(), "attempt {attempt}");
+                        break;
+                    }
+                    assert!(tokio::time::Instant::now() < deadline, "attempt {attempt}");
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+
+                rdp_close(connected.session_id)
+                    .await
+                    .expect("release RDP session");
+                assert!(
+                    get_session(connected.session_id).is_err(),
+                    "attempt {attempt}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn user_facing_errors_do_not_expose_build_paths() {
+        let raw = "[TCP connect @ C:\\build\\ironrdp-client\\src\\rdp.rs:486] custom error";
+        let message = rdp_error_message(raw);
+
+        assert!(message.contains("RDPサーバーへ接続できません"));
+        assert!(!message.contains("C:\\"));
+        assert!(!message.contains("rdp.rs"));
     }
 }

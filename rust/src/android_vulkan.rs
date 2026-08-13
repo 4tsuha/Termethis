@@ -1,4 +1,5 @@
 use std::ffi::c_void;
+use std::ffi::CString;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -47,8 +48,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 "#;
 
 pub(crate) struct AndroidVulkanRenderer {
-    command: mpsc::Sender<RenderCommand>,
+    command: mpsc::SyncSender<RenderCommand>,
     surface: Arc<Mutex<Option<VulkanSurface>>>,
+    pending_frame: Arc<Mutex<Option<PendingFrame>>>,
     metrics: Arc<Mutex<RenderMetrics>>,
     error: Arc<Mutex<Option<String>>>,
     next_sequence: AtomicI64,
@@ -62,32 +64,48 @@ struct RenderMetrics {
     frame_height: u16,
 }
 
+struct PendingFrame {
+    sequence: i64,
+    width: u16,
+    height: u16,
+    dirty_left: u16,
+    dirty_top: u16,
+    dirty_right: u16,
+    dirty_bottom: u16,
+    pixels: Vec<u8>,
+}
+
 enum RenderCommand {
     Attach {
         native_window: usize,
         width: u32,
         height: u32,
     },
+    Present,
     Detach(mpsc::SyncSender<()>),
     Stop,
 }
 
 impl AndroidVulkanRenderer {
     pub(crate) fn new(session_id: i64) -> Self {
-        let (command, receiver) = mpsc::channel();
+        // One pending present is enough: every upload updates the same texture,
+        // so a queued present always shows the newest completed update.
+        let (command, receiver) = mpsc::sync_channel(2);
         let surface = Arc::new(Mutex::new(None));
+        let pending_frame = Arc::new(Mutex::new(None));
         let metrics = Arc::new(Mutex::new(RenderMetrics::default()));
         let error = Arc::new(Mutex::new(None));
         let renderer = Self {
             command,
             surface: Arc::clone(&surface),
+            pending_frame: Arc::clone(&pending_frame),
             metrics: Arc::clone(&metrics),
             error: Arc::clone(&error),
             next_sequence: AtomicI64::new(1),
         };
         std::thread::Builder::new()
             .name(format!("rdp-vulkan-{session_id}"))
-            .spawn(move || render_loop(receiver, surface, metrics, error))
+            .spawn(move || render_loop(receiver, surface, pending_frame, metrics, error))
             .expect("Vulkan rendering thread initialization failed");
         renderer
     }
@@ -133,29 +151,51 @@ impl AndroidVulkanRenderer {
             metrics.frame_height = height;
         }
         let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed);
+        let mut uploaded = false;
         let result = self
             .surface
             .lock()
             .map_err(|_| "Vulkan Surfaceをロックできませんでした".to_owned())
             .and_then(|mut surface| {
-                let Some(surface) = surface.as_mut() else {
-                    return Ok(());
-                };
-                surface.render(
-                    sequence,
-                    width,
-                    height,
-                    dirty_left,
-                    dirty_top,
-                    dirty_right,
-                    dirty_bottom,
-                    pixels,
-                )
+                if let Some(surface) = surface.as_mut() {
+                    uploaded = true;
+                    return surface.upload(
+                        sequence,
+                        width,
+                        height,
+                        dirty_left,
+                        dirty_top,
+                        dirty_right,
+                        dirty_bottom,
+                        pixels,
+                    );
+                }
+                let required_bytes = usize::from(width)
+                    .saturating_mul(usize::from(height))
+                    .saturating_mul(4);
+                if pixels.len() < required_bytes {
+                    return Err("IronRDP frame buffer is shorter than expected".to_owned());
+                }
+                if let Ok(mut pending) = self.pending_frame.lock() {
+                    *pending = Some(PendingFrame {
+                        sequence,
+                        width,
+                        height,
+                        dirty_left,
+                        dirty_top,
+                        dirty_right,
+                        dirty_bottom,
+                        pixels: pixels[..required_bytes].to_vec(),
+                    });
+                }
+                Ok(())
             });
         if let Err(message) = result {
             if let Ok(mut current_error) = self.error.lock() {
                 *current_error = Some(message);
             }
+        } else if uploaded || self.pending_frame.lock().is_ok_and(|frame| frame.is_some()) {
+            let _ = self.command.try_send(RenderCommand::Present);
         }
     }
 
@@ -194,6 +234,7 @@ impl Drop for AndroidVulkanRenderer {
 fn render_loop(
     receiver: mpsc::Receiver<RenderCommand>,
     shared_surface: Arc<Mutex<Option<VulkanSurface>>>,
+    pending_frame: Arc<Mutex<Option<PendingFrame>>>,
     metrics: Arc<Mutex<RenderMetrics>>,
     error: Arc<Mutex<Option<String>>>,
 ) {
@@ -219,6 +260,7 @@ fn render_loop(
                             current_metrics.surface_width = width;
                             current_metrics.surface_height = height;
                         }
+                        present_latest(&shared_surface, &pending_frame, &error);
                     }
                     Err(message) => {
                         if let Ok(mut current_error) = error.lock() {
@@ -226,6 +268,9 @@ fn render_loop(
                         }
                     }
                 }
+            }
+            RenderCommand::Present => {
+                present_latest(&shared_surface, &pending_frame, &error);
             }
             RenderCommand::Detach(completed) => {
                 if let Ok(mut surface) = shared_surface.lock() {
@@ -235,10 +280,60 @@ fn render_loop(
                     current_metrics.surface_width = 0;
                     current_metrics.surface_height = 0;
                 }
+                if let Ok(mut pending) = pending_frame.lock() {
+                    *pending = None;
+                }
                 let _ = completed.send(());
             }
-            RenderCommand::Stop => break,
+            RenderCommand::Stop => {
+                break;
+            }
         }
+    }
+}
+
+fn present_latest(
+    shared_surface: &Arc<Mutex<Option<VulkanSurface>>>,
+    pending_frame: &Arc<Mutex<Option<PendingFrame>>>,
+    error: &Arc<Mutex<Option<String>>>,
+) {
+    let result = shared_surface
+        .lock()
+        .map_err(|_| "Vulkan Surfaceをロックできませんでした".to_owned())
+        .and_then(|mut surface| {
+            let Some(surface) = surface.as_mut() else {
+                return Ok(());
+            };
+            if let Some(frame) = pending_frame.lock().ok().and_then(|mut frame| frame.take()) {
+                surface.upload(
+                    frame.sequence,
+                    frame.width,
+                    frame.height,
+                    frame.dirty_left,
+                    frame.dirty_top,
+                    frame.dirty_right,
+                    frame.dirty_bottom,
+                    &frame.pixels,
+                )?;
+            }
+            surface.present()
+        });
+    if let Err(message) = result {
+        if let Ok(mut current_error) = error.lock() {
+            *current_error = Some(message);
+        }
+    }
+}
+
+fn android_log(message: &str) {
+    let Ok(tag) = CString::new("TermethisRdpVulkan") else {
+        return;
+    };
+    let Ok(message) = CString::new(message) else {
+        return;
+    };
+    unsafe {
+        ndk_sys::__android_log_write(6, tag.as_ptr(), message.as_ptr());
     }
 }
 
@@ -270,7 +365,8 @@ struct VulkanSurface {
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     frame_texture: Option<FrameTexture>,
-    last_sequence: i64,
+    last_uploaded_sequence: i64,
+    last_presented_sequence: i64,
     _window: NativeWindow,
 }
 
@@ -306,14 +402,30 @@ impl VulkanSurface {
             ..Default::default()
         }))
         .map_err(|cause| format!("Vulkanデバイスを作成できませんでした: {cause}"))?;
+        device.on_uncaptured_error(Arc::new(|cause| {
+            android_log(&format!("uncaptured error: {cause}"));
+        }));
         let mut config = surface
             .get_default_config(&adapter, width.max(1), height.max(1))
             .ok_or_else(|| "Vulkanスワップチェーン設定が見つかりません".to_owned())?;
         config.present_mode = wgpu::PresentMode::Fifo;
         config.desired_maximum_frame_latency = 1;
-        config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+        let capabilities = surface.get_capabilities(&adapter);
+        config.alpha_mode = if capabilities
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::Opaque)
+        {
+            wgpu::CompositeAlphaMode::Opaque
+        } else {
+            capabilities
+                .alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Auto)
+        };
         surface.configure(&device, &config);
 
+        let validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Termethis RDP frame layout"),
             entries: &[
@@ -375,6 +487,11 @@ impl VulkanSurface {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        if let Some(cause) = pollster::block_on(validation_scope.pop()) {
+            return Err(format!(
+                "Vulkan描画パイプラインを作成できませんでした: {cause}"
+            ));
+        }
         Ok(Self {
             surface,
             device,
@@ -384,12 +501,13 @@ impl VulkanSurface {
             bind_group_layout,
             sampler,
             frame_texture: None,
-            last_sequence: 0,
+            last_uploaded_sequence: 0,
+            last_presented_sequence: 0,
             _window: window,
         })
     }
 
-    fn render(
+    fn upload(
         &mut self,
         sequence: i64,
         width: u16,
@@ -400,7 +518,7 @@ impl VulkanSurface {
         dirty_bottom: u16,
         pixels: &[u8],
     ) -> Result<(), String> {
-        if sequence <= self.last_sequence || pixels.is_empty() {
+        if sequence <= self.last_uploaded_sequence || pixels.is_empty() {
             return Ok(());
         }
         let texture_created = self.ensure_frame_texture(width, height);
@@ -446,6 +564,18 @@ impl VulkanSurface {
                 depth_or_array_layers: 1,
             },
         );
+        self.last_uploaded_sequence = sequence;
+        Ok(())
+    }
+
+    fn present(&mut self) -> Result<(), String> {
+        if self.last_uploaded_sequence <= self.last_presented_sequence {
+            return Ok(());
+        }
+        let texture = self
+            .frame_texture
+            .as_ref()
+            .ok_or_else(|| "RDPフレームテクスチャを作成できませんでした".to_owned())?;
         let output = match self.surface.get_current_texture() {
             Ok(output) => output,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -482,8 +612,12 @@ impl VulkanSurface {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let (left, top, width, height) =
-                fitted_viewport(self.config.width, self.config.height, width, height);
+            let (left, top, width, height) = fitted_viewport(
+                self.config.width,
+                self.config.height,
+                texture.width,
+                texture.height,
+            );
             pass.set_viewport(left, top, width, height, 0.0, 1.0);
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &texture.bind_group, &[]);
@@ -491,7 +625,7 @@ impl VulkanSurface {
         }
         self.queue.submit([encoder.finish()]);
         output.present();
-        self.last_sequence = sequence;
+        self.last_presented_sequence = self.last_uploaded_sequence;
         Ok(())
     }
 

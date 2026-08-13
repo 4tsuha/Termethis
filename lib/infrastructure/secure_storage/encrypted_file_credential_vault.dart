@@ -7,24 +7,34 @@ import 'package:cryptography/cryptography.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../features/connections/domain/credential_vault.dart';
+import '../../features/settings/domain/vault_protection.dart';
 import 'secure_value_store.dart';
 
 typedef VaultDirectoryProvider = Future<Directory> Function();
 
-class EncryptedFileCredentialVault implements CredentialVault {
+class EncryptedFileCredentialVault implements LockableCredentialVault {
   EncryptedFileCredentialVault(
     this._secureStore,
     this._directoryProvider, {
     AesGcm? cipher,
-  }) : _cipher = cipher ?? AesGcm.with256bits();
+    VaultProtectionGateway? protectionGateway,
+    this._protectionMode = VaultProtectionMode.none,
+  }) : _cipher = cipher ?? AesGcm.with256bits(),
+       _protectionGateway =
+           protectionGateway ?? const UnavailableVaultProtectionGateway();
 
-  factory EncryptedFileCredentialVault.androidDefaults() {
+  factory EncryptedFileCredentialVault.androidDefaults({
+    required VaultProtectionGateway protectionGateway,
+    required VaultProtectionMode protectionMode,
+  }) {
     return EncryptedFileCredentialVault(
       const FlutterSecureValueStore(),
       () async {
         final supportDirectory = await getApplicationSupportDirectory();
         return Directory('${supportDirectory.path}/credential_vault');
       },
+      protectionGateway: protectionGateway,
+      protectionMode: protectionMode,
     );
   }
 
@@ -36,6 +46,8 @@ class EncryptedFileCredentialVault implements CredentialVault {
   final VaultDirectoryProvider _directoryProvider;
   final AesGcm _cipher;
   final Random _random = Random.secure();
+  final VaultProtectionGateway _protectionGateway;
+  VaultProtectionMode _protectionMode;
 
   Future<SecretKey>? _masterKeyFuture;
 
@@ -130,6 +142,7 @@ class EncryptedFileCredentialVault implements CredentialVault {
   @override
   Future<PrivateKeyCredential?> readPrivateKey(CredentialHandle handle) async {
     try {
+      await _requireUnlocked();
       final file = await _fileFor(handle);
       if (!await file.exists()) {
         return null;
@@ -186,6 +199,7 @@ class EncryptedFileCredentialVault implements CredentialVault {
   @override
   Future<PasswordCredential?> readPassword(CredentialHandle handle) async {
     try {
+      await _requireUnlocked();
       final record = await _readRecord(handle);
       if (record == null || record['type'] != 'password') return null;
       return PasswordCredential(record['password'] as String);
@@ -247,6 +261,37 @@ class EncryptedFileCredentialVault implements CredentialVault {
 
   Future<SecretKey> _masterKey() {
     return _masterKeyFuture ??= _loadOrCreateMasterKey();
+  }
+
+  Future<void> _requireUnlocked() async {
+    final mode = _protectionMode;
+    if (mode == VaultProtectionMode.none) return;
+    final status = await _protectionGateway.status(mode);
+    if (status.keyInvalidated) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.keystoreKeyInvalidated,
+      );
+    }
+    if (!status.available) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.biometricUnavailable,
+      );
+    }
+    if (status.locked) {
+      throw const CredentialVaultFailure(
+        CredentialVaultFailureCode.vaultLocked,
+      );
+    }
+  }
+
+  @override
+  void clearCachedSecrets() {
+    _masterKeyFuture = null;
+  }
+
+  @override
+  void setProtectionMode(Object mode) {
+    if (mode is VaultProtectionMode) _protectionMode = mode;
   }
 
   Future<SecretKey> _loadOrCreateMasterKey() async {

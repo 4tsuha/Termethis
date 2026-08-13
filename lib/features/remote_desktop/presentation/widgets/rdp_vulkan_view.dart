@@ -54,7 +54,7 @@ class _RdpVulkanViewState extends State<RdpVulkanView> {
         hitTestBehavior: PlatformViewHitTestBehavior.opaque,
       ),
       onCreatePlatformView: (params) {
-        final controller = PlatformViewsService.initSurfaceAndroidView(
+        final controller = PlatformViewsService.initExpensiveAndroidView(
           id: params.id,
           viewType: _viewType,
           layoutDirection: TextDirection.ltr,

@@ -5,10 +5,30 @@ import '../../features/terminal/domain/ssh_failure.dart';
 import '../../features/terminal/domain/ssh_gateway.dart';
 import '../../src/rust/api/core.dart' as rust;
 
+typedef RustConnect =
+    Future<rust.RustSshConnectResult> Function({
+      required rust.RustSshConnectRequest request,
+    });
+typedef RustContinueHostKey =
+    Future<rust.RustSshConnectResult> Function({
+      required int pendingHostKeyId,
+      required bool approved,
+    });
+typedef RustConnectionFactory = SshConnection Function(int sessionId);
+
 class RustSshGateway implements SshGateway {
-  RustSshGateway(this._hostKeys);
+  RustSshGateway(
+    this._hostKeys, {
+    RustConnect connect = rust.sshConnect,
+    RustContinueHostKey continueHostKey = rust.sshContinueHostKey,
+    this._connectionFactory = RustSshConnection.new,
+  }) : _rustConnect = connect,
+       _rustContinueHostKey = continueHostKey;
 
   final HostKeyRepository _hostKeys;
+  final RustConnect _rustConnect;
+  final RustContinueHostKey _rustContinueHostKey;
+  final RustConnectionFactory _connectionFactory;
 
   @override
   Future<SshConnection> connect(SshConnectRequest request) async {
@@ -20,6 +40,30 @@ class RustSshGateway implements SshGateway {
     if (trustedKeys.isNotEmpty) request.onAuthenticationStarted();
 
     var result = await _connect(request, trustedKeys);
+    if (result.hostKey case final receivedKey?) {
+      final jumpIndex = _jumpHostIndex(result.errorCode);
+      if (jumpIndex != null && jumpIndex < request.jumpHosts.length) {
+        final jump = request.jumpHosts[jumpIndex].profile;
+        final received = HostKeyInfo(
+          host: jump.host,
+          port: jump.port,
+          algorithm: receivedKey.algorithm,
+          fingerprintSha256: receivedKey.fingerprintSha256,
+        );
+        final knownJumpHosts = await _hostKeys.find(jump.host, jump.port);
+        if (evaluateHostKeyTrust(knownJumpHosts, received) ==
+            HostKeyTrust.mismatch) {
+          throw const SshFailure(SshFailureCode.jumpHostKeyRejected);
+        }
+        if (!await request.onUnknownHostKey(received)) {
+          throw const SshFailure(SshFailureCode.jumpHostKeyRejected);
+        }
+        await _hostKeys.trust(
+          KnownHost(info: received, acceptedAt: DateTime.now()),
+        );
+        result = await _connect(request, trustedKeys);
+      }
+    }
     if (result.hostKey case final receivedKey?) {
       final received = HostKeyInfo(
         host: request.profile.host,
@@ -33,15 +77,32 @@ class RustSshGateway implements SshGateway {
         case HostKeyTrust.trusted:
           throw const SshFailure(SshFailureCode.hostKeyRejected);
         case HostKeyTrust.unknown:
-          if (!await request.onUnknownHostKey(received)) {
+          final pendingHostKeyId = result.pendingHostKeyId;
+          var approved = false;
+          try {
+            final userApproved = await request.onUnknownHostKey(received);
+            if (userApproved) {
+              await _hostKeys.trust(
+                KnownHost(info: received, acceptedAt: DateTime.now()),
+              );
+              approved = true;
+              request.onAuthenticationStarted();
+            }
+          } finally {
+            if (pendingHostKeyId != null) {
+              result = await _rustContinueHostKey(
+                pendingHostKeyId: pendingHostKeyId,
+                approved: approved,
+              );
+            }
+          }
+          if (!approved) {
             throw const SshFailure(SshFailureCode.hostKeyRejected);
           }
-          await _hostKeys.trust(
-            KnownHost(info: received, acceptedAt: DateTime.now()),
-          );
-          trustedKeys = [_hostKeyIdentity(received)];
-          request.onAuthenticationStarted();
-          result = await _connect(request, trustedKeys);
+          if (pendingHostKeyId == null) {
+            trustedKeys = [_hostKeyIdentity(received)];
+            result = await _connect(request, trustedKeys);
+          }
       }
     }
 
@@ -75,15 +136,15 @@ class RustSshGateway implements SshGateway {
       throw _mapRustFailure(result.errorCode, result.errorMessage);
     }
     request.onOpeningPty();
-    return RustSshConnection(result.sessionId!);
+    return _connectionFactory(result.sessionId!);
   }
 
   Future<rust.RustSshConnectResult> _connect(
     SshConnectRequest request,
     List<String> trustedKeys,
-  ) {
+  ) async {
     final authentication = request.authentication;
-    return rust.sshConnect(
+    return _rustConnect(
       request: rust.RustSshConnectRequest(
         host: request.profile.host,
         port: request.profile.port,
@@ -103,12 +164,48 @@ class RustSshGateway implements SshGateway {
         trustedHostKeys: trustedKeys,
         terminalWidth: request.terminalWidth,
         terminalHeight: request.terminalHeight,
+        jumpHosts: await Future.wait([
+          for (final jump in request.jumpHosts) _jumpHost(jump),
+        ]),
       ),
+    );
+  }
+
+  Future<rust.RustSshJumpHost> _jumpHost(SshJumpHost jump) async {
+    final knownHosts = await _hostKeys.find(
+      jump.profile.host,
+      jump.profile.port,
+    );
+    final authentication = jump.authentication;
+    return rust.RustSshJumpHost(
+      host: jump.profile.host,
+      port: jump.profile.port,
+      username: jump.profile.username,
+      authKind: authentication is SshPrivateKeyAuthentication
+          ? 'private_key'
+          : 'password',
+      password: authentication is SshPasswordAuthentication
+          ? authentication.password
+          : '',
+      privateKeyPem: authentication is SshPrivateKeyAuthentication
+          ? authentication.pem
+          : '',
+      passphrase: authentication is SshPrivateKeyAuthentication
+          ? authentication.passphrase
+          : null,
+      trustedHostKeys: _trustedKeyIdentities(knownHosts),
     );
   }
 }
 
-class RustSshConnection implements SshConnection {
+int? _jumpHostIndex(String? errorCode) {
+  if (errorCode == null || !errorCode.startsWith('jump_host_key_rejected:')) {
+    return null;
+  }
+  return int.tryParse(errorCode.substring(errorCode.lastIndexOf(':') + 1));
+}
+
+class RustSshConnection implements TunnelCapableSshConnection {
   RustSshConnection(this._sessionId) {
     _stdout = StreamController<Uint8List>(
       onPause: () => _setConsumerPaused(stdout: true),
@@ -133,6 +230,7 @@ class RustSshConnection implements SshConnection {
   bool _stdoutPaused = false;
   bool _stderrPaused = false;
   bool _closing = false;
+  final Set<int> _tunnelIds = {};
 
   @override
   Stream<Uint8List> get stdout => _stdout.stream;
@@ -174,11 +272,56 @@ class RustSshConnection implements SshConnection {
   Future<void> close() async {
     if (_closing) return;
     _closing = true;
+    for (final tunnelId in _tunnelIds.toList(growable: false)) {
+      await rust.sshStopTunnel(tunnelId: tunnelId);
+    }
+    _tunnelIds.clear();
     await _writeChain;
     _setConsumerPaused(stdout: false, stderr: false);
     await rust.sshClose(sessionId: _sessionId);
     await _pumpFuture;
   }
+
+  @override
+  Future<SshTunnelStatus> startTunnel(SshTunnelRequest request) async {
+    final status = await rust.sshStartTunnel(
+      request: rust.RustSshTunnelStartRequest(
+        sessionId: _sessionId,
+        kind: request.kind.name,
+        bindHost: request.bindHost,
+        bindPort: request.bindPort,
+        targetHost: request.targetHost,
+        targetPort: request.targetPort,
+        allowLan: request.allowLan,
+      ),
+    );
+    _tunnelIds.add(status.tunnelId);
+    return _tunnelStatus(status);
+  }
+
+  @override
+  Future<SshTunnelStatus> tunnelStatus(int tunnelId) async =>
+      _tunnelStatus(await rust.sshTunnelStatus(tunnelId: tunnelId));
+
+  @override
+  Future<void> stopTunnel(int tunnelId) async {
+    await rust.sshStopTunnel(tunnelId: tunnelId);
+    _tunnelIds.remove(tunnelId);
+  }
+
+  SshTunnelStatus _tunnelStatus(rust.RustSshTunnelStatus status) =>
+      SshTunnelStatus(
+        id: status.tunnelId,
+        kind: SshTunnelKind.values.firstWhere(
+          (value) => value.name == status.kind,
+        ),
+        bindHost: status.bindHost,
+        bindPort: status.bindPort,
+        bytesUp: status.bytesUp.toInt(),
+        bytesDown: status.bytesDown.toInt(),
+        active: status.active,
+        errorMessage: status.errorMessage,
+      );
 
   Future<void> _pump() async {
     Object? terminalError;
@@ -252,6 +395,15 @@ SshFailure _mapRustFailure(String? code, String? message) {
   final detail = message == null ? null : StateError(message);
   if (code == 'authentication_failed') {
     return SshFailure(SshFailureCode.authenticationFailed, detail);
+  }
+  if (code?.startsWith('jump_host_key_rejected:') == true) {
+    return SshFailure(SshFailureCode.jumpHostKeyRejected, detail);
+  }
+  if (code?.startsWith('jump_host_authentication_failed:') == true) {
+    return SshFailure(SshFailureCode.jumpHostAuthenticationFailed, detail);
+  }
+  if (code?.startsWith('jump_host_connection_failed:') == true) {
+    return SshFailure(SshFailureCode.jumpHostConnectionFailed, detail);
   }
   final normalized = message?.toLowerCase() ?? '';
   if (normalized.contains('timed out')) {

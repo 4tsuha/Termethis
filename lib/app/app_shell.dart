@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/connections/application/connection_tabs_controller.dart';
 import 'l10n/app_localizations.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final connectionCount =
+        ref.watch(connectionTabsProvider).value?.length ?? 0;
     final destinations = [
       NavigationDestination(
         icon: const Icon(Icons.home_outlined),
@@ -18,19 +22,20 @@ class AppShell extends StatelessWidget {
         label: l10n.navHome,
       ),
       NavigationDestination(
-        icon: const Icon(Icons.terminal_outlined),
-        selectedIcon: const Icon(Icons.terminal),
-        label: l10n.navTerminal,
+        icon: _ConnectionNavigationIcon(
+          count: connectionCount,
+          selected: false,
+        ),
+        selectedIcon: _ConnectionNavigationIcon(
+          count: connectionCount,
+          selected: true,
+        ),
+        label: l10n.navConnections,
       ),
       NavigationDestination(
-        icon: const Icon(Icons.desktop_windows_outlined),
-        selectedIcon: const Icon(Icons.desktop_windows),
-        label: l10n.navDesktop,
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.folder_copy_outlined),
-        selectedIcon: const Icon(Icons.folder_copy),
-        label: l10n.navFtp,
+        icon: const Icon(Icons.folder_outlined),
+        selectedIcon: const Icon(Icons.folder),
+        label: l10n.navFiles,
       ),
       NavigationDestination(
         icon: const Icon(Icons.settings_outlined),
@@ -43,10 +48,14 @@ class AppShell extends StatelessWidget {
         final useRail = constraints.maxWidth >= 600;
         if (useRail) {
           return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
             body: Row(
               children: [
                 RepaintBoundary(
                   child: NavigationRail(
+                    minWidth: 88,
+                    minExtendedWidth: 232,
+                    groupAlignment: -0.72,
                     selectedIndex: navigationShell.currentIndex,
                     extended: constraints.maxWidth >= 840,
                     labelType: constraints.maxWidth >= 840
@@ -63,8 +72,18 @@ class AppShell extends StatelessWidget {
                     ],
                   ),
                 ),
-                const VerticalDivider(width: 1),
-                Expanded(child: RepaintBoundary(child: navigationShell)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(28),
+                    ),
+                    child: ColoredBox(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: RepaintBoundary(child: navigationShell),
+                    ),
+                  ),
+                ),
               ],
             ),
           );
@@ -73,6 +92,7 @@ class AppShell extends StatelessWidget {
           body: RepaintBoundary(child: navigationShell),
           bottomNavigationBar: RepaintBoundary(
             child: NavigationBar(
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               selectedIndex: navigationShell.currentIndex,
               onDestinationSelected: _goToBranch,
               destinations: destinations,
@@ -89,4 +109,24 @@ class AppShell extends StatelessWidget {
       initialLocation: index == navigationShell.currentIndex,
     );
   }
+}
+
+class _ConnectionNavigationIcon extends StatelessWidget {
+  const _ConnectionNavigationIcon({
+    required this.count,
+    required this.selected,
+  });
+
+  final int count;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: count == 0 ? '接続なし' : '接続タブ$count件',
+    child: Badge(
+      isLabelVisible: count > 0,
+      label: Text('$count'),
+      child: Icon(selected ? Icons.lan : Icons.lan_outlined),
+    ),
+  );
 }

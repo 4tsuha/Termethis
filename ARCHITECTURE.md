@@ -2,7 +2,43 @@
 
 最終更新：2026年8月12日
 
-状態：Termethis 0.5.0として、Android最適化と実用的なSSH／SFTP接続を実装済み
+状態：Termethis 0.8.0。統合接続画面とSSH／SFTP基盤を実装済み
+
+## 2026年8月 統合接続アーキテクチャ
+
+ボトムナビゲーションは「ホーム / 接続 / ファイル / 設定」の4項目とする。SSH、Mosh、RDP、VNC、Shizuku Shellはプロトコル別のナビゲーションへ分けず、`UnifiedConnectionTab`相当の`ConnectionTab`で同じ接続画面へ表示する。
+
+OpenCode Serveも同じ`ConnectionTab`へ統合する。保存する接続情報はホスト、ポート、ユーザー名、任意のプロジェクトパスとVault参照だけで、会話本文はOpenCode Serveを正としてローカルDBへ複製しない。`/global/health`で到達性を確認し、`/session`と`/session/:id/message`でセッションと会話を扱う。`/event`のSSEは選択中セッションだけを反映し、タブ破棄時にHTTP clientと購読を閉じる。
+
+ファイル変更やコマンド実行の確認は`permission.asked`または`permission.v2.asked`から受け取り、利用者が選んだ`once`、`always`、`reject`を権限応答APIへ返す。未知の操作を自動承認しない。Basic認証のパスワードは共通の保存可否設定に従い、保存時だけCredential Vaultへ置く。OpenCode ServeはHTTPを提供するため、直接のインターネット公開を想定せず、信頼できるネットワーク、VPN、SSHトンネルのいずれかを境界とする。
+
+`ConnectionTab`が永続化するのは`id`、`profileId`、`protocol`、`title`、作成・最終選択時刻、復元方針だけである。資格情報、端末出力、デスクトップフレームは保存しない。旧`SshTabStore`は新形式の保存成功後にだけ削除し、削除済みプロフィールは復元不能タブとして安全に表示する。
+
+共通化する責務はタブ順、選択状態、接続状態、復元とナビゲーションである。SSH/Mosh/ShizukuのPTYと入出力はTerminal Session層、RDP/VNCのフレーム、Vulkan Surface、ポインター入力はRemote Desktop Session層に残す。選択中のタブだけ表示Widgetを構築し、非表示のWebView、PlatformView、Texture、Surfaceの提示を停止する。
+
+### Vault保護
+
+「SSHパスワードを保存」は資格情報を永続化するかだけを決める。「Vaultの保護」は保存済みの秘密鍵、パスフレーズ、任意保存パスワードをいつ解錠できるかを決める。両設定は独立しており、生体認証を有効にしてもパスワード保存は有効にならない。
+
+Android側はAndroid Keystoreのユーザー認証必須鍵とシステム認証プロンプトを使用し、毎回、30秒、5分の解錠方針を提供する。アプリがバックグラウンドへ移動した場合と「今すぐロック」実行時は、Android側の解錠状態とDart側のmaster keyキャッシュを破棄する。MCPやForeground ServiceはVaultを自動解錠せず、ロック中は`vaultLocked`として拒否する。
+
+### SSH経路とトンネル
+
+ProxyJumpは各段の保存済みSSHプロフィール、個別の資格情報、個別のホスト鍵検証を使い、踏み台の`direct-tcpip`チャネルを`russh::client::connect_stream`へ渡す。保存時にプロフィールIDの有向グラフを検査し、循環を拒否する。任意コマンドを実行するProxyCommandは扱わない。
+
+ローカル転送とSOCKS5は既存Rust SSHセッションの`direct-tcpip`を再利用する。リモート転送は`tcpip-forward`を要求し、server-opened `forwarded-tcpip`チャネルを端末側の転送先TCPストリームへ接続する。既定bindは`127.0.0.1`で、LAN bindは明示許可が必要である。各トンネルはID、種類、bind先、転送バイト数、状態、最後のエラーを持ち、親SSHセッション終了時に`cancel-tcpip-forward`を送って停止する。現行alphaでは、server-openedチャネルの所有権を明確にするためリモート転送はSSHセッションごとに1件へ制限する。
+
+### コマンドパレット
+
+スニペットはタイトル、コマンドテンプレート、任意の接続先ID、タグ、お気に入りを保存する。`${name}`と既定値付き変数を展開し、`${secret:name}`は値を保存・履歴化・ログ記録しない。選択だけでは送信せず、変数展開後の文字列と複数行の有無を確認してから、現在選択中のセッションstdinへそのまま送る。
+
+### MoshとCPU実行時ディスパッチ
+
+Moshは保存済みSSHプロフィールと既知ホスト鍵を使ってRust SSH execから`mosh-server`を起動し、返されたUDPポートと一時鍵をDartのSSP transportへ渡す。SSP、AES-OCB、protobuf wire形式はMITライセンスの`mosh_dart`をローカルpackageとして固定し、SSH秘密情報とMosh一時鍵は永続化しない。端末描画、IME、補助キー、コマンドパレットはSSHと共通化する一方、ProxyJump、SSHトンネル、SFTP、MCP execはMoshタブで有効化しない。
+
+VNCはRustの`vnc-rs`を用いてRFBハンドシェイク、認証、ZRLE／CopyRect／Rawデコード、ポインター入力をアプリ内で処理する。Dartへは選択中タブの最新BGRAフレームだけを最大30fpsで渡し、前の`ui.Image`は差し替え時に破棄する。フレームバッファは2560×1600を安全上限として、悪意ある巨大解像度で150MB目標を破壊しない。RDPのVulkan Surfaceとは別経路であり、VNCをゼロコピーVulkanとしては扱わない。
+
+秘密鍵読み込みはPEM/OpenSSH/PKCS#8解析を既存暗号ライブラリへ委譲する。Rustはaarch64、Neon、SVE、SVE2、AES、SHA2を実行時検出し、P50/P95を計測する。現在の採用経路は`portable`である。SVE/SVE2は出力・エラー分類一致、10%以上または0.5ms以上の改善、コピー回数非増加を満たすaarch64実機計測が得られた場合だけ採用し、未対応CPUで呼び出さない。x86_64エミュレーターでは機能検出とportableフォールバックだけを確認し、SVE/SVE2採用の根拠にはしない。
 
 ## 1. 対象と設計原則
 
@@ -100,7 +136,7 @@ Repositoryの再起動試験では接続先と複数のホスト鍵が復元さ�
 
 ### 3.1 トップレベルナビゲーション
 
-トップレベルは`ホーム`、`FTP`、`設定`の三画面で構成する。SSH、RDP、VNCはホームの接続先として扱い、接続方式ごとのトップレベル画面は増やさない。
+トップレベルは`ホーム`、`接続`、`ファイル`、`設定`の四画面で構成する。SSH、Mosh、RDP、VNC、Shizuku Shellは接続画面の共通タブで扱い、接続方式ごとのトップレベル画面は増やさない。
 
 幅600dp未満ではボトムナビゲーション、600dp以上では`NavigationRail`へ切り替える。
 
@@ -108,7 +144,7 @@ Repositoryの再起動試験では接続先と複数のホスト鍵が復元さ�
 
 デスクトップ表示向けの接続先、ターミナル、SFTPの任意3ペインは次段階とし、1,200dp以上を候補閾値として情報密度とフォーカス移動を実機で検証してから有効化する。
 
-各ブランチは`StatefulShellRoute`の`IndexedStack`で保持し、FTPタブと一覧位置をナビゲーション切り替えで破棄しない。
+各ブランチは`StatefulShellRoute`の`IndexedStack`で保持し、ファイルタブと一覧位置をナビゲーション切り替えで破棄しない。
 
 SSHターミナルや接続先編集のような集中操作はルートNavigatorへ表示し、ボトムナビゲーションを隠す。
 
@@ -148,9 +184,7 @@ FlutterのPlatformViewはHybrid Compositionを使い、Android 14以降ではVul
 
 RDPパスワードは接続画面からRustへ直接渡し、SQLite、URI、ログには保存しない。初期実装は直接接続、Unicode文字入力、スキャンコード入力、ポインター入力、動的解像度変更を対象とする。
 
-VNCは`vnc://` URIを使用し、ホスト、ポート、任意のユーザー名をAndroidの対応クライアントへ渡す。
-
-VNCは`ACTION_VIEW`で起動し、対応アプリがない場合は必要なクライアント種別を日本語で案内する。VNCパスワードはURI、SQLite、ログへ渡さず、起動先のクライアントで入力する。
+VNCは共通接続タブ内の内蔵RFBクライアントで開く。保存済み資格情報がない場合は接続時にパスワードを入力し、接続処理だけで使用してSQLiteとログへ渡さない。
 
 ### 3.5 Wake on LAN
 
@@ -184,11 +218,13 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 端末の横幅は本文へ全て割り当て、接続状態と描画方式は端末上へ重ねずAppBarの副題に表示する。左右パディングは4px、スクロールバーは5pxとし、表示幅400dp未満では12px、400dp以上600dp未満では13px、600dp以上では14pxを基準フォントサイズにする。OSの文字倍率は反映しつつ18pxを上限とし、再レイアウト後の列数と行数をPTYへ送る。
 
-既定の描画系はローカルアセットとして同梱した`xterm.js` WebGLとし、複雑なTUI、120Hz表示、CJK、絵文字、Nerd Fontsとの互換性を優先する。ネイティブ描画は、ConnectBot `termlib`のHaven系forkとTermux `terminal-emulator`の2方式から選択できる。ConnectBotはJetpack Compose CanvasとJNI経由の`libvterm`、TermuxはAndroid Canvasと`terminal-view`のレンダラーを使用する。
+既定の描画系はConnectBot `termlib`のHaven系forkとJNI経由の`libvterm`を使う。独自`TerminalSurfaceView`は持たず、termlibが提供するCompose `Terminal`のCanvas、`ImeInputView`、`KeyboardHandler`を再利用する。PTY解析は表示優先のHandlerThreadへ分離し、端末更新はフレーム単位の不変スナップショットへまとめる。可視行のASCII連続セルと背景色は同一スタイル単位で描画命令を束ね、CJK、絵文字、結合文字、全角セルはセル単位で描画する。非表示タブはCompositionを停止し、再選択時に同じ端末状態から描画を再開する。
+
+互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter製の`xterm.dart`を選択可能にする。廃止したFlutter Alacrittyの保存値は`xterm.dart`へ移行する。WebGLを保存していた既存利用者はtermlib描画へ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
 
 WebViewは外部URLを開かず、Content Security Policyでスクリプト、CSS、フォントを同梱アセットに限定する。SSH出力はUTF-8を最大64Ki文字に分割してBase64へ変換し、xterm.jsの`Terminal.write`完了ACKを受け取ってから次を送る。端末入力とPTY寸法はJSONメッセージでDart側へ戻す。
 
-SSH出力は`SessionRegistry`内の共通セッション履歴へ一度だけ追加し、現在選択されている描画系だけが購読する。WebGL、ConnectBot、Termuxを同一セッションで同時に動かさず、Flutter版`xterm`は描画と出力解析に使用しない。
+SSH出力は`SessionRegistry`内の共通セッション履歴へ一度だけ追加し、現在選択されている描画系だけが購読する。WebGL、xterm.dart、ConnectBot、Termuxを同一セッションで同時に動かさない。xterm.dartは表示単位の上限付き履歴を持ち、分割されたUTF-8をストリームとして復号する。
 
 タブを離れるときはSerialize Addonで画面、スクロールバック、端末モードをANSI文字列へ直列化し、セッションへ保存してWebViewを破棄する。非表示中の受信差分には単調増加する世代番号を付け、再表示時はスナップショット以降だけを再生する。これにより非表示タブのWebGL描画を止め、複数WebViewを同時保持しない。
 
@@ -219,6 +255,8 @@ FTPライブラリとSFTPライブラリ固有の型はInfrastructure層に閉�
 SFTPはSSH接続先を選択でき、known_hostsによるホスト鍵照合、パスワード認証、Credential Vaultに保存した秘密鍵認証を使用する。
 
 SFTPとターミナルは認証資産を共有するが、transportとタブは共有しない。一方の切断や障害が他方を終了させない設計とする。
+
+SFTPのファイルとフォルダ転送はRust側の`SftpTransferState`が実バイト数、総バイト数、完了状態、キャンセル要求を管理する。Flutter側の`SftpTransferManager`は100ms間隔で状態だけを購読し、UI isolateでファイルをコピーしない。アップロードは同じディレクトリ内の一時パスへ完了させてから既存項目を退避して置換し、失敗またはキャンセル時は一時項目を削除して退避元を復元する。ダウンロードもアプリキャッシュ内の`.part`へ書き、完了後だけ保存先選択へ進む。タブ終了時は関連転送をキャンセルし、Rustハンドルとキャッシュを解放する。
 
 平文FTPでは認証情報と通信内容が暗号化されないことを接続前と接続中に表示する。
 
@@ -422,6 +460,8 @@ known_hostsは入力された正規化ホスト名とポートの組で検索す
 
 未知の鍵を承認する画面には、別経路でフィンガープリントを確認する必要があることを日本語で表示する。
 
+初回接続で未知のホスト鍵を受信した場合、Rust側は認証を開始せずSSHトランスポートを最大120秒間保留する。利用者が承認し、known_hostsへの保存が完了した後だけ、同じ接続上で公開鍵または選択済み認証を開始する。拒否、保存失敗、期限切れでは保留接続を明示的に切断する。承認済み鍵との不一致は保留せず直ちに遮断し、再鍵交換時も最初に確認した鍵との一致を要求する。
+
 ### 5.6 認証方式
 
 認証方式は`AuthenticationPlan`として接続先へ保存する。
@@ -430,7 +470,7 @@ known_hostsは入力された正規化ホスト名とポートの組で検索す
 
 サーバーが提示した方式だけを試し、選択されていない方式へ暗黙にフォールバックしない。
 
-秘密鍵認証ではOpenSSH形式のRSA、ECDSA、Ed25519鍵をRust側で解析し、公開鍵認証に使用する。
+秘密鍵認証ではOpenSSH形式のRSA、ECDSA、Ed25519鍵をRust側で解析し、公開鍵認証に使用する。RSAは2048-bitと4096-bitを正式対応範囲とし、2048-bit未満はインポート検証と接続時の共通デコーダーで拒否する。RSA署名はサーバーとの交渉結果に従ってRSA-SHA2-512、RSA-SHA2-256を優先し、SHA-1固定の`ssh-rsa`へ暗黙に切り替えない。
 
 暗号化秘密鍵のパスフレーズは毎回入力を既定とし、利用者が選択した場合だけCredential Vaultへ保存する。
 
@@ -612,6 +652,16 @@ Android Auto BackupにはDBとCredential Vaultを含めない。
 
 診断ログはサイズ上限と保存日数を持つリングバッファにし、利用者が明示した場合だけ共有する。
 
+保存済み接続先の診断は、認証を試行せずにDNS解決、TCPポート到達性、SSHホスト鍵の登録状態、Credential Vaultの解錠状態を順に確認する。失敗項目には編集、再診断、Vault解錠など次の操作を日本語で提示する。接続方式ごとの安全性表示は現在の実装をそのまま開示し、SSH/Moshのホスト鍵照合、RDPの証明書未検証、VNCの非暗号化、OpenCodeのHTTP固定を過大評価しない。
+
+診断エクスポートは版番号付きJSONとし、アプリ版、Android版、端末モデル、描画方式、Vulkan対応、保存接続数、タブ数だけを既定で含める。接続ログは既定で除外し、利用者が明示した場合も接続先IDを一時的な別名へ変換して、時刻、状態、失敗コードだけを書き出す。ホスト名、IPアドレス、ユーザー名、タブID、コマンド、端末本文、資格情報は含めない。
+
+### 8.1 バックアップと復元
+
+バックアップは`termethis-backup`形式と版番号を持つJSONで、接続先、known_hosts、共通接続タブ、踏み台経路、コマンドスニペット、フォントとターミナル設定を保存する。Credential Vaultの参照ID、秘密鍵名、秘密鍵、パスフレーズ、パスワード、端末出力、リモート画面は含めない。保存済み資格情報があった接続先は再入力件数だけを記録する。
+
+復元前に形式、版、ID重複、参照先、踏み台経路の循環を検証し、新規接続先数、更新接続先数、復元可能なタブ数、資格情報の再入力数を確認画面へ表示する。既存データを一括削除せず、同じIDの項目だけを更新する。認証情報は復元後に利用者が接続先編集画面から再登録する。
+
 ## 9. Androidライフサイクルとネットワーク
 
 画面回転とタブ切り替えでは`SessionRegistry`を維持する。
@@ -649,7 +699,7 @@ Foreground Serviceを使わない通常モードでは、DozeとOEMの省電力�
 | Dart・Rust連携 | `flutter_rust_bridge` | 実装済み | 生成APIをInfrastructure Adapterに閉じ込め、UIとネイティブ処理を分離する |
 | SSHとPTY | Rust `russh` | 実装済み | パケット解析、鍵交換、認証、チャンネル、PTY、keepaliveをRust側で処理する |
 | SFTP | Rust `russh-sftp` | 実装済み | FTP共通の階層UIへAdapterで接続し、SSHのknown_hostsとVault認証を再利用する |
-| 端末エミュレーター | `xterm.js` WebGL、ConnectBot `termlib`＋`libvterm`、Termux `terminal-emulator`＋`terminal-view` | 実装済み | WebGLを既定とし、ネイティブ描画は省メモリと互換性の要件に応じて選択する |
+| 端末エミュレーター | ConnectBot `termlib`＋`libvterm` Native Surface、`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、`xterm.dart` | 実装済み | Native Surfaceを既定とし、最新スナップショット優先で描画キューとWebView固定費を削減する |
 | Android端末ブリッジ | Flutter PlatformView＋MethodChannel | 実装済み | UTF-8バイト列、入力、PTY寸法だけを交換し、端末状態と描画はAndroid側に閉じ込める |
 | WebViewブリッジ | `webview_flutter` | 実装済み | 外部通信を許可せず、Base64 UTF-8出力とJSON入力だけを交換する |
 | 状態管理とDI | `flutter_riverpod` | 実装済み | セッション一覧と低頻度状態に使用する |
@@ -801,7 +851,7 @@ CIでは固定したOpenSSHサーバーをコンテナで起動する。
 次の設定を別々のテストケースとして用意する。
 
 - パスワード認証
-- Ed25519とRSA SHA-2の秘密鍵認証
+- Ed25519とRSA 2048／4096-bit（RSA SHA-2）の秘密鍵認証
 - 暗号化秘密鍵
 - 複数ラウンドのkeyboard-interactive
 - 認証失敗と認証タイムアウト

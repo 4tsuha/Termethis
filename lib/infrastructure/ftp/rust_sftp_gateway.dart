@@ -83,7 +83,7 @@ class RustSftpGateway implements FtpGateway {
   }
 }
 
-class RustSftpConnection implements FtpConnection {
+class RustSftpConnection implements SftpFileConnection {
   RustSftpConnection(this._sessionId);
 
   final int _sessionId;
@@ -112,6 +112,7 @@ class RustSftpConnection implements FtpConnection {
               : DateTime.fromMillisecondsSinceEpoch(
                   entry.modifiedSeconds! * 1000,
                 ),
+          permissions: entry.permissions,
         ),
     ];
   }
@@ -140,10 +141,114 @@ class RustSftpConnection implements FtpConnection {
       rust.sftpDeleteEmptyDirectory(sessionId: _sessionId, name: name);
 
   @override
+  Future<void> deleteDirectoryRecursive(String name) =>
+      rust.sftpDeleteDirectoryRecursive(sessionId: _sessionId, name: name);
+
+  @override
+  Future<void> changePermissions(String name, int mode) =>
+      rust.sftpSetPermissions(sessionId: _sessionId, name: name, mode: mode);
+
+  @override
+  Future<void> downloadFile(String remoteName, String localPath) =>
+      rust.sftpDownloadFile(
+        sessionId: _sessionId,
+        remoteName: remoteName,
+        localPath: localPath,
+      );
+
+  @override
+  Future<void> uploadFile(String localPath, String remoteName) =>
+      rust.sftpUploadFile(
+        sessionId: _sessionId,
+        localPath: localPath,
+        remoteName: remoteName,
+      );
+
+  @override
+  Future<SftpTransferTask> startDownloadFile(
+    String remoteName,
+    String localPath,
+  ) async => _RustSftpTransferTask(
+    await rust.sftpStartDownloadFile(
+      sessionId: _sessionId,
+      remoteName: remoteName,
+      localPath: localPath,
+    ),
+  );
+
+  @override
+  Future<SftpTransferTask> startUploadFile(
+    String localPath,
+    String remoteName,
+  ) async => _RustSftpTransferTask(
+    await rust.sftpStartUploadFile(
+      sessionId: _sessionId,
+      localPath: localPath,
+      remoteName: remoteName,
+    ),
+  );
+
+  @override
+  Future<SftpTransferTask> startUploadDirectory(
+    String localPath,
+    String remoteName,
+  ) async => _RustSftpTransferTask(
+    await rust.sftpStartUploadDirectory(
+      sessionId: _sessionId,
+      localPath: localPath,
+      remoteName: remoteName,
+    ),
+  );
+
+  @override
+  Future<void> uploadDirectory(String localPath, String remoteName) =>
+      rust.sftpUploadDirectory(
+        sessionId: _sessionId,
+        localPath: localPath,
+        remoteName: remoteName,
+      );
+
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
     await rust.sftpClose(sessionId: _sessionId);
+  }
+}
+
+class _RustSftpTransferTask implements SftpTransferTask {
+  const _RustSftpTransferTask(this._transferId);
+
+  final int _transferId;
+
+  @override
+  String get id => 'sftp-$_transferId';
+
+  @override
+  Future<void> cancel() => rust.sftpCancelTransfer(transferId: _transferId);
+
+  @override
+  Future<void> dispose() => rust.sftpForgetTransfer(transferId: _transferId);
+
+  @override
+  Future<SftpTransferProgress> progress() async {
+    final value = await rust.sftpTransferProgress(transferId: _transferId);
+    return SftpTransferProgress(
+      id: id,
+      name: value.name,
+      direction: value.direction == 'download'
+          ? SftpTransferDirection.download
+          : SftpTransferDirection.upload,
+      status: switch (value.state) {
+        'completed' => SftpTransferStatus.completed,
+        'cancelled' => SftpTransferStatus.cancelled,
+        'failed' => SftpTransferStatus.failed,
+        _ => SftpTransferStatus.running,
+      },
+      bytesTransferred: value.bytesTransferred.toInt(),
+      totalBytes: value.totalBytes?.toInt(),
+      errorMessage: value.errorMessage,
+    );
   }
 }
 

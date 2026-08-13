@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import '../../connection_logs/domain/connection_log_entry.dart';
 import '../../connection_logs/domain/connection_log_repository.dart';
 import '../domain/ssh_failure.dart';
 import '../domain/ssh_gateway.dart';
+import '../infrastructure/mosh_bootstrapper.dart';
 
 enum SshSessionStatus {
   idle,
@@ -60,6 +62,8 @@ class SshSessionController extends ChangeNotifier {
     required this.profile,
     this.tabId,
     this.connectionLogs,
+    this.moshBootstrapper,
+    this.hostKeys,
   }) : terminal = Terminal(maxLines: 50) {
     terminal.onOutput = _handleTerminalOutput;
     terminal.onResize = _handleResize;
@@ -74,6 +78,8 @@ class SshSessionController extends ChangeNotifier {
   final SshGateway _gateway;
   final TerminalCodec _codec;
   final ConnectionLogRepository? connectionLogs;
+  final RustMoshBootstrapper? moshBootstrapper;
+  final HostKeyRepository? hostKeys;
   final Terminal terminal;
   final Set<VoidCallback> _terminalActivityListeners = {};
   final Set<ValueChanged<String>> _terminalDataListeners = {};
@@ -102,6 +108,7 @@ class SshSessionController extends ChangeNotifier {
   bool _webTerminalDeltaTruncated = false;
   bool _rendererOutputBackpressured = false;
   bool _outputSubscriptionsPaused = false;
+  bool _awaitingInteractiveResponse = false;
 
   static const _visibleWriteInterval = Duration(milliseconds: 8);
   static const _hiddenWriteInterval = Duration(milliseconds: 32);
@@ -124,6 +131,7 @@ class SshSessionController extends ChangeNotifier {
     required SshAuthentication authentication,
     required HostKeyApprovalHandler onUnknownHostKey,
     required InteractivePromptHandler onInteractivePrompt,
+    List<SshJumpHost> jumpHosts = const [],
   }) async {
     if ({
       SshSessionStatus.connecting,
@@ -143,25 +151,32 @@ class SshSessionController extends ChangeNotifier {
     _setStatus(SshSessionStatus.connecting);
 
     try {
-      final connection = await _gateway.connect(
-        SshConnectRequest(
-          profile: profile,
-          authentication: authentication,
-          onUnknownHostKey: (info) async {
-            _setStatus(SshSessionStatus.verifyingHost);
-            return onUnknownHostKey(info);
-          },
-          onInteractivePrompt: onInteractivePrompt,
-          onAuthenticationStarted: () {
-            _setStatus(SshSessionStatus.authenticating);
-          },
-          onOpeningPty: () {
-            _setStatus(SshSessionStatus.openingPty);
-          },
-          terminalWidth: terminal.viewWidth,
-          terminalHeight: terminal.viewHeight,
-        ),
-      );
+      final connection = profile.connectionType == ConnectionType.mosh
+          ? await _connectMosh(
+              authentication,
+              onUnknownHostKey,
+              jumpHosts: jumpHosts,
+            )
+          : await _gateway.connect(
+              SshConnectRequest(
+                profile: profile,
+                authentication: authentication,
+                onUnknownHostKey: (info) async {
+                  _setStatus(SshSessionStatus.verifyingHost);
+                  return onUnknownHostKey(info);
+                },
+                onInteractivePrompt: onInteractivePrompt,
+                onAuthenticationStarted: () {
+                  _setStatus(SshSessionStatus.authenticating);
+                },
+                onOpeningPty: () {
+                  _setStatus(SshSessionStatus.openingPty);
+                },
+                terminalWidth: terminal.viewWidth,
+                terminalHeight: terminal.viewHeight,
+                jumpHosts: jumpHosts,
+              ),
+            );
       if (_closing || _disposed) {
         await connection.close();
         return;
@@ -192,6 +207,56 @@ class SshSessionController extends ChangeNotifier {
     } catch (error) {
       failure = SshFailure(SshFailureCode.unexpected, error);
       _setStatus(SshSessionStatus.failed);
+    }
+  }
+
+  Future<SshConnection> _connectMosh(
+    SshAuthentication authentication,
+    HostKeyApprovalHandler onUnknownHostKey, {
+    required List<SshJumpHost> jumpHosts,
+  }) async {
+    if (jumpHosts.isNotEmpty) {
+      throw const SshFailure(SshFailureCode.moshProtocolMismatch);
+    }
+    final bootstrapper = moshBootstrapper;
+    final repository = hostKeys;
+    if (bootstrapper == null || repository == null) {
+      throw const SshFailure(SshFailureCode.moshProtocolMismatch);
+    }
+    var knownHosts = await repository.find(profile.host, profile.port);
+    if (knownHosts.isEmpty) {
+      final probe = await _gateway.connect(
+        SshConnectRequest(
+          profile: profile,
+          authentication: authentication,
+          onUnknownHostKey: onUnknownHostKey,
+          onInteractivePrompt: (_) async => null,
+          onAuthenticationStarted: () {},
+          onOpeningPty: () {},
+          terminalWidth: terminal.viewWidth,
+          terminalHeight: terminal.viewHeight,
+        ),
+      );
+      await probe.close();
+      knownHosts = await repository.find(profile.host, profile.port);
+    }
+    if (knownHosts.isEmpty) {
+      throw const SshFailure(SshFailureCode.hostKeyRejected);
+    }
+    final trusted = [
+      for (final host in knownHosts)
+        '${host.info.algorithm}|${host.info.fingerprintSha256}',
+    ];
+    try {
+      return await bootstrapper.connect(
+        profile: profile,
+        authentication: authentication,
+        trustedHostKeys: trusted,
+      );
+    } on FormatException {
+      throw const SshFailure(SshFailureCode.moshServerMissing);
+    } on SocketException {
+      throw const SshFailure(SshFailureCode.moshUdpUnreachable);
     }
   }
 
@@ -312,6 +377,7 @@ class SshSessionController extends ChangeNotifier {
   void sendInputDirect(String data) {
     final connection = _connection;
     if (connection == null || status != SshSessionStatus.connected) return;
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(_codec.encode(data));
   }
@@ -331,6 +397,7 @@ class SshSessionController extends ChangeNotifier {
       output = Uint8List.fromList([0x1b, ...output]);
     }
     _clearModifiers();
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(output);
   }
@@ -338,6 +405,7 @@ class SshSessionController extends ChangeNotifier {
   void sendInputBytesDirect(Uint8List data) {
     final connection = _connection;
     if (connection == null || status != SshSessionStatus.connected) return;
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(data);
   }
@@ -381,6 +449,29 @@ class SshSessionController extends ChangeNotifier {
     _setStatus(SshSessionStatus.closed);
   }
 
+  Future<SshTunnelStatus> startTunnel(SshTunnelRequest request) async {
+    final connection = _connection;
+    if (connection is! TunnelCapableSshConnection || !isConnected) {
+      throw StateError('SSHトンネルを開始できる接続ではありません。');
+    }
+    return connection.startTunnel(request);
+  }
+
+  Future<SshTunnelStatus> tunnelStatus(int tunnelId) async {
+    final connection = _connection;
+    if (connection is! TunnelCapableSshConnection) {
+      throw StateError('SSHトンネルが見つかりません。');
+    }
+    return connection.tunnelStatus(tunnelId);
+  }
+
+  Future<void> stopTunnel(int tunnelId) async {
+    final connection = _connection;
+    if (connection is TunnelCapableSshConnection) {
+      await connection.stopTunnel(tunnelId);
+    }
+  }
+
   Future<void> _releaseConnection() async {
     final connection = _connection;
     _connection = null;
@@ -397,6 +488,11 @@ class SshSessionController extends ChangeNotifier {
     if (data.isEmpty || _disposed) return;
     _pendingTerminalData.add(data);
     _pendingTerminalLength += data.length;
+    if (_viewportVisible && _awaitingInteractiveResponse) {
+      _awaitingInteractiveResponse = false;
+      _flushTerminalWrites();
+      return;
+    }
     if (_pendingTerminalLength >= _maximumBufferedBytes) {
       _flushTerminalWrites();
       return;
@@ -478,8 +574,14 @@ class SshSessionController extends ChangeNotifier {
       output = '\x1b$output';
     }
     _clearModifiers();
+    _prioritizeInteractiveResponse();
     _reportTerminalActivity();
     connection.write(_codec.encode(output));
+  }
+
+  void _prioritizeInteractiveResponse() {
+    if (!_viewportVisible) return;
+    _awaitingInteractiveResponse = true;
   }
 
   void _reportTerminalActivity() {
@@ -506,6 +608,7 @@ class SshSessionController extends ChangeNotifier {
     if (_closing || _disposed) {
       return;
     }
+    if (status == SshSessionStatus.reconnectPrompt) return;
     _flushTerminalWrites();
     failure = const SshFailure(SshFailureCode.remoteClosed);
     _setStatus(SshSessionStatus.reconnectPrompt);

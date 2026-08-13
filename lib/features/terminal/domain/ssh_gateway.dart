@@ -105,6 +105,7 @@ class SshConnectRequest {
     required this.onOpeningPty,
     required this.terminalWidth,
     required this.terminalHeight,
+    this.jumpHosts = const [],
   });
 
   final ConnectionProfile profile;
@@ -115,6 +116,14 @@ class SshConnectRequest {
   final void Function() onOpeningPty;
   final int terminalWidth;
   final int terminalHeight;
+  final List<SshJumpHost> jumpHosts;
+}
+
+class SshJumpHost {
+  const SshJumpHost({required this.profile, required this.authentication});
+
+  final ConnectionProfile profile;
+  final SshAuthentication authentication;
 }
 
 abstract interface class SshConnection {
@@ -125,6 +134,54 @@ abstract interface class SshConnection {
   void write(Uint8List data);
   void resize(int width, int height, int pixelWidth, int pixelHeight);
   Future<void> close();
+}
+
+enum SshTunnelKind { local, remote, socks5 }
+
+class SshTunnelRequest {
+  const SshTunnelRequest({
+    required this.kind,
+    this.bindHost = '127.0.0.1',
+    required this.bindPort,
+    this.targetHost = '',
+    this.targetPort = 0,
+    this.allowLan = false,
+  });
+
+  final SshTunnelKind kind;
+  final String bindHost;
+  final int bindPort;
+  final String targetHost;
+  final int targetPort;
+  final bool allowLan;
+}
+
+class SshTunnelStatus {
+  const SshTunnelStatus({
+    required this.id,
+    required this.kind,
+    required this.bindHost,
+    required this.bindPort,
+    required this.bytesUp,
+    required this.bytesDown,
+    required this.active,
+    this.errorMessage,
+  });
+
+  final int id;
+  final SshTunnelKind kind;
+  final String bindHost;
+  final int bindPort;
+  final int bytesUp;
+  final int bytesDown;
+  final bool active;
+  final String? errorMessage;
+}
+
+abstract interface class TunnelCapableSshConnection implements SshConnection {
+  Future<SshTunnelStatus> startTunnel(SshTunnelRequest request);
+  Future<SshTunnelStatus> tunnelStatus(int tunnelId);
+  Future<void> stopTunnel(int tunnelId);
 }
 
 abstract interface class SshGateway {

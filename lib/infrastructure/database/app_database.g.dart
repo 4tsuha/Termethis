@@ -134,6 +134,17 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _remotePathMeta = const VerificationMeta(
+    'remotePath',
+  );
+  @override
+  late final GeneratedColumn<String> remotePath = GeneratedColumn<String>(
+    'remote_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -170,6 +181,7 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
     wakeOnLanMacAddress,
     wakeOnLanBroadcastAddress,
     wakeOnLanPort,
+    remotePath,
     createdAt,
     updatedAt,
   ];
@@ -287,6 +299,12 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
         ),
       );
     }
+    if (data.containsKey('remote_path')) {
+      context.handle(
+        _remotePathMeta,
+        remotePath.isAcceptableOrUnknown(data['remote_path']!, _remotePathMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -363,6 +381,10 @@ class $ConnectionProfileRowsTable extends ConnectionProfileRows
         DriftSqlType.int,
         data['${effectivePrefix}wake_on_lan_port'],
       ),
+      remotePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_path'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -394,6 +416,7 @@ class ConnectionProfileRecord extends DataClass
   final String? wakeOnLanMacAddress;
   final String? wakeOnLanBroadcastAddress;
   final int? wakeOnLanPort;
+  final String? remotePath;
   final DateTime createdAt;
   final DateTime updatedAt;
   const ConnectionProfileRecord({
@@ -409,6 +432,7 @@ class ConnectionProfileRecord extends DataClass
     this.wakeOnLanMacAddress,
     this.wakeOnLanBroadcastAddress,
     this.wakeOnLanPort,
+    this.remotePath,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -438,6 +462,9 @@ class ConnectionProfileRecord extends DataClass
     }
     if (!nullToAbsent || wakeOnLanPort != null) {
       map['wake_on_lan_port'] = Variable<int>(wakeOnLanPort);
+    }
+    if (!nullToAbsent || remotePath != null) {
+      map['remote_path'] = Variable<String>(remotePath);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -469,6 +496,9 @@ class ConnectionProfileRecord extends DataClass
       wakeOnLanPort: wakeOnLanPort == null && nullToAbsent
           ? const Value.absent()
           : Value(wakeOnLanPort),
+      remotePath: remotePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remotePath),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -500,6 +530,7 @@ class ConnectionProfileRecord extends DataClass
         json['wakeOnLanBroadcastAddress'],
       ),
       wakeOnLanPort: serializer.fromJson<int?>(json['wakeOnLanPort']),
+      remotePath: serializer.fromJson<String?>(json['remotePath']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -522,6 +553,7 @@ class ConnectionProfileRecord extends DataClass
         wakeOnLanBroadcastAddress,
       ),
       'wakeOnLanPort': serializer.toJson<int?>(wakeOnLanPort),
+      'remotePath': serializer.toJson<String?>(remotePath),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -540,6 +572,7 @@ class ConnectionProfileRecord extends DataClass
     Value<String?> wakeOnLanMacAddress = const Value.absent(),
     Value<String?> wakeOnLanBroadcastAddress = const Value.absent(),
     Value<int?> wakeOnLanPort = const Value.absent(),
+    Value<String?> remotePath = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => ConnectionProfileRecord(
@@ -565,6 +598,7 @@ class ConnectionProfileRecord extends DataClass
     wakeOnLanPort: wakeOnLanPort.present
         ? wakeOnLanPort.value
         : this.wakeOnLanPort,
+    remotePath: remotePath.present ? remotePath.value : this.remotePath,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -598,6 +632,9 @@ class ConnectionProfileRecord extends DataClass
       wakeOnLanPort: data.wakeOnLanPort.present
           ? data.wakeOnLanPort.value
           : this.wakeOnLanPort,
+      remotePath: data.remotePath.present
+          ? data.remotePath.value
+          : this.remotePath,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -618,6 +655,7 @@ class ConnectionProfileRecord extends DataClass
           ..write('wakeOnLanMacAddress: $wakeOnLanMacAddress, ')
           ..write('wakeOnLanBroadcastAddress: $wakeOnLanBroadcastAddress, ')
           ..write('wakeOnLanPort: $wakeOnLanPort, ')
+          ..write('remotePath: $remotePath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -638,6 +676,7 @@ class ConnectionProfileRecord extends DataClass
     wakeOnLanMacAddress,
     wakeOnLanBroadcastAddress,
     wakeOnLanPort,
+    remotePath,
     createdAt,
     updatedAt,
   );
@@ -657,6 +696,7 @@ class ConnectionProfileRecord extends DataClass
           other.wakeOnLanMacAddress == this.wakeOnLanMacAddress &&
           other.wakeOnLanBroadcastAddress == this.wakeOnLanBroadcastAddress &&
           other.wakeOnLanPort == this.wakeOnLanPort &&
+          other.remotePath == this.remotePath &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -675,6 +715,7 @@ class ConnectionProfileRowsCompanion
   final Value<String?> wakeOnLanMacAddress;
   final Value<String?> wakeOnLanBroadcastAddress;
   final Value<int?> wakeOnLanPort;
+  final Value<String?> remotePath;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -691,6 +732,7 @@ class ConnectionProfileRowsCompanion
     this.wakeOnLanMacAddress = const Value.absent(),
     this.wakeOnLanBroadcastAddress = const Value.absent(),
     this.wakeOnLanPort = const Value.absent(),
+    this.remotePath = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -708,6 +750,7 @@ class ConnectionProfileRowsCompanion
     this.wakeOnLanMacAddress = const Value.absent(),
     this.wakeOnLanBroadcastAddress = const Value.absent(),
     this.wakeOnLanPort = const Value.absent(),
+    this.remotePath = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -732,6 +775,7 @@ class ConnectionProfileRowsCompanion
     Expression<String>? wakeOnLanMacAddress,
     Expression<String>? wakeOnLanBroadcastAddress,
     Expression<int>? wakeOnLanPort,
+    Expression<String>? remotePath,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -752,6 +796,7 @@ class ConnectionProfileRowsCompanion
       if (wakeOnLanBroadcastAddress != null)
         'wake_on_lan_broadcast_address': wakeOnLanBroadcastAddress,
       if (wakeOnLanPort != null) 'wake_on_lan_port': wakeOnLanPort,
+      if (remotePath != null) 'remote_path': remotePath,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -771,6 +816,7 @@ class ConnectionProfileRowsCompanion
     Value<String?>? wakeOnLanMacAddress,
     Value<String?>? wakeOnLanBroadcastAddress,
     Value<int?>? wakeOnLanPort,
+    Value<String?>? remotePath,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -789,6 +835,7 @@ class ConnectionProfileRowsCompanion
       wakeOnLanBroadcastAddress:
           wakeOnLanBroadcastAddress ?? this.wakeOnLanBroadcastAddress,
       wakeOnLanPort: wakeOnLanPort ?? this.wakeOnLanPort,
+      remotePath: remotePath ?? this.remotePath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -838,6 +885,9 @@ class ConnectionProfileRowsCompanion
     if (wakeOnLanPort.present) {
       map['wake_on_lan_port'] = Variable<int>(wakeOnLanPort.value);
     }
+    if (remotePath.present) {
+      map['remote_path'] = Variable<String>(remotePath.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -865,6 +915,7 @@ class ConnectionProfileRowsCompanion
           ..write('wakeOnLanMacAddress: $wakeOnLanMacAddress, ')
           ..write('wakeOnLanBroadcastAddress: $wakeOnLanBroadcastAddress, ')
           ..write('wakeOnLanPort: $wakeOnLanPort, ')
+          ..write('remotePath: $remotePath, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1282,6 +1333,7 @@ typedef $$ConnectionProfileRowsTableCreateCompanionBuilder =
       Value<String?> wakeOnLanMacAddress,
       Value<String?> wakeOnLanBroadcastAddress,
       Value<int?> wakeOnLanPort,
+      Value<String?> remotePath,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -1300,6 +1352,7 @@ typedef $$ConnectionProfileRowsTableUpdateCompanionBuilder =
       Value<String?> wakeOnLanMacAddress,
       Value<String?> wakeOnLanBroadcastAddress,
       Value<int?> wakeOnLanPort,
+      Value<String?> remotePath,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -1371,6 +1424,11 @@ class $$ConnectionProfileRowsTableFilterComposer
 
   ColumnFilters<int> get wakeOnLanPort => $composableBuilder(
     column: $table.wakeOnLanPort,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remotePath => $composableBuilder(
+    column: $table.remotePath,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1454,6 +1512,11 @@ class $$ConnectionProfileRowsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remotePath => $composableBuilder(
+    column: $table.remotePath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1524,6 +1587,11 @@ class $$ConnectionProfileRowsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get remotePath => $composableBuilder(
+    column: $table.remotePath,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -1589,6 +1657,7 @@ class $$ConnectionProfileRowsTableTableManager
                 Value<String?> wakeOnLanMacAddress = const Value.absent(),
                 Value<String?> wakeOnLanBroadcastAddress = const Value.absent(),
                 Value<int?> wakeOnLanPort = const Value.absent(),
+                Value<String?> remotePath = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1605,6 +1674,7 @@ class $$ConnectionProfileRowsTableTableManager
                 wakeOnLanMacAddress: wakeOnLanMacAddress,
                 wakeOnLanBroadcastAddress: wakeOnLanBroadcastAddress,
                 wakeOnLanPort: wakeOnLanPort,
+                remotePath: remotePath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -1623,6 +1693,7 @@ class $$ConnectionProfileRowsTableTableManager
                 Value<String?> wakeOnLanMacAddress = const Value.absent(),
                 Value<String?> wakeOnLanBroadcastAddress = const Value.absent(),
                 Value<int?> wakeOnLanPort = const Value.absent(),
+                Value<String?> remotePath = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -1639,6 +1710,7 @@ class $$ConnectionProfileRowsTableTableManager
                 wakeOnLanMacAddress: wakeOnLanMacAddress,
                 wakeOnLanBroadcastAddress: wakeOnLanBroadcastAddress,
                 wakeOnLanPort: wakeOnLanPort,
+                remotePath: remotePath,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

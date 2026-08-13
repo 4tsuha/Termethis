@@ -59,18 +59,58 @@ class FtpConnectRequest {
 
 enum FtpEntryKind { directory, file, link, unknown }
 
+enum SftpTransferDirection { download, upload }
+
+enum SftpTransferStatus { running, completed, cancelled, failed }
+
+class SftpTransferProgress {
+  const SftpTransferProgress({
+    required this.id,
+    required this.name,
+    required this.direction,
+    required this.status,
+    required this.bytesTransferred,
+    this.totalBytes,
+    this.errorMessage,
+  });
+
+  final String id;
+  final String name;
+  final SftpTransferDirection direction;
+  final SftpTransferStatus status;
+  final int bytesTransferred;
+  final int? totalBytes;
+  final String? errorMessage;
+
+  double? get fraction => switch (totalBytes) {
+    final total? when total > 0 => (bytesTransferred / total).clamp(0, 1),
+    _ => null,
+  };
+
+  bool get isFinished => status != SftpTransferStatus.running;
+}
+
+abstract interface class SftpTransferTask {
+  String get id;
+  Future<SftpTransferProgress> progress();
+  Future<void> cancel();
+  Future<void> dispose();
+}
+
 class FtpEntryInfo {
   const FtpEntryInfo({
     required this.name,
     required this.kind,
     this.size,
     this.modifiedAt,
+    this.permissions,
   });
 
   final String name;
   final FtpEntryKind kind;
   final int? size;
   final DateTime? modifiedAt;
+  final int? permissions;
 
   bool get isDirectory => kind == FtpEntryKind.directory;
 }
@@ -88,4 +128,21 @@ abstract interface class FtpConnection {
   Future<void> deleteFile(String name);
   Future<void> deleteEmptyDirectory(String name);
   Future<void> close();
+}
+
+abstract interface class SftpFileConnection implements FtpConnection {
+  Future<void> changePermissions(String name, int mode);
+  Future<void> downloadFile(String remoteName, String localPath);
+  Future<void> uploadFile(String localPath, String remoteName);
+  Future<SftpTransferTask> startDownloadFile(
+    String remoteName,
+    String localPath,
+  );
+  Future<SftpTransferTask> startUploadFile(String localPath, String remoteName);
+  Future<SftpTransferTask> startUploadDirectory(
+    String localPath,
+    String remoteName,
+  );
+  Future<void> uploadDirectory(String localPath, String remoteName);
+  Future<void> deleteDirectoryRecursive(String name);
 }

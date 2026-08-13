@@ -12,6 +12,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.OpenableColumns
 import android.view.WindowManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterShellArgs
@@ -34,6 +45,8 @@ class MainActivity : FlutterActivity() {
             "jp.yts.termethis/remote_desktop"
         private const val HARDWARE_ACCELERATION_CHANNEL =
             "jp.yts.termethis/hardware_acceleration"
+        private const val APP_ENVIRONMENT_CHANNEL =
+            "jp.yts.termethis/app_environment"
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 4109
     }
 
@@ -43,6 +56,9 @@ class MainActivity : FlutterActivity() {
     private var pendingPrivateKeyResult: MethodChannel.Result? = null
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
     private var shizukuDiagnosticsChannel: ShizukuDiagnosticsChannel? = null
+    private var vaultProtectionChannel: VaultProtectionChannel? = null
+    private var sftpFileTransferChannel: SftpFileTransferChannel? = null
+    private val composeLifecycleOwner = FlutterComposeLifecycleOwner()
 
     @Suppress("DEPRECATION")
     override fun getFlutterShellArgs(): FlutterShellArgs {
@@ -67,6 +83,14 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         shizukuDiagnosticsChannel = ShizukuDiagnosticsChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+        vaultProtectionChannel = VaultProtectionChannel(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+        sftpFileTransferChannel = SftpFileTransferChannel(
             this,
             flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -148,6 +172,31 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_ENVIRONMENT_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "getInfo") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            @Suppress("DEPRECATION")
+            val packageInfo = packageManager.getPackageInfo(packageName, 0)
+            val buildNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode.toString()
+            } else {
+                packageInfo.versionCode.toString()
+            }
+            result.success(
+                mapOf(
+                    "appVersion" to packageInfo.versionName,
+                    "buildNumber" to buildNumber,
+                    "osRelease" to Build.VERSION.RELEASE,
+                    "sdkLevel" to Build.VERSION.SDK_INT,
+                    "deviceModel" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
+                ),
+            )
         }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -237,12 +286,25 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        composeLifecycleOwner.resume()
+        window.decorView.setViewTreeLifecycleOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeSavedStateRegistryOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeViewModelStoreOwner(composeLifecycleOwner)
         window.decorView.post { refreshRateController.attachTo(this) }
     }
 
     override fun onResume() {
         super.onResume()
+        composeLifecycleOwner.resume()
+        window.decorView.setViewTreeLifecycleOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeSavedStateRegistryOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeViewModelStoreOwner(composeLifecycleOwner)
         window.decorView.post { refreshRateController.attachTo(this) }
+    }
+
+    override fun onPause() {
+        composeLifecycleOwner.pause()
+        super.onPause()
     }
 
     override fun onMultiWindowModeChanged(
@@ -254,6 +316,11 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        composeLifecycleOwner.destroy()
+        vaultProtectionChannel?.dispose()
+        vaultProtectionChannel = null
+        sftpFileTransferChannel?.dispose()
+        sftpFileTransferChannel = null
         pendingBackgroundSessionResult?.error(
             "activity_destroyed",
             "Activity was destroyed before notification permission completed",
@@ -269,6 +336,9 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Android SDK, retained for FlutterActivity compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (sftpFileTransferChannel?.onActivityResult(requestCode, resultCode, data) == true) {
+            return
+        }
         if (requestCode != PRIVATE_KEY_REQUEST_CODE) {
             return
         }
@@ -413,5 +483,36 @@ class MainActivity : FlutterActivity() {
             host
         }
         return "$formattedHost:$port"
+    }
+}
+
+private class FlutterComposeLifecycleOwner :
+    LifecycleOwner,
+    SavedStateRegistryOwner,
+    ViewModelStoreOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle = registry
+    private val savedStateController = SavedStateRegistryController.create(this)
+    private val models = ViewModelStore()
+
+    init {
+        savedStateController.performAttach()
+        savedStateController.performRestore(null)
+    }
+
+    override val savedStateRegistry: SavedStateRegistry = savedStateController.savedStateRegistry
+    override val viewModelStore: ViewModelStore = models
+
+    fun resume() {
+        registry.currentState = Lifecycle.State.RESUMED
+    }
+
+    fun pause() {
+        registry.currentState = Lifecycle.State.STARTED
+    }
+
+    fun destroy() {
+        registry.currentState = Lifecycle.State.DESTROYED
+        models.clear()
     }
 }

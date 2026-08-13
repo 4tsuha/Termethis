@@ -40,6 +40,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustHostKey dco_decode_box_autoadd_rust_host_key(dynamic raw);
 
   @protected
+  RustMoshBootstrapRequest dco_decode_box_autoadd_rust_mosh_bootstrap_request(
+    dynamic raw,
+  );
+
+  @protected
   RustRdpConnectRequest dco_decode_box_autoadd_rust_rdp_connect_request(
     dynamic raw,
   );
@@ -58,7 +63,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSshExecRequest dco_decode_box_autoadd_rust_ssh_exec_request(dynamic raw);
 
   @protected
+  RustSshTunnelStartRequest
+  dco_decode_box_autoadd_rust_ssh_tunnel_start_request(dynamic raw);
+
+  @protected
+  RustVncConnectRequest dco_decode_box_autoadd_rust_vnc_connect_request(
+    dynamic raw,
+  );
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -84,6 +101,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<RustSftpEntry> dco_decode_list_rust_sftp_entry(dynamic raw);
 
   @protected
+  List<RustSshJumpHost> dco_decode_list_rust_ssh_jump_host(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -101,6 +121,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
   RustAuthChallenge dco_decode_rust_auth_challenge(dynamic raw);
 
   @protected
@@ -108,6 +131,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustInteractivePrompt dco_decode_rust_interactive_prompt(dynamic raw);
+
+  @protected
+  RustKeyDecodeDiagnostics dco_decode_rust_key_decode_diagnostics(dynamic raw);
+
+  @protected
+  RustMoshBootstrapRequest dco_decode_rust_mosh_bootstrap_request(dynamic raw);
+
+  @protected
+  RustMoshBootstrapResult dco_decode_rust_mosh_bootstrap_result(dynamic raw);
 
   @protected
   RustRdpConnectRequest dco_decode_rust_rdp_connect_request(dynamic raw);
@@ -131,6 +163,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSftpEntry dco_decode_rust_sftp_entry(dynamic raw);
 
   @protected
+  RustSftpTransferProgress dco_decode_rust_sftp_transfer_progress(dynamic raw);
+
+  @protected
   RustSshConnectRequest dco_decode_rust_ssh_connect_request(dynamic raw);
 
   @protected
@@ -143,13 +178,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSshExecResult dco_decode_rust_ssh_exec_result(dynamic raw);
 
   @protected
+  RustSshJumpHost dco_decode_rust_ssh_jump_host(dynamic raw);
+
+  @protected
   RustSshReadResult dco_decode_rust_ssh_read_result(dynamic raw);
+
+  @protected
+  RustSshTunnelStartRequest dco_decode_rust_ssh_tunnel_start_request(
+    dynamic raw,
+  );
+
+  @protected
+  RustSshTunnelStatus dco_decode_rust_ssh_tunnel_status(dynamic raw);
+
+  @protected
+  RustVncConnectRequest dco_decode_rust_vnc_connect_request(dynamic raw);
+
+  @protected
+  RustVncConnectResult dco_decode_rust_vnc_connect_result(dynamic raw);
+
+  @protected
+  RustVncFrame dco_decode_rust_vnc_frame(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -180,6 +238,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustMoshBootstrapRequest sse_decode_box_autoadd_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustRdpConnectRequest sse_decode_box_autoadd_rust_rdp_connect_request(
     SseDeserializer deserializer,
   );
@@ -200,7 +263,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustSshTunnelStartRequest
+  sse_decode_box_autoadd_rust_ssh_tunnel_start_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncConnectRequest sse_decode_box_autoadd_rust_vnc_connect_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -228,6 +305,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RustSshJumpHost> sse_decode_list_rust_ssh_jump_host(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -247,6 +329,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   RustAuthChallenge sse_decode_rust_auth_challenge(
     SseDeserializer deserializer,
   );
@@ -256,6 +341,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustInteractivePrompt sse_decode_rust_interactive_prompt(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustKeyDecodeDiagnostics sse_decode_rust_key_decode_diagnostics(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustMoshBootstrapRequest sse_decode_rust_mosh_bootstrap_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustMoshBootstrapResult sse_decode_rust_mosh_bootstrap_result(
     SseDeserializer deserializer,
   );
 
@@ -289,6 +389,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustSftpEntry sse_decode_rust_sftp_entry(SseDeserializer deserializer);
 
   @protected
+  RustSftpTransferProgress sse_decode_rust_sftp_transfer_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustSshConnectRequest sse_decode_rust_ssh_connect_request(
     SseDeserializer deserializer,
   );
@@ -309,15 +414,44 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustSshJumpHost sse_decode_rust_ssh_jump_host(SseDeserializer deserializer);
+
+  @protected
   RustSshReadResult sse_decode_rust_ssh_read_result(
     SseDeserializer deserializer,
   );
+
+  @protected
+  RustSshTunnelStartRequest sse_decode_rust_ssh_tunnel_start_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustSshTunnelStatus sse_decode_rust_ssh_tunnel_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncConnectRequest sse_decode_rust_vnc_connect_request(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncConnectResult sse_decode_rust_vnc_connect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustVncFrame sse_decode_rust_vnc_frame(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -356,6 +490,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_rust_rdp_connect_request(
     RustRdpConnectRequest self,
     SseSerializer serializer,
@@ -380,7 +520,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_rust_ssh_tunnel_start_request(
+    RustSshTunnelStartRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_rust_vnc_connect_request(
+    RustVncConnectRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -413,6 +568,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_rust_ssh_jump_host(
+    List<RustSshJumpHost> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -437,6 +598,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_rust_auth_challenge(
     RustAuthChallenge self,
     SseSerializer serializer,
@@ -448,6 +612,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_rust_interactive_prompt(
     RustInteractivePrompt self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_key_decode_diagnostics(
+    RustKeyDecodeDiagnostics self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_mosh_bootstrap_request(
+    RustMoshBootstrapRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_mosh_bootstrap_result(
+    RustMoshBootstrapResult self,
     SseSerializer serializer,
   );
 
@@ -485,6 +667,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_rust_sftp_entry(RustSftpEntry self, SseSerializer serializer);
 
   @protected
+  void sse_encode_rust_sftp_transfer_progress(
+    RustSftpTransferProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_rust_ssh_connect_request(
     RustSshConnectRequest self,
     SseSerializer serializer,
@@ -509,16 +697,52 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_rust_ssh_jump_host(
+    RustSshJumpHost self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_rust_ssh_read_result(
     RustSshReadResult self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_rust_ssh_tunnel_start_request(
+    RustSshTunnelStartRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_ssh_tunnel_status(
+    RustSshTunnelStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_vnc_connect_request(
+    RustVncConnectRequest self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_vnc_connect_result(
+    RustVncConnectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_rust_vnc_frame(RustVncFrame self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

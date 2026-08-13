@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../shared/utils/normalize_ascii_input.dart';
@@ -8,10 +12,15 @@ import '../../connections/application/connection_profiles_controller.dart';
 import '../../connections/domain/connection_profile.dart';
 import '../../connections/domain/credential_vault.dart';
 import '../application/ftp_tabs_controller.dart';
+import '../application/sftp_transfer_manager.dart';
 import '../domain/ftp_gateway.dart';
 import '../../terminal/domain/ssh_gateway.dart';
+import '../../../infrastructure/ftp/android_sftp_file_transfer_gateway.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
-enum _EntryAction { rename, delete }
+enum _EntryAction { download, permissions, rename, delete }
+
+enum _UploadAction { file, folder }
 
 final _ftpDateFormat = DateFormat('yyyy/MM/dd HH:mm', 'ja');
 
@@ -23,6 +32,7 @@ class FtpManagerScreen extends ConsumerStatefulWidget {
 }
 
 class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
+  static const _fileTransfer = AndroidSftpFileTransferGateway();
   String? _selectedTabId;
 
   @override
@@ -36,17 +46,15 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
         ? null
         : tabs.firstWhere((tab) => tab.id == activeId);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.ftpTitle),
-        actions: [
-          IconButton(
-            onPressed: _showConnectionDialog,
-            tooltip: l10n.ftpAddTab,
-            icon: const Icon(Icons.add_link),
-          ),
-        ],
-      ),
+    return ExpressiveScaffold(
+      title: 'ファイル',
+      actions: [
+        IconButton(
+          onPressed: _showConnectionDialog,
+          tooltip: l10n.ftpAddTab,
+          icon: const Icon(Icons.add_link),
+        ),
+      ],
       body: tabs.isEmpty
           ? _EmptyFtpState(onAdd: _showConnectionDialog)
           : Column(
@@ -67,6 +75,10 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
 
   Widget _buildTabContent(FtpTabState tab) {
     final l10n = AppLocalizations.of(context);
+    final transfers = ref
+        .watch(sftpTransferManagerProvider)
+        .where((transfer) => transfer.tabId == tab.id)
+        .toList(growable: false);
     if (tab.status == FtpTabStatus.connecting) {
       return _CenteredStatus(
         icon: Icons.cloud_sync_outlined,
@@ -103,12 +115,24 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
               ),
             ],
           ),
+        if (transfers.isNotEmpty)
+          _TransferPanel(
+            transfers: transfers,
+            onCancel: (id) =>
+                ref.read(sftpTransferManagerProvider.notifier).cancel(id),
+            onRetry: (id) =>
+                ref.read(sftpTransferManagerProvider.notifier).retry(id),
+            onSave: _saveCompletedDownload,
+            onRemove: (id) =>
+                ref.read(sftpTransferManagerProvider.notifier).remove(id),
+          ),
         _DirectoryToolbar(
           tab: tab,
           onNavigate: (path) =>
               ref.read(ftpTabsProvider.notifier).goToDirectory(tab.id, path),
           onRefresh: () => ref.read(ftpTabsProvider.notifier).refresh(tab.id),
           onNewFolder: () => _showNewFolderDialog(context, tab),
+          onUpload: (action) => _handleUpload(tab, action),
         ),
         const Divider(height: 1),
         if (tab.isBusy) const LinearProgressIndicator(minHeight: 2),
@@ -137,6 +161,7 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
 
   Widget _buildEntryTile(FtpTabState tab, FtpEntryInfo entry) {
     final theme = Theme.of(context);
+    final supportsSftpActions = tab.connection is SftpFileConnection;
     return ListTile(
       enabled: !tab.isBusy,
       leading: CircleAvatar(
@@ -158,10 +183,29 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
                 .enterDirectory(tab.id, entry.name)
           : null,
       trailing: PopupMenuButton<_EntryAction>(
+        key: ValueKey('file-entry-menu-${entry.name}'),
         onSelected: (action) => _handleEntryAction(tab, entry, action),
         itemBuilder: (context) {
           final l10n = AppLocalizations.of(context);
           return [
+            if (supportsSftpActions && !entry.isDirectory)
+              const PopupMenuItem(
+                value: _EntryAction.download,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.download_outlined),
+                  title: Text('ダウンロード'),
+                ),
+              ),
+            if (supportsSftpActions)
+              const PopupMenuItem(
+                value: _EntryAction.permissions,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.admin_panel_settings_outlined),
+                  title: Text('権限を変更'),
+                ),
+              ),
             PopupMenuItem(
               value: _EntryAction.rename,
               child: ListTile(
@@ -189,10 +233,24 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
     final type = entry.isDirectory ? l10n.ftpDirectory : l10n.ftpFile;
     final details = <String>[type];
     if (!entry.isDirectory) details.add(_formatBytes(entry.size));
+    if (entry.permissions case final mode?) {
+      details.add(
+        '${mode.toRadixString(8).padLeft(3, '0')} ${_permissionText(mode)}',
+      );
+    }
     if (entry.modifiedAt != null) {
       details.add(_ftpDateFormat.format(entry.modifiedAt!));
     }
     return details.join(' ・ ');
+  }
+
+  String _permissionText(int mode) {
+    const bits = [0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1];
+    const labels = ['r', 'w', 'x', 'r', 'w', 'x', 'r', 'w', 'x'];
+    return [
+      for (var index = 0; index < bits.length; index++)
+        mode & bits[index] != 0 ? labels[index] : '-',
+    ].join();
   }
 
   String _formatBytes(int? bytes) {
@@ -352,6 +410,47 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
     _EntryAction action,
   ) async {
     switch (action) {
+      case _EntryAction.download:
+        final temporaryDirectory = await getTemporaryDirectory();
+        final transferDirectory = await Directory(
+          p.join(
+            temporaryDirectory.path,
+            'sftp_download',
+            DateTime.now().microsecondsSinceEpoch.toString(),
+          ),
+        ).create(recursive: true);
+        final localPath = p.join(transferDirectory.path, entry.name);
+        final transferId = await ref
+            .read(ftpTabsProvider.notifier)
+            .startDownloadFile(
+              id: tab.id,
+              remoteName: entry.name,
+              localPath: localPath,
+              cleanup: () async {
+                if (await transferDirectory.exists()) {
+                  await transferDirectory.delete(recursive: true);
+                }
+              },
+            );
+        if (transferId == null && await transferDirectory.exists()) {
+          if (await transferDirectory.exists()) {
+            await transferDirectory.delete(recursive: true);
+          }
+        }
+      case _EntryAction.permissions:
+        final mode = await showDialog<int>(
+          context: context,
+          builder: (context) => _PermissionsDialog(
+            name: entry.name,
+            initialMode:
+                entry.permissions ?? (entry.isDirectory ? 0x1ed : 0x1a4),
+          ),
+        );
+        if (mode != null && mounted) {
+          await ref
+              .read(ftpTabsProvider.notifier)
+              .changePermissions(tab.id, entry.name, mode);
+        }
       case _EntryAction.rename:
         final name = await _showNameDialog(
           context,
@@ -370,7 +469,11 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: Text(l10n.ftpDeleteTitle),
-            content: Text(l10n.ftpDeleteMessage(entry.name)),
+            content: Text(
+              entry.isDirectory
+                  ? '${entry.name}と、その中にあるすべてのファイルを削除します。この操作は元に戻せません。'
+                  : l10n.ftpDeleteMessage(entry.name),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -388,6 +491,134 @@ class _FtpManagerScreenState extends ConsumerState<FtpManagerScreen> {
         }
     }
   }
+
+  Future<void> _handleUpload(FtpTabState tab, _UploadAction action) async {
+    switch (action) {
+      case _UploadAction.file:
+        final files = await _fileTransfer.pickFiles();
+        if (files.isEmpty || !mounted) return;
+        final transferRoots = files
+            .map((file) => File(file.path).parent)
+            .toSet();
+        final lease = _TransferRootLease(transferRoots, files.length);
+        for (final file in files) {
+          final existing = tab.entries
+              .where((entry) => entry.name == file.name)
+              .firstOrNull;
+          if (existing != null && existing.kind != FtpEntryKind.file) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${file.name}はファイルとして上書きできません。')),
+              );
+            }
+            await lease.release();
+            continue;
+          }
+          if (existing != null) {
+            if (!mounted || !await _confirmOverwrite(context, file.name)) {
+              await lease.release();
+              continue;
+            }
+          }
+          final transferId = await ref
+              .read(ftpTabsProvider.notifier)
+              .startUploadFile(
+                id: tab.id,
+                localPath: file.path,
+                remoteName: file.name,
+                cleanup: lease.release,
+              );
+          if (transferId == null) await lease.release();
+        }
+      case _UploadAction.folder:
+        final folder = await _fileTransfer.pickDirectory();
+        if (folder == null || !mounted) return;
+        final transferRoot = File(folder.path).parent;
+        final existing = tab.entries
+            .where((entry) => entry.name == folder.name)
+            .firstOrNull;
+        if (existing != null && !existing.isDirectory) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${folder.name}はフォルダとして上書きできません。')),
+            );
+          }
+          if (await transferRoot.exists()) {
+            await transferRoot.delete(recursive: true);
+          }
+          return;
+        }
+        if (existing != null &&
+            !await _confirmOverwrite(context, folder.name)) {
+          if (await transferRoot.exists()) {
+            await transferRoot.delete(recursive: true);
+          }
+          return;
+        }
+        final transferId = await ref
+            .read(ftpTabsProvider.notifier)
+            .startUploadDirectory(
+              id: tab.id,
+              localPath: folder.path,
+              remoteName: folder.name,
+              cleanup: () async {
+                if (await transferRoot.exists()) {
+                  await transferRoot.delete(recursive: true);
+                }
+              },
+            );
+        if (transferId == null) {
+          if (await transferRoot.exists()) {
+            await transferRoot.delete(recursive: true);
+          }
+        }
+    }
+  }
+
+  Future<void> _saveCompletedDownload(ManagedSftpTransfer transfer) async {
+    final localPath = transfer.localPath;
+    if (localPath == null) return;
+    bool saved;
+    try {
+      saved = await _fileTransfer.exportFile(
+        localPath: localPath,
+        fileName: transfer.name,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('保存先を開けませんでした。もう一度お試しください。')),
+        );
+      }
+      return;
+    }
+    if (!mounted || !saved) return;
+    await ref.read(sftpTransferManagerProvider.notifier).markSaved(transfer.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${transfer.name}を保存しました。')));
+  }
+
+  Future<bool> _confirmOverwrite(BuildContext context, String name) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('ファイルを上書き'),
+          content: Text('$name はすでに存在します。上書きしますか？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('上書き'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
 
   Future<String?> _showNameDialog(
     BuildContext context, {
@@ -523,12 +754,14 @@ class _DirectoryToolbar extends StatelessWidget {
     required this.onNavigate,
     required this.onRefresh,
     required this.onNewFolder,
+    required this.onUpload,
   });
 
   final FtpTabState tab;
   final ValueChanged<String> onNavigate;
   final VoidCallback onRefresh;
   final VoidCallback onNewFolder;
+  final ValueChanged<_UploadAction> onUpload;
 
   @override
   Widget build(BuildContext context) {
@@ -549,6 +782,31 @@ class _DirectoryToolbar extends StatelessWidget {
             tooltip: l10n.ftpRefresh,
             icon: const Icon(Icons.refresh),
           ),
+          if (tab.connection is SftpFileConnection)
+            PopupMenuButton<_UploadAction>(
+              enabled: !tab.isBusy,
+              tooltip: 'アップロード',
+              icon: const Icon(Icons.upload_outlined),
+              onSelected: onUpload,
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _UploadAction.file,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.upload_file_outlined),
+                    title: Text('ファイルをアップロード'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _UploadAction.folder,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.drive_folder_upload_outlined),
+                    title: Text('フォルダをアップロード'),
+                  ),
+                ),
+              ],
+            ),
           IconButton(
             onPressed: tab.isBusy ? null : onNewFolder,
             tooltip: l10n.ftpNewFolder,
@@ -583,6 +841,223 @@ class _DirectoryToolbar extends StatelessWidget {
     }
     return widgets;
   }
+}
+
+class _TransferPanel extends StatelessWidget {
+  const _TransferPanel({
+    required this.transfers,
+    required this.onCancel,
+    required this.onRetry,
+    required this.onSave,
+    required this.onRemove,
+  });
+
+  final List<ManagedSftpTransfer> transfers;
+  final ValueChanged<String> onCancel;
+  final ValueChanged<String> onRetry;
+  final ValueChanged<ManagedSftpTransfer> onSave;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      child: ExpansionTile(
+        initiallyExpanded: transfers.any((item) => item.isActive),
+        leading: const Icon(Icons.sync_alt),
+        title: Text('転送 ${transfers.length}件'),
+        subtitle: Text(_summary()),
+        children: [
+          for (final transfer in transfers)
+            ListTile(
+              leading: Icon(
+                transfer.direction == SftpTransferDirection.download
+                    ? Icons.download_outlined
+                    : Icons.upload_outlined,
+              ),
+              title: Text(
+                transfer.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_statusText(transfer)),
+                  if (transfer.isActive) ...[
+                    const SizedBox(height: 4),
+                    LinearProgressIndicator(value: transfer.fraction),
+                  ],
+                ],
+              ),
+              trailing: switch (transfer.status) {
+                ManagedTransferStatus.running => IconButton(
+                  tooltip: 'キャンセル',
+                  onPressed: () => onCancel(transfer.id),
+                  icon: const Icon(Icons.close),
+                ),
+                ManagedTransferStatus.readyToSave => FilledButton.tonalIcon(
+                  onPressed: () => onSave(transfer),
+                  icon: const Icon(Icons.save_alt, size: 18),
+                  label: const Text('保存'),
+                ),
+                ManagedTransferStatus.failed => IconButton(
+                  tooltip: '再試行',
+                  onPressed: () => onRetry(transfer.id),
+                  icon: const Icon(Icons.refresh),
+                ),
+                _ => IconButton(
+                  tooltip: '履歴から削除',
+                  onPressed: () => onRemove(transfer.id),
+                  icon: const Icon(Icons.close),
+                ),
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _summary() {
+    final active = transfers.where((item) => item.isActive).length;
+    final failed = transfers
+        .where((item) => item.status == ManagedTransferStatus.failed)
+        .length;
+    if (active > 0) return '$active件を転送中';
+    if (failed > 0) return '$failed件が失敗';
+    return '完了した転送を確認できます';
+  }
+
+  String _statusText(ManagedSftpTransfer transfer) {
+    final bytes = _compactBytes(transfer.bytesTransferred);
+    final total = transfer.totalBytes == null
+        ? ''
+        : ' / ${_compactBytes(transfer.totalBytes!)}';
+    return switch (transfer.status) {
+      ManagedTransferStatus.running => '$bytes$total',
+      ManagedTransferStatus.readyToSave => '転送完了・保存先を選択してください',
+      ManagedTransferStatus.completed => '完了',
+      ManagedTransferStatus.cancelled => 'キャンセルしました',
+      ManagedTransferStatus.failed => transfer.errorMessage ?? '転送に失敗しました',
+    };
+  }
+
+  String _compactBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+class _TransferRootLease {
+  _TransferRootLease(this.roots, this.remaining);
+
+  final Set<Directory> roots;
+  int remaining;
+
+  Future<void> release() async {
+    if (remaining <= 0) return;
+    remaining -= 1;
+    if (remaining != 0) return;
+    for (final root in roots) {
+      if (await root.exists()) await root.delete(recursive: true);
+    }
+  }
+}
+
+class _PermissionsDialog extends StatefulWidget {
+  const _PermissionsDialog({required this.name, required this.initialMode});
+
+  final String name;
+  final int initialMode;
+
+  @override
+  State<_PermissionsDialog> createState() => _PermissionsDialogState();
+}
+
+class _PermissionsDialogState extends State<_PermissionsDialog> {
+  late final int _specialMode = widget.initialMode & ~0x1ff;
+  late int _mode = widget.initialMode & 0x1ff;
+
+  int get _fullMode => _specialMode | _mode;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('権限を変更'),
+    content: SizedBox(
+      width: 420,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'chmod ${_fullMode.toRadixString(8).padLeft(_specialMode == 0 ? 3 : 4, '0')}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontFamily: 'CascadiaMono'),
+            ),
+            const SizedBox(height: 16),
+            _permissionGroup('所有者', 0x100, 0x80, 0x40),
+            const Divider(),
+            _permissionGroup('グループ', 0x20, 0x10, 0x8),
+            const Divider(),
+            _permissionGroup('その他', 0x4, 0x2, 0x1),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('キャンセル'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, _fullMode),
+        child: const Text('適用'),
+      ),
+    ],
+  );
+
+  Widget _permissionGroup(String label, int read, int write, int execute) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              _permissionCheckbox('読み取り', read),
+              _permissionCheckbox('書き込み', write),
+              _permissionCheckbox('実行', execute),
+            ],
+          ),
+        ],
+      );
+
+  Widget _permissionCheckbox(String label, int bit) => SizedBox(
+    width: 120,
+    child: CheckboxListTile(
+      value: _mode & bit != 0,
+      onChanged: (selected) => setState(() {
+        _mode = selected == true ? _mode | bit : _mode & ~bit;
+      }),
+      title: Text(label),
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.leading,
+      dense: true,
+    ),
+  );
 }
 
 class _WarningBanner extends StatelessWidget {
@@ -621,10 +1096,10 @@ class _EmptyFtpState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return _CenteredStatus(
+    return ExpressiveEmptyState(
       icon: Icons.folder_copy_outlined,
-      message: l10n.ftpEmptyTitle,
-      supportingMessage: l10n.ftpEmptyMessage,
+      title: l10n.ftpEmptyTitle,
+      message: l10n.ftpEmptyMessage,
       action: FilledButton.icon(
         onPressed: onAdd,
         icon: const Icon(Icons.add_link),
@@ -638,14 +1113,12 @@ class _CenteredStatus extends StatelessWidget {
   const _CenteredStatus({
     required this.icon,
     required this.message,
-    this.supportingMessage,
     this.action,
     this.showProgress = false,
   });
 
   final IconData icon;
   final String message;
-  final String? supportingMessage;
   final Widget? action;
   final bool showProgress;
 
@@ -664,10 +1137,6 @@ class _CenteredStatus extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            if (supportingMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(supportingMessage!, textAlign: TextAlign.center),
-            ],
             if (showProgress) ...[
               const SizedBox(height: 20),
               const CircularProgressIndicator(),

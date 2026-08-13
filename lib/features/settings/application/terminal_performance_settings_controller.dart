@@ -11,7 +11,7 @@ import 'background_session_coordinator.dart';
 final initialTerminalPerformanceSettingsProvider =
     Provider<TerminalPerformanceSettings>(
       (ref) => const TerminalPerformanceSettings(
-        rendererMode: TerminalRendererMode.webgl,
+        rendererMode: TerminalRendererMode.connectBot,
       ),
     );
 

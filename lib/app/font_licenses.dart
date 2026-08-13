@@ -48,6 +48,9 @@ void registerBundledLicenses() {
       'xterm.dart',
     ], await rootBundle.loadString('third_party/xterm/LICENSE'));
     yield LicenseEntryWithLineBreaks(const [
+      'mosh_dart',
+    ], await rootBundle.loadString('third_party/mosh_dart/LICENSE'));
+    yield LicenseEntryWithLineBreaks(const [
       '@xterm/xterm',
       '@xterm/addon-fit',
       '@xterm/addon-serialize',
@@ -104,6 +107,10 @@ void registerBundledLicenses() {
       'russh-sftp': ['assets/licenses/LICENSE-russh-sftp.txt'],
       'tokio': ['assets/licenses/LICENSE-tokio.txt'],
       'Shizuku API': ['assets/licenses/LICENSE-Shizuku-API.txt'],
+      'vnc-rs': [
+        'assets/licenses/LICENSE-vnc-rs-MIT.txt',
+        'assets/licenses/LICENSE-vnc-rs-APACHE.txt',
+      ],
     }.entries) {
       for (final asset in license.value) {
         yield LicenseEntryWithLineBreaks([

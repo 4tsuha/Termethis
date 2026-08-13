@@ -670,6 +670,18 @@ abstract class AppLocalizations {
   /// **'ホーム'**
   String get navHome;
 
+  /// No description provided for @navConnections.
+  ///
+  /// In ja, this message translates to:
+  /// **'接続'**
+  String get navConnections;
+
+  /// No description provided for @navFiles.
+  ///
+  /// In ja, this message translates to:
+  /// **'ファイル'**
+  String get navFiles;
+
   /// No description provided for @navTerminal.
   ///
   /// In ja, this message translates to:
@@ -889,19 +901,19 @@ abstract class AppLocalizations {
   /// No description provided for @ftpAddTab.
   ///
   /// In ja, this message translates to:
-  /// **'FTP接続'**
+  /// **'ファイル接続'**
   String get ftpAddTab;
 
   /// No description provided for @ftpEmptyTitle.
   ///
   /// In ja, this message translates to:
-  /// **'FTPタブがありません'**
+  /// **'ファイル接続がありません'**
   String get ftpEmptyTitle;
 
   /// No description provided for @ftpEmptyMessage.
   ///
   /// In ja, this message translates to:
-  /// **'接続先を追加すると、サーバー内のフォルダーを階層表示できます。'**
+  /// **'FTP、FTPS、SFTPの接続先を追加すると、サーバー内のファイルを管理できます。'**
   String get ftpEmptyMessage;
 
   /// No description provided for @ftpConnectionTitle.
@@ -1159,7 +1171,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTerminalRenderer.
   ///
   /// In ja, this message translates to:
-  /// **'ターミナル描画エンジン'**
+  /// **'ターミナルエミュレータ'**
   String get settingsTerminalRenderer;
 
   /// No description provided for @settingsSelectTerminalRenderer.
@@ -1180,28 +1192,28 @@ abstract class AppLocalizations {
   /// **'複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。'**
   String get terminalRendererWebglDescription;
 
-  /// No description provided for @terminalRendererAlacritty.
+  /// No description provided for @terminalRendererXtermDart.
   ///
   /// In ja, this message translates to:
-  /// **'Flutter Alacritty'**
-  String get terminalRendererAlacritty;
+  /// **'xterm.dart'**
+  String get terminalRendererXtermDart;
 
-  /// No description provided for @terminalRendererAlacrittyDescription.
+  /// No description provided for @terminalRendererXtermDartDescription.
   ///
   /// In ja, this message translates to:
-  /// **'AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。'**
-  String get terminalRendererAlacrittyDescription;
+  /// **'Flutter上で動くDart製ターミナルです。CJK、絵文字、日本語IMEに対応し、WebViewを使用しません。'**
+  String get terminalRendererXtermDartDescription;
 
   /// No description provided for @terminalRendererConnectBot.
   ///
   /// In ja, this message translates to:
-  /// **'ConnectBot'**
+  /// **'termlib'**
   String get terminalRendererConnectBot;
 
   /// No description provided for @terminalRendererConnectBotDescription.
   ///
   /// In ja, this message translates to:
-  /// **'ConnectBot termlibとlibvtermによる省メモリ描画です。WebViewを使わず、長時間の通常操作を軽く保ちます。複雑なTUIや大量更新ではWebGLより遅くなる場合があります。'**
+  /// **'termlibとlibvtermの標準描画を使用します。IME、文字選択、スクロール、マウス入力をAndroid上で処理し、WebViewを使用しません。'**
   String get terminalRendererConnectBotDescription;
 
   /// No description provided for @terminalRendererTermux.
@@ -1459,7 +1471,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionValue.
   ///
   /// In ja, this message translates to:
-  /// **'0.5.0'**
+  /// **'0.8.0'**
   String get settingsVersionValue;
 
   /// No description provided for @settingsLicenses.

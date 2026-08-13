@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../application/shizuku_diagnostics_controller.dart';
 import '../domain/shizuku_diagnostics_gateway.dart';
+import '../../../shared/presentation/expressive_scaffold.dart';
 
 class ShizukuScreen extends ConsumerWidget {
   const ShizukuScreen({super.key});
@@ -11,17 +12,15 @@ class ShizukuScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(shizukuStatusProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Shizuku連携'),
-        actions: [
-          IconButton(
-            tooltip: '状態を更新',
-            onPressed: () => ref.read(shizukuStatusProvider.notifier).refresh(),
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+    return ExpressiveScaffold(
+      title: 'Shizuku連携',
+      actions: [
+        IconButton(
+          tooltip: '状態を更新',
+          onPressed: () => ref.read(shizukuStatusProvider.notifier).refresh(),
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
       body: status.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _ShizukuError(
@@ -47,7 +46,6 @@ class _ShizukuBody extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
         Card(
-          elevation: 0,
           color: granted ? colors.primaryContainer : colors.surfaceContainerLow,
           child: ListTile(
             leading: Icon(
@@ -59,7 +57,6 @@ class _ShizukuBody extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         Card(
-          elevation: 0,
           color: colors.surfaceContainerLow,
           child: const Padding(
             padding: EdgeInsets.all(16),
@@ -92,7 +89,7 @@ class _ShizukuBody extends ConsumerWidget {
           ),
         if (granted) ...[
           FilledButton.icon(
-            onPressed: () => context.go('/terminals?mode=shizuku'),
+            onPressed: () => context.go('/connections'),
             icon: const Icon(Icons.terminal),
             label: const Text('ADBシェルを開く'),
           ),

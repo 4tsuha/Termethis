@@ -14,7 +14,9 @@ import '../application/shizuku_shell_controller.dart';
 import '../domain/shizuku_diagnostics_gateway.dart';
 
 class ShizukuShellScreen extends ConsumerStatefulWidget {
-  const ShizukuShellScreen({super.key});
+  const ShizukuShellScreen({this.embedded = false, super.key});
+
+  final bool embedded;
 
   @override
   ConsumerState<ShizukuShellScreen> createState() => _ShizukuShellScreenState();
@@ -45,13 +47,14 @@ class _ShizukuShellScreenState extends ConsumerState<ShizukuShellScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              _ShizukuTabBar(
-                running: controller.isRunning,
-                onClose: () async {
-                  await controller.stop();
-                  if (context.mounted) context.go('/terminals');
-                },
-              ),
+              if (!widget.embedded)
+                _ShizukuTabBar(
+                  running: controller.isRunning,
+                  onClose: () async {
+                    await controller.stop();
+                    if (context.mounted) context.go('/connections');
+                  },
+                ),
               Expanded(
                 child: status.when(
                   loading: () =>

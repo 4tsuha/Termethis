@@ -19,6 +19,7 @@ class XtermWebTerminal extends StatefulWidget {
     required this.mouseInput,
     required this.longPressRightClick,
     required this.tapToMovePromptCursor,
+    required this.agentMode,
     this.onRendererChanged,
     this.onFatalError,
     super.key,
@@ -32,6 +33,7 @@ class XtermWebTerminal extends StatefulWidget {
   final bool mouseInput;
   final bool longPressRightClick;
   final bool tapToMovePromptCursor;
+  final bool agentMode;
   final ValueChanged<String>? onRendererChanged;
   final ValueChanged<String>? onFatalError;
 
@@ -51,6 +53,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
   static const _writeAckTimeout = Duration(seconds: 10);
 
   late final WebViewController _controller;
+  late final Widget _webView;
   final Queue<String> _pendingScripts = Queue<String>();
   final Queue<_QueuedOutputChunk> _pendingOutput = Queue<_QueuedOutputChunk>();
   final Map<int, Completer<_SnapshotResult>> _snapshotRequests = {};
@@ -106,6 +109,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
         onMessageReceived: _handleJavaScriptMessage,
       )
       ..loadFlutterAsset('assets/web_terminal/index.html');
+    _webView = WebViewWidget(controller: _controller);
   }
 
   @override
@@ -134,7 +138,8 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
             oldWidget.fontSize != widget.fontSize ||
             oldWidget.mouseInput != widget.mouseInput ||
             oldWidget.longPressRightClick != widget.longPressRightClick ||
-            oldWidget.tapToMovePromptCursor != widget.tapToMovePromptCursor)) {
+            oldWidget.tapToMovePromptCursor != widget.tapToMovePromptCursor ||
+            oldWidget.agentMode != widget.agentMode)) {
       _configure();
     }
   }
@@ -171,10 +176,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black,
-      child: WebViewWidget(controller: _controller),
-    );
+    return ColoredBox(color: Colors.black, child: _webView);
   }
 
   void focus() {
@@ -511,6 +513,7 @@ class XtermWebTerminalState extends State<XtermWebTerminal> {
       'mouseInput': widget.mouseInput,
       'longPressRightClick': widget.longPressRightClick,
       'tapToMovePromptCursor': widget.tapToMovePromptCursor,
+      'agentMode': widget.agentMode,
     });
     _enqueueScript('window.termethisTerminal.setOptions($options);');
   }
