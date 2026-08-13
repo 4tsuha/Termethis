@@ -1,14 +1,22 @@
-# Termethis 0.8.0-alpha3 検証記録
+# Termethis 0.8.0-alpha4 検証記録
 
 ## 自動検証
 
 - `flutter analyze`: 成功
+- termlib Release難読化回帰テスト: 成功
 - 対象Flutterテスト: 24件成功
 - `cargo fmt`: 成功
 - `cargo check`: 成功
 - Android Kotlinコンパイル: 成功
-- Debug APKビルド: 成功
+- arm64 Release APKビルド: 成功
 - `git diff --check`: 成功
+
+## 0.8.0-alpha4
+
+- ReleaseビルドでtermlibのJNI境界がR8により難読化されないよう修正
+- AVDからQEMU DebianへED25519公開鍵認証で接続し、xterm.js WebGL、Flutter Alacritty、termlib、Termuxの4方式でPTY表示とコマンド往復を確認
+- termlib選択時の`NoSuchFieldError`が再発しないことと、アプリプロセスの生存を確認
+- APK: `versionName=0.8.0-alpha4`、`versionCode=11`、arm64-v8a、署名v2検証済み
 
 ## 実装済み範囲
 
