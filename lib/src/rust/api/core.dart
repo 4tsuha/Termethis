@@ -6,13 +6,21 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `apply_vnc_rect`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `copy_vnc_rect`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `release_excess_capacity`, `resolve_sftp_path`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`, `start_remote_tunnel`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `ForwardedTcpIpChannel`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `SftpSessionState`, `SshSession`, `SshTunnel`, `VncSession`
+// These functions are ignored because they are not marked as `pub`: `append_limited`, `append_output`, `apply_vnc_rect`, `authenticate_and_finalize`, `authenticate_jump_host`, `authenticate_noninteractive_target`, `authenticate_private_key`, `authenticate_sftp`, `authenticate`, `connect_client`, `connect_error`, `copy_vnc_rect`, `decode_ssh_private_key`, `drain_queue`, `execute_ssh_command`, `finalize_ssh_session`, `forward_direct`, `forward_socks5`, `get_sftp_session`, `get_ssh_session`, `host_key_identity`, `len`, `next_id`, `percentile`, `positive_integer_bits`, `release_excess_capacity`, `resolve_sftp_path`, `rsa_hash_candidates`, `runtime_key_decode_features`, `sftp_connect_error`, `ssh_client_config`, `ssh_connect_via_jumps`, `start_remote_tunnel`, `validate_rsa_key_size`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AuthenticationOutcome`, `ForwardedTcpIpChannel`, `HostKeyHandler`, `KeyDecodeFeatures`, `OutputBuffer`, `PendingAuthentication`, `PendingHostKey`, `SftpSessionState`, `SshSession`, `SshTunnel`, `VncSession`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `check_server_key`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `server_channel_open_forwarded_tcpip`
 
 Future<RustSshConnectResult> sshConnect({
   required RustSshConnectRequest request,
 }) => RustLib.instance.api.crateApiCoreSshConnect(request: request);
+
+Future<RustSshConnectResult> sshContinueHostKey({
+  required PlatformInt64 pendingHostKeyId,
+  required bool approved,
+}) => RustLib.instance.api.crateApiCoreSshContinueHostKey(
+  pendingHostKeyId: pendingHostKeyId,
+  approved: approved,
+);
 
 Future<RustSshConnectResult> sshContinueAuthentication({
   required PlatformInt64 pendingAuthId,
@@ -540,6 +548,7 @@ class RustSshConnectRequest {
 class RustSshConnectResult {
   final PlatformInt64? sessionId;
   final PlatformInt64? pendingAuthId;
+  final PlatformInt64? pendingHostKeyId;
   final RustHostKey? hostKey;
   final RustAuthChallenge? challenge;
   final String? errorCode;
@@ -548,6 +557,7 @@ class RustSshConnectResult {
   const RustSshConnectResult({
     this.sessionId,
     this.pendingAuthId,
+    this.pendingHostKeyId,
     this.hostKey,
     this.challenge,
     this.errorCode,
@@ -558,6 +568,7 @@ class RustSshConnectResult {
   int get hashCode =>
       sessionId.hashCode ^
       pendingAuthId.hashCode ^
+      pendingHostKeyId.hashCode ^
       hostKey.hashCode ^
       challenge.hashCode ^
       errorCode.hashCode ^
@@ -570,6 +581,7 @@ class RustSshConnectResult {
           runtimeType == other.runtimeType &&
           sessionId == other.sessionId &&
           pendingAuthId == other.pendingAuthId &&
+          pendingHostKeyId == other.pendingHostKeyId &&
           hostKey == other.hostKey &&
           challenge == other.challenge &&
           errorCode == other.errorCode &&

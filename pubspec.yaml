@@ -1,7 +1,7 @@
 name: termethis
 description: "日本語入力に対応したAndroid向けSSH・SFTPモバイルターミナル。"
 publish_to: 'none'
-version: 0.8.0-alpha5+12
+version: 0.8.0-alpha6+13
 
 environment:
   sdk: ^3.12.2

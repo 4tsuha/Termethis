@@ -5,10 +5,30 @@ import '../../features/terminal/domain/ssh_failure.dart';
 import '../../features/terminal/domain/ssh_gateway.dart';
 import '../../src/rust/api/core.dart' as rust;
 
+typedef RustConnect =
+    Future<rust.RustSshConnectResult> Function({
+      required rust.RustSshConnectRequest request,
+    });
+typedef RustContinueHostKey =
+    Future<rust.RustSshConnectResult> Function({
+      required int pendingHostKeyId,
+      required bool approved,
+    });
+typedef RustConnectionFactory = SshConnection Function(int sessionId);
+
 class RustSshGateway implements SshGateway {
-  RustSshGateway(this._hostKeys);
+  RustSshGateway(
+    this._hostKeys, {
+    RustConnect connect = rust.sshConnect,
+    RustContinueHostKey continueHostKey = rust.sshContinueHostKey,
+    this._connectionFactory = RustSshConnection.new,
+  }) : _rustConnect = connect,
+       _rustContinueHostKey = continueHostKey;
 
   final HostKeyRepository _hostKeys;
+  final RustConnect _rustConnect;
+  final RustContinueHostKey _rustContinueHostKey;
+  final RustConnectionFactory _connectionFactory;
 
   @override
   Future<SshConnection> connect(SshConnectRequest request) async {
@@ -57,15 +77,32 @@ class RustSshGateway implements SshGateway {
         case HostKeyTrust.trusted:
           throw const SshFailure(SshFailureCode.hostKeyRejected);
         case HostKeyTrust.unknown:
-          if (!await request.onUnknownHostKey(received)) {
+          final pendingHostKeyId = result.pendingHostKeyId;
+          var approved = false;
+          try {
+            final userApproved = await request.onUnknownHostKey(received);
+            if (userApproved) {
+              await _hostKeys.trust(
+                KnownHost(info: received, acceptedAt: DateTime.now()),
+              );
+              approved = true;
+              request.onAuthenticationStarted();
+            }
+          } finally {
+            if (pendingHostKeyId != null) {
+              result = await _rustContinueHostKey(
+                pendingHostKeyId: pendingHostKeyId,
+                approved: approved,
+              );
+            }
+          }
+          if (!approved) {
             throw const SshFailure(SshFailureCode.hostKeyRejected);
           }
-          await _hostKeys.trust(
-            KnownHost(info: received, acceptedAt: DateTime.now()),
-          );
-          trustedKeys = [_hostKeyIdentity(received)];
-          request.onAuthenticationStarted();
-          result = await _connect(request, trustedKeys);
+          if (pendingHostKeyId == null) {
+            trustedKeys = [_hostKeyIdentity(received)];
+            result = await _connect(request, trustedKeys);
+          }
       }
     }
 
@@ -99,7 +136,7 @@ class RustSshGateway implements SshGateway {
       throw _mapRustFailure(result.errorCode, result.errorMessage);
     }
     request.onOpeningPty();
-    return RustSshConnection(result.sessionId!);
+    return _connectionFactory(result.sessionId!);
   }
 
   Future<rust.RustSshConnectResult> _connect(
@@ -107,7 +144,7 @@ class RustSshGateway implements SshGateway {
     List<String> trustedKeys,
   ) async {
     final authentication = request.authentication;
-    return rust.sshConnect(
+    return _rustConnect(
       request: rust.RustSshConnectRequest(
         host: request.profile.host,
         port: request.profile.port,

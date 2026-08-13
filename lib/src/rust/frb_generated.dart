@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -597932971;
+  int get rustContentHash => 174260125;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -187,6 +187,11 @@ abstract class RustLibApi extends BaseApi {
   Future<RustSshConnectResult> crateApiCoreSshContinueAuthentication({
     required PlatformInt64 pendingAuthId,
     required List<String> responses,
+  });
+
+  Future<RustSshConnectResult> crateApiCoreSshContinueHostKey({
+    required PlatformInt64 pendingHostKeyId,
+    required bool approved,
   });
 
   Future<RustSshExecResult> crateApiCoreSshExecute({
@@ -1087,6 +1092,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<RustSshConnectResult> crateApiCoreSshContinueHostKey({
+    required PlatformInt64 pendingHostKeyId,
+    required bool approved,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(pendingHostKeyId, serializer);
+          sse_encode_bool(approved, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rust_ssh_connect_result,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+        constMeta: kCrateApiCoreSshContinueHostKeyConstMeta,
+        argValues: [pendingHostKeyId, approved],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreSshContinueHostKeyConstMeta =>
+      const TaskConstMeta(
+        debugName: "ssh_continue_host_key",
+        argNames: ["pendingHostKeyId", "approved"],
+      );
+
+  @override
   Future<RustSshExecResult> crateApiCoreSshExecute({
     required RustSshExecRequest request,
   }) {
@@ -1098,7 +1138,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1132,7 +1172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1172,7 +1212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1207,7 +1247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1235,7 +1275,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1265,7 +1305,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1300,7 +1340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1334,7 +1374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1365,7 +1405,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1395,7 +1435,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1429,7 +1469,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1467,7 +1507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1503,7 +1543,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1922,15 +1962,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RustSshConnectResult dco_decode_rust_ssh_connect_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return RustSshConnectResult(
       sessionId: dco_decode_opt_box_autoadd_i_64(arr[0]),
       pendingAuthId: dco_decode_opt_box_autoadd_i_64(arr[1]),
-      hostKey: dco_decode_opt_box_autoadd_rust_host_key(arr[2]),
-      challenge: dco_decode_opt_box_autoadd_rust_auth_challenge(arr[3]),
-      errorCode: dco_decode_opt_String(arr[4]),
-      errorMessage: dco_decode_opt_String(arr[5]),
+      pendingHostKeyId: dco_decode_opt_box_autoadd_i_64(arr[2]),
+      hostKey: dco_decode_opt_box_autoadd_rust_host_key(arr[3]),
+      challenge: dco_decode_opt_box_autoadd_rust_auth_challenge(arr[4]),
+      errorCode: dco_decode_opt_String(arr[5]),
+      errorMessage: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -2630,6 +2671,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_sessionId = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_pendingAuthId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_pendingHostKeyId = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_hostKey = sse_decode_opt_box_autoadd_rust_host_key(deserializer);
     var var_challenge = sse_decode_opt_box_autoadd_rust_auth_challenge(
       deserializer,
@@ -2639,6 +2681,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return RustSshConnectResult(
       sessionId: var_sessionId,
       pendingAuthId: var_pendingAuthId,
+      pendingHostKeyId: var_pendingHostKeyId,
       hostKey: var_hostKey,
       challenge: var_challenge,
       errorCode: var_errorCode,
@@ -3311,6 +3354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.sessionId, serializer);
     sse_encode_opt_box_autoadd_i_64(self.pendingAuthId, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.pendingHostKeyId, serializer);
     sse_encode_opt_box_autoadd_rust_host_key(self.hostKey, serializer);
     sse_encode_opt_box_autoadd_rust_auth_challenge(self.challenge, serializer);
     sse_encode_opt_String(self.errorCode, serializer);

@@ -31,10 +31,12 @@ const RETAINED_BUFFER_BYTES: usize = 128 * 1024;
 const READ_BATCH_BYTES: usize = 64 * 1024;
 const READ_COALESCE_MILLIS: u64 = 2;
 const MIN_RSA_KEY_BITS: usize = 2048;
+const HOST_KEY_CONFIRMATION_TIMEOUT_SECS: u64 = 120;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::new);
 static PENDING_AUTHS: Lazy<DashMap<i64, PendingAuthentication>> = Lazy::new(DashMap::new);
+static PENDING_HOST_KEYS: Lazy<DashMap<i64, PendingHostKey>> = Lazy::new(DashMap::new);
 static SFTP_SESSIONS: Lazy<DashMap<i64, Arc<SftpSessionState>>> = Lazy::new(DashMap::new);
 static SSH_EXEC_CANCELLATIONS: Lazy<DashMap<i64, Arc<Notify>>> = Lazy::new(DashMap::new);
 static SSH_TUNNELS: Lazy<DashMap<i64, Arc<SshTunnel>>> = Lazy::new(DashMap::new);
@@ -89,6 +91,7 @@ pub struct RustAuthChallenge {
 pub struct RustSshConnectResult {
     pub session_id: Option<i64>,
     pub pending_auth_id: Option<i64>,
+    pub pending_host_key_id: Option<i64>,
     pub host_key: Option<RustHostKey>,
     pub challenge: Option<RustAuthChallenge>,
     pub error_code: Option<String>,
@@ -244,9 +247,10 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        accept_unknown_for_confirmation: request.trusted_host_keys.is_empty(),
         forwarded_channels: Some(forwarded_tx),
     };
-    let mut client = match connect_client(&request.host, request.port, handler).await {
+    let client = match connect_client(&request.host, request.port, handler).await {
         Ok(client) => client,
         Err(error) => {
             if let Some(host_key) = observed.lock().expect("host key mutex poisoned").clone() {
@@ -256,6 +260,72 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
         }
     };
 
+    if request.trusted_host_keys.is_empty() {
+        let Some(host_key) = observed.lock().expect("host key mutex poisoned").clone() else {
+            return Ok(connect_error(
+                "connection_failed",
+                anyhow!("SSH server did not provide a host key"),
+                None,
+            ));
+        };
+        let id = next_id();
+        PENDING_HOST_KEYS.insert(
+            id,
+            PendingHostKey {
+                client,
+                request,
+                forwarded_channels: forwarded_rx,
+            },
+        );
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(HOST_KEY_CONFIRMATION_TIMEOUT_SECS)).await;
+            if let Some((_, pending)) = PENDING_HOST_KEYS.remove(&id) {
+                let _ = pending
+                    .client
+                    .disconnect(Disconnect::ByApplication, "", "English")
+                    .await;
+            }
+        });
+        return Ok(RustSshConnectResult {
+            session_id: None,
+            pending_auth_id: None,
+            pending_host_key_id: Some(id),
+            host_key: Some(host_key),
+            challenge: None,
+            error_code: Some("host_key_confirmation_required".to_owned()),
+            error_message: None,
+        });
+    }
+
+    authenticate_and_finalize(client, request, forwarded_rx).await
+}
+
+pub async fn ssh_continue_host_key(
+    pending_host_key_id: i64,
+    approved: bool,
+) -> Result<RustSshConnectResult> {
+    let (_, pending) = PENDING_HOST_KEYS
+        .remove(&pending_host_key_id)
+        .ok_or_else(|| anyhow!("Host-key confirmation expired"))?;
+    if !approved {
+        let _ = pending
+            .client
+            .disconnect(Disconnect::ByApplication, "", "English")
+            .await;
+        return Ok(connect_error(
+            "host_key_rejected",
+            anyhow!("SSH host key was rejected"),
+            None,
+        ));
+    }
+    authenticate_and_finalize(pending.client, pending.request, pending.forwarded_channels).await
+}
+
+async fn authenticate_and_finalize(
+    mut client: client::Handle<HostKeyHandler>,
+    request: RustSshConnectRequest,
+    forwarded_rx: mpsc::Receiver<ForwardedTcpIpChannel>,
+) -> Result<RustSshConnectResult> {
     match authenticate(&mut client, &request).await {
         Ok(AuthenticationOutcome::Complete) => {
             finalize_ssh_session(
@@ -282,6 +352,7 @@ pub async fn ssh_connect(request: RustSshConnectRequest) -> Result<RustSshConnec
             Ok(RustSshConnectResult {
                 session_id: None,
                 pending_auth_id: Some(id),
+                pending_host_key_id: None,
                 host_key: None,
                 challenge: Some(challenge),
                 error_code: None,
@@ -324,6 +395,7 @@ pub async fn ssh_continue_authentication(
             Ok(RustSshConnectResult {
                 session_id: None,
                 pending_auth_id: Some(pending_auth_id),
+                pending_host_key_id: None,
                 host_key: None,
                 challenge: Some(RustAuthChallenge {
                     name,
@@ -521,6 +593,7 @@ pub async fn mosh_bootstrap(request: RustMoshBootstrapRequest) -> Result<RustMos
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed,
+        accept_unknown_for_confirmation: false,
         forwarded_channels: None,
     };
     let mut client = connect_client(&request.host, request.port, handler).await?;
@@ -971,6 +1044,7 @@ pub async fn sftp_connect(request: RustSftpConnectRequest) -> Result<RustSftpCon
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        accept_unknown_for_confirmation: false,
         forwarded_channels: None,
     };
     let mut client = match connect_client(&request.host, request.port, handler).await {
@@ -1353,6 +1427,7 @@ async fn copy_vnc_rect(session: &VncSession, destination: Rect, source: Rect) ->
 struct HostKeyHandler {
     trusted: HashSet<String>,
     observed: Arc<StdMutex<Option<RustHostKey>>>,
+    accept_unknown_for_confirmation: bool,
     forwarded_channels: Option<mpsc::Sender<ForwardedTcpIpChannel>>,
 }
 
@@ -1373,8 +1448,20 @@ impl client::Handler for HostKeyHandler {
             fingerprint_sha256: server_public_key.fingerprint(HashAlg::Sha256).to_string(),
         };
         let identity = host_key_identity(&host_key);
-        *self.observed.lock().expect("host key mutex poisoned") = Some(host_key);
-        Ok(self.trusted.contains(&identity))
+        let mut observed = self.observed.lock().expect("host key mutex poisoned");
+        let confirmation_match = if self.accept_unknown_for_confirmation {
+            match observed.as_ref() {
+                Some(expected) => host_key_identity(expected) == identity,
+                None => {
+                    *observed = Some(host_key);
+                    true
+                }
+            }
+        } else {
+            *observed = Some(host_key);
+            false
+        };
+        Ok(self.trusted.contains(&identity) || confirmation_match)
     }
 
     async fn server_channel_open_forwarded_tcpip(
@@ -1406,6 +1493,12 @@ struct PendingAuthentication {
     jump_clients: Vec<client::Handle<HostKeyHandler>>,
     terminal_width: u32,
     terminal_height: u32,
+    forwarded_channels: mpsc::Receiver<ForwardedTcpIpChannel>,
+}
+
+struct PendingHostKey {
+    client: client::Handle<HostKeyHandler>,
+    request: RustSshConnectRequest,
     forwarded_channels: mpsc::Receiver<ForwardedTcpIpChannel>,
 }
 
@@ -1503,6 +1596,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
     let first_handler = HostKeyHandler {
         trusted: first.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&first_observed),
+        accept_unknown_for_confirmation: false,
         forwarded_channels: None,
     };
     let mut current = match connect_client(&first.host, first.port, first_handler).await {
@@ -1547,6 +1641,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
         let handler = HostKeyHandler {
             trusted: next.trusted_host_keys.iter().cloned().collect(),
             observed: Arc::clone(&observed),
+            accept_unknown_for_confirmation: false,
             forwarded_channels: None,
         };
         let next_client = tokio::time::timeout(
@@ -1593,6 +1688,7 @@ async fn ssh_connect_via_jumps(request: RustSshConnectRequest) -> Result<RustSsh
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed: Arc::clone(&observed),
+        accept_unknown_for_confirmation: false,
         forwarded_channels: Some(forwarded_tx),
     };
     let mut target = match tokio::time::timeout(
@@ -1764,6 +1860,7 @@ async fn execute_ssh_command(
     let handler = HostKeyHandler {
         trusted: request.trusted_host_keys.iter().cloned().collect(),
         observed,
+        accept_unknown_for_confirmation: false,
         forwarded_channels: None,
     };
     let mut client = connect_client(&request.host, request.port, handler).await?;
@@ -1982,6 +2079,7 @@ async fn finalize_ssh_session(
     Ok(RustSshConnectResult {
         session_id: Some(id),
         pending_auth_id: None,
+        pending_host_key_id: None,
         host_key: None,
         challenge: None,
         error_code: None,
@@ -2056,6 +2154,7 @@ fn connect_error(
     RustSshConnectResult {
         session_id: None,
         pending_auth_id: None,
+        pending_host_key_id: None,
         host_key,
         challenge: None,
         error_code: Some(code.to_owned()),
@@ -2087,8 +2186,8 @@ fn next_id() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        positive_integer_bits, rsa_hash_candidates, ssh_execute, RustSshExecRequest,
-        MIN_RSA_KEY_BITS,
+        positive_integer_bits, rsa_hash_candidates, ssh_close, ssh_connect, ssh_continue_host_key,
+        ssh_execute, RustSshConnectRequest, RustSshExecRequest, MIN_RSA_KEY_BITS,
     };
     use russh::keys::HashAlg;
     use std::{env, fs};
@@ -2171,6 +2270,56 @@ mod tests {
                     result.exit_status
                 );
             }
+        });
+    }
+
+    #[test]
+    #[ignore = "requires an explicitly configured local SSH test server"]
+    fn continues_public_key_authentication_after_host_key_confirmation() {
+        let host = env::var("TERMETHIS_HOST_KEY_TEST_HOST").expect("test host");
+        let port = env::var("TERMETHIS_HOST_KEY_TEST_PORT")
+            .expect("test port")
+            .parse()
+            .expect("numeric test port");
+        let username = env::var("TERMETHIS_HOST_KEY_TEST_USER").expect("test user");
+        let private_key_pem = fs::read_to_string(
+            env::var("TERMETHIS_HOST_KEY_TEST_PRIVATE_KEY").expect("private key path"),
+        )
+        .expect("private key");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Tokio runtime");
+
+        runtime.block_on(async {
+            let initial = ssh_connect(RustSshConnectRequest {
+                host,
+                port,
+                username,
+                auth_kind: "private_key".to_owned(),
+                password: String::new(),
+                private_key_pem,
+                passphrase: None,
+                trusted_host_keys: Vec::new(),
+                terminal_width: 80,
+                terminal_height: 24,
+                jump_hosts: Vec::new(),
+            })
+            .await
+            .expect("initial SSH connection");
+            assert_eq!(
+                initial.error_code.as_deref(),
+                Some("host_key_confirmation_required")
+            );
+            assert!(initial.host_key.is_some());
+            let pending_id = initial.pending_host_key_id.expect("pending connection");
+
+            let connected = ssh_continue_host_key(pending_id, true)
+                .await
+                .expect("host-key continuation");
+            assert_eq!(connected.error_code, None);
+            let session_id = connected.session_id.expect("connected SSH session");
+            ssh_close(session_id).await.expect("close SSH session");
         });
     }
 }
