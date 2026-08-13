@@ -209,8 +209,8 @@
   "terminalRendererWebglDescription": "複雑なTUIと高速更新を優先します。WebViewを使うためメモリ使用量は増えます。WebGLを使えない場合はDOM描画へ切り替わります。",
   "terminalRendererAlacritty": "Flutter Alacritty",
   "terminalRendererAlacrittyDescription": "AlacrittyベースのRust VTエンジンとGPUグリフ描画を使用します。Android対応は実験段階のため、問題が起きた場合はxterm.js WebGLへ切り替わります。",
-  "terminalRendererConnectBot": "ネイティブSurface",
-  "terminalRendererConnectBotDescription": "termlibとlibvtermで解析し、AndroidのSurfaceへ直接描画します。WebViewを使わず、最新フレームを優先して大量出力時の遅延とメモリ増加を抑えます。",
+  "terminalRendererConnectBot": "termlib",
+  "terminalRendererConnectBotDescription": "termlibとlibvtermの標準描画を使用します。IME、文字選択、スクロール、マウス入力をAndroid上で処理し、WebViewを使用しません。",
   "terminalRendererTermux": "Termux",
   "terminalRendererTermuxDescription": "Termuxのterminal-emulatorでANSI・UTF-8・IME互換性を優先します。Android Canvas描画のため、WebGLよりメモリを抑えられます。履歴は最大50,000行です。",
   "settingsJapaneseFont": "画面フォント",
@@ -256,6 +256,6 @@
   "settingsFtpSecurityMessage": "平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。",
   "settingsAboutSection": "Termethisについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.8.0-alpha2",
+  "settingsVersionValue": "0.8.0-alpha3",
   "settingsLicenses": "オープンソースライセンス"
 }

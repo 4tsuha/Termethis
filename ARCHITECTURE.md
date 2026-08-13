@@ -2,7 +2,7 @@
 
 最終更新：2026年8月12日
 
-状態：Termethis 0.8.0-alpha2企画として、統合接続画面とSSH／SFTP基盤を開発中
+状態：Termethis 0.8.0-alpha3企画として、統合接続画面とSSH／SFTP基盤を開発中
 
 ## 2026年8月 統合接続アーキテクチャ
 
@@ -214,9 +214,9 @@ Magic Packetには認証機能がないため、ローカルネットワーク�
 
 端末の横幅は本文へ全て割り当て、接続状態と描画方式は端末上へ重ねずAppBarの副題に表示する。左右パディングは4px、スクロールバーは5pxとし、表示幅400dp未満では12px、400dp以上600dp未満では13px、600dp以上では14pxを基準フォントサイズにする。OSの文字倍率は反映しつつ18pxを上限とし、再レイアウト後の列数と行数をPTYへ送る。
 
-既定の描画系はConnectBot `termlib`のHaven系forkとJNI経由の`libvterm`を使うネイティブSurfaceとする。PTY解析は表示優先のHandlerThread、描画はAndroid `SurfaceView`の専用スレッドへ分離する。更新通知では最新の不変スナップショット1件だけを保持し、VSYNCごとに最大1回描画して、UIが遅れた場合は古い状態を捨てる。日本語IMEと物理キー処理はtermlibの`ImeInputView`と`KeyboardHandler`を再利用し、描画経路から分離する。
+既定の描画系はConnectBot `termlib`のHaven系forkとJNI経由の`libvterm`を使う。独自`TerminalSurfaceView`は持たず、termlibが提供するCompose `Terminal`のCanvas、`ImeInputView`、`KeyboardHandler`を再利用する。PTY解析は表示優先のHandlerThreadへ分離し、端末更新はフレーム単位の不変スナップショットへまとめる。可視行のASCII連続セルと背景色は同一スタイル単位で描画命令を束ね、CJK、絵文字、結合文字、全角セルはセル単位で描画する。非表示タブはCompositionを停止し、再選択時に同じ端末状態から描画を再開する。
 
-互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacrittyを選択可能にする。WebGLを保存していた既存利用者はネイティブSurfaceへ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
+互換描画として、ローカルアセットの`xterm.js` WebGL、Termux `terminal-emulator`＋`terminal-view`、Flutter Alacrittyを選択可能にする。WebGLを保存していた既存利用者はtermlib描画へ一度だけ移行し、移行後に利用者が明示的にWebGLを選び直した場合は設定を維持する。
 
 WebViewは外部URLを開かず、Content Security Policyでスクリプト、CSS、フォントを同梱アセットに限定する。SSH出力はUTF-8を最大64Ki文字に分割してBase64へ変換し、xterm.jsの`Terminal.write`完了ACKを受け取ってから次を送る。端末入力とPTY寸法はJSONメッセージでDart側へ戻す。
 

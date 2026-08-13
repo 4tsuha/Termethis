@@ -3,8 +3,8 @@ import 'package:termethis/features/settings/domain/terminal_performance_settings
 import 'package:termethis/infrastructure/settings/shared_preferences_terminal_performance_settings_store.dart';
 
 void main() {
-  group('native Surface renderer migration', () {
-    test('moves the previous WebGL default to native Surface once', () {
+  group('native terminal renderer migration', () {
+    test('moves the previous WebGL default to the native renderer once', () {
       final renderer = selectRendererAfterNativeSurfaceMigration(
         savedRenderer: TerminalRendererMode.webgl,
         migrationCompleted: false,
@@ -22,7 +22,7 @@ void main() {
       expect(renderer, TerminalRendererMode.webgl);
     });
 
-    test('uses native Surface when no renderer was saved', () {
+    test('uses the native renderer when no renderer was saved', () {
       final renderer = selectRendererAfterNativeSurfaceMigration(
         savedRenderer: null,
         migrationCompleted: false,

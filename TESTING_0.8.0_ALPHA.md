@@ -1,4 +1,4 @@
-# Termethis 0.8.0-alpha2 検証記録
+# Termethis 0.8.0-alpha3 検証記録
 
 ## 自動検証
 
@@ -22,15 +22,15 @@
 - Rust RFBクライアントによる内蔵VNC
 - SSHコマンドパレット
 - CPU機能の実行時検出とportable鍵デコード診断
-- termlib／libvtermのAndroidネイティブSurface描画
-- VSYNC単位の最新スナップショット優先描画
+- termlib／libvtermの標準Compose描画
+- 同一スタイルのASCII連続セルと背景色の描画バッチ化
 
-## ネイティブSurface確認
+## termlib描画確認
 
-- AVD上で`SurfaceView(BLAST)`の生成を確認
+- AVD上で公式Compose `Terminal`の生成を確認
 - Termethisプロセスの`dumpsys meminfo`で`WebViews: 0`を確認
-- Surfaceを含む接続画面の生成とタブ切り替えでクラッシュなし
-- 保存済み接続先はパスワード未保存のため、実SSH出力中のフレーム時間は未測定
+- 接続画面の生成とタブ切り替えでクラッシュなし
+- 120Hz AVDからWSLの実PTYへ10万行を出力した比較では、GPU P95が13msから12ms、Slow issue draw commandsが32件から24件へ減少。総合P95は24msのままで、物理端末の性能達成値としては扱わない
 
 ## 未確認・制約
 

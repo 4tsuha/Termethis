@@ -12,6 +12,17 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.OpenableColumns
 import android.view.WindowManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterShellArgs
@@ -44,6 +55,7 @@ class MainActivity : FlutterActivity() {
     private var pendingBackgroundSessionResult: MethodChannel.Result? = null
     private var shizukuDiagnosticsChannel: ShizukuDiagnosticsChannel? = null
     private var vaultProtectionChannel: VaultProtectionChannel? = null
+    private val composeLifecycleOwner = FlutterComposeLifecycleOwner()
 
     @Suppress("DEPRECATION")
     override fun getFlutterShellArgs(): FlutterShellArgs {
@@ -242,12 +254,25 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        composeLifecycleOwner.resume()
+        window.decorView.setViewTreeLifecycleOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeSavedStateRegistryOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeViewModelStoreOwner(composeLifecycleOwner)
         window.decorView.post { refreshRateController.attachTo(this) }
     }
 
     override fun onResume() {
         super.onResume()
+        composeLifecycleOwner.resume()
+        window.decorView.setViewTreeLifecycleOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeSavedStateRegistryOwner(composeLifecycleOwner)
+        window.decorView.setViewTreeViewModelStoreOwner(composeLifecycleOwner)
         window.decorView.post { refreshRateController.attachTo(this) }
+    }
+
+    override fun onPause() {
+        composeLifecycleOwner.pause()
+        super.onPause()
     }
 
     override fun onMultiWindowModeChanged(
@@ -259,6 +284,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        composeLifecycleOwner.destroy()
         vaultProtectionChannel?.dispose()
         vaultProtectionChannel = null
         pendingBackgroundSessionResult?.error(
@@ -420,5 +446,36 @@ class MainActivity : FlutterActivity() {
             host
         }
         return "$formattedHost:$port"
+    }
+}
+
+private class FlutterComposeLifecycleOwner :
+    LifecycleOwner,
+    SavedStateRegistryOwner,
+    ViewModelStoreOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle = registry
+    private val savedStateController = SavedStateRegistryController.create(this)
+    private val models = ViewModelStore()
+
+    init {
+        savedStateController.performAttach()
+        savedStateController.performRestore(null)
+    }
+
+    override val savedStateRegistry: SavedStateRegistry = savedStateController.savedStateRegistry
+    override val viewModelStore: ViewModelStore = models
+
+    fun resume() {
+        registry.currentState = Lifecycle.State.RESUMED
+    }
+
+    fun pause() {
+        registry.currentState = Lifecycle.State.STARTED
+    }
+
+    fun destroy() {
+        registry.currentState = Lifecycle.State.DESTROYED
+        models.clear()
     }
 }

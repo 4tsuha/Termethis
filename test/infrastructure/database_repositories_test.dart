@@ -139,7 +139,7 @@ void main() {
     await database.close();
   });
 
-  test('スキーマ1の接続先をスキーマ5へ移行する', () async {
+  test('スキーマ1の接続先をスキーマ6へ移行する', () async {
     final legacy = sqlite.sqlite3.open(databaseFile.path);
     legacy.execute('''
       CREATE TABLE connection_profile_rows (
@@ -175,7 +175,7 @@ void main() {
     final repository = DriftConnectionProfileRepository(database);
     final restored = await repository.findById('legacy');
 
-    expect(database.schemaVersion, 5);
+    expect(database.schemaVersion, 6);
     expect(restored?.name, '旧接続先');
     expect(restored?.credentialReference, isNull);
     expect(restored?.privateKeyLabel, isNull);
@@ -245,4 +245,105 @@ void main() {
     );
     await database.close();
   });
+
+  test('DB版が5でも不足列を補い保存済み接続先を維持する', () async {
+    final staleDatabase = sqlite.sqlite3.open(databaseFile.path);
+    _createVersionOneSchema(staleDatabase);
+    staleDatabase.execute(
+      "INSERT INTO connection_profile_rows VALUES "
+      "('same-app-version', '同一バージョン更新', 'old.example.com', 22, "
+      "'operator', 'passwordOrInteractive', 0, 0)",
+    );
+    staleDatabase.userVersion = 5;
+    staleDatabase.close();
+
+    final database = AppDatabase(NativeDatabase(databaseFile));
+    final repository = DriftConnectionProfileRepository(database);
+    final restored = await repository.findById('same-app-version');
+
+    expect(restored?.name, '同一バージョン更新');
+    expect(restored?.connectionType, ConnectionType.ssh);
+    expect(restored?.credentialReference, isNull);
+    expect(await _columnNames(databaseFile), containsAll(_currentColumns));
+    expect(await _userVersion(databaseFile), 6);
+    await database.close();
+  });
+
+  test('DB版が現行でも不足列を非破壊で修復する', () async {
+    final staleDatabase = sqlite.sqlite3.open(databaseFile.path);
+    _createVersionOneSchema(staleDatabase);
+    staleDatabase.execute(
+      "INSERT INTO connection_profile_rows VALUES "
+      "('current-db-version', '修復対象', 'repair.example.com', 2222, "
+      "'repair-user', 'passwordOrInteractive', 0, 0)",
+    );
+    staleDatabase.userVersion = 6;
+    staleDatabase.close();
+
+    var database = AppDatabase(NativeDatabase(databaseFile));
+    var repository = DriftConnectionProfileRepository(database);
+    expect((await repository.findById('current-db-version'))?.name, '修復対象');
+    await database.close();
+
+    database = AppDatabase(NativeDatabase(databaseFile));
+    repository = DriftConnectionProfileRepository(database);
+    expect((await repository.findById('current-db-version'))?.name, '修復対象');
+    expect(await _columnNames(databaseFile), containsAll(_currentColumns));
+    await database.close();
+  });
+}
+
+const _currentColumns = <String>{
+  'credential_reference',
+  'private_key_label',
+  'wake_on_lan_mac_address',
+  'wake_on_lan_broadcast_address',
+  'wake_on_lan_port',
+  'connection_type',
+};
+
+void _createVersionOneSchema(sqlite.Database database) {
+  database.execute('''
+    CREATE TABLE connection_profile_rows (
+      id TEXT NOT NULL PRIMARY KEY,
+      name TEXT NOT NULL,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      authentication_type TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  database.execute('''
+    CREATE TABLE known_host_records (
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      algorithm TEXT NOT NULL,
+      fingerprint_sha256 TEXT NOT NULL,
+      accepted_at INTEGER NOT NULL,
+      PRIMARY KEY (host, port, algorithm, fingerprint_sha256)
+    )
+  ''');
+}
+
+Future<Set<String>> _columnNames(File databaseFile) async {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    return database
+        .select("PRAGMA table_info('connection_profile_rows')")
+        .map((row) => row['name'] as String)
+        .toSet();
+  } finally {
+    database.close();
+  }
+}
+
+Future<int> _userVersion(File databaseFile) async {
+  final database = sqlite.sqlite3.open(databaseFile.path);
+  try {
+    return database.userVersion;
+  } finally {
+    database.close();
+  }
 }
