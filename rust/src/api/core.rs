@@ -30,6 +30,7 @@ const MAX_READ_BYTES: usize = 256 * 1024;
 const RETAINED_BUFFER_BYTES: usize = 128 * 1024;
 const READ_BATCH_BYTES: usize = 64 * 1024;
 const READ_COALESCE_MILLIS: u64 = 2;
+const MIN_RSA_KEY_BITS: usize = 2048;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
 static SSH_SESSIONS: Lazy<DashMap<i64, Arc<SshSession>>> = Lazy::new(DashMap::new);
@@ -596,7 +597,7 @@ pub fn private_key_is_encrypted(pem: String) -> bool {
 }
 
 pub fn validate_private_key(pem: String, passphrase: Option<String>) -> Result<()> {
-    decode_secret_key(&pem, passphrase.as_deref())
+    decode_ssh_private_key(&pem, passphrase.as_deref())
         .map(|_| ())
         .context("Invalid or unsupported private key")
 }
@@ -612,7 +613,7 @@ pub fn key_decode_diagnostics(
     let mut successful_iterations = 0;
     for _ in 0..sample_count {
         let started = Instant::now();
-        let decoded = decode_secret_key(&pem, passphrase.as_deref())
+        let decoded = decode_ssh_private_key(&pem, passphrase.as_deref())
             .context("Invalid or unsupported private key")?;
         measurements.push(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
         successful_iterations += 1;
@@ -1848,20 +1849,78 @@ async fn authenticate_private_key(
     pem: &str,
     passphrase: Option<&str>,
 ) -> Result<()> {
-    let key = decode_secret_key(pem, passphrase).context("Invalid SSH private key")?;
-    let hash = client
-        .best_supported_rsa_hash()
-        .await
-        .context("Failed to negotiate RSA signature algorithm")?
-        .flatten();
+    let key = decode_ssh_private_key(pem, passphrase).context("Invalid SSH private key")?;
+    if key.algorithm().is_rsa() {
+        let advertised = client
+            .best_supported_rsa_hash()
+            .await
+            .context("Failed to negotiate RSA signature algorithm")?;
+        let key = Arc::new(key);
+        for hash in rsa_hash_candidates(advertised)? {
+            let result = client
+                .authenticate_publickey(
+                    username,
+                    PrivateKeyWithHashAlg::new(Arc::clone(&key), Some(hash)),
+                )
+                .await
+                .context("Public-key authentication failed")?;
+            if result.success() {
+                return Ok(());
+            }
+        }
+        return Err(anyhow!("RSA SHA-2 public-key authentication was rejected"));
+    }
+
     let result = client
-        .authenticate_publickey(username, PrivateKeyWithHashAlg::new(Arc::new(key), hash))
+        .authenticate_publickey(username, PrivateKeyWithHashAlg::new(Arc::new(key), None))
         .await
         .context("Public-key authentication failed")?;
-    if result.success() {
-        Ok(())
-    } else {
-        Err(anyhow!("Public-key authentication was rejected"))
+    result
+        .success()
+        .then_some(())
+        .ok_or_else(|| anyhow!("Public-key authentication was rejected"))
+}
+
+fn decode_ssh_private_key(pem: &str, passphrase: Option<&str>) -> Result<PrivateKey> {
+    let key = decode_secret_key(pem, passphrase).context("Unable to decode private key")?;
+    validate_rsa_key_size(&key)?;
+    Ok(key)
+}
+
+fn validate_rsa_key_size(key: &PrivateKey) -> Result<()> {
+    let Some(rsa) = key.public_key().key_data().rsa() else {
+        return Ok(());
+    };
+    let modulus = rsa
+        .n
+        .as_positive_bytes()
+        .ok_or_else(|| anyhow!("Invalid RSA modulus"))?;
+    let bits = positive_integer_bits(modulus);
+    if bits < MIN_RSA_KEY_BITS {
+        return Err(anyhow!(
+            "RSA private keys must be at least {MIN_RSA_KEY_BITS} bits"
+        ));
+    }
+    Ok(())
+}
+
+fn positive_integer_bits(bytes: &[u8]) -> usize {
+    bytes
+        .first()
+        .map(|first| bytes.len() * 8 - first.leading_zeros() as usize)
+        .unwrap_or(0)
+}
+
+fn rsa_hash_candidates(advertised: Option<Option<HashAlg>>) -> Result<Vec<HashAlg>> {
+    match advertised {
+        Some(Some(HashAlg::Sha512)) => Ok(vec![HashAlg::Sha512]),
+        Some(Some(HashAlg::Sha256)) => Ok(vec![HashAlg::Sha256]),
+        Some(Some(_)) | Some(None) => Err(anyhow!(
+            "The SSH server does not support RSA SHA-2 signatures"
+        )),
+        // Servers without RFC 8308 extension info can still support RFC 8332.
+        // Try both SHA-2 variants and never silently downgrade to SHA-1 ssh-rsa.
+        None => Ok(vec![HashAlg::Sha512, HashAlg::Sha256]),
     }
 }
 
@@ -2023,4 +2082,95 @@ fn host_key_identity(key: &RustHostKey) -> String {
 
 fn next_id() -> i64 {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        positive_integer_bits, rsa_hash_candidates, ssh_execute, RustSshExecRequest,
+        MIN_RSA_KEY_BITS,
+    };
+    use russh::keys::HashAlg;
+    use std::{env, fs};
+
+    #[test]
+    fn calculates_supported_rsa_key_boundaries() {
+        for bits in [2048, 4096] {
+            let mut modulus = vec![0_u8; bits / 8];
+            modulus[0] = 0x80;
+            assert_eq!(positive_integer_bits(&modulus), bits);
+        }
+        let mut weak_modulus = vec![0_u8; 1024 / 8];
+        weak_modulus[0] = 0x80;
+        assert!(positive_integer_bits(&weak_modulus) < MIN_RSA_KEY_BITS);
+    }
+
+    #[test]
+    fn rsa_signature_selection_never_downgrades_to_sha1() {
+        assert_eq!(
+            rsa_hash_candidates(Some(Some(HashAlg::Sha512))).unwrap(),
+            vec![HashAlg::Sha512]
+        );
+        assert_eq!(
+            rsa_hash_candidates(Some(Some(HashAlg::Sha256))).unwrap(),
+            vec![HashAlg::Sha256]
+        );
+        assert_eq!(
+            rsa_hash_candidates(None).unwrap(),
+            vec![HashAlg::Sha512, HashAlg::Sha256]
+        );
+        assert!(rsa_hash_candidates(Some(None)).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires an explicitly configured local SSH test server"]
+    fn authenticates_rsa_2048_and_4096_against_ssh_server() {
+        let host = env::var("TERMETHIS_RSA_TEST_HOST").expect("test host");
+        let port = env::var("TERMETHIS_RSA_TEST_PORT")
+            .expect("test port")
+            .parse()
+            .expect("numeric test port");
+        let username = env::var("TERMETHIS_RSA_TEST_USER").expect("test user");
+        let host_key = env::var("TERMETHIS_RSA_TEST_HOST_KEY").expect("trusted host key");
+        let key_directory = env::var("TERMETHIS_RSA_TEST_KEY_DIRECTORY").expect("key directory");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Tokio runtime");
+
+        runtime.block_on(async {
+            for (execution_id, bits) in [(20_480, 2048), (40_960, 4096)] {
+                let private_key_pem = fs::read_to_string(format!("{key_directory}/id_rsa_{bits}"))
+                    .expect("RSA test key");
+                let expected = format!("TERMETHIS_RSA_{bits}_OK");
+                let result = ssh_execute(RustSshExecRequest {
+                    execution_id,
+                    host: host.clone(),
+                    port,
+                    username: username.clone(),
+                    auth_kind: "private_key".to_owned(),
+                    password: String::new(),
+                    private_key_pem,
+                    passphrase: None,
+                    trusted_host_keys: vec![host_key.clone()],
+                    command: format!("printf {expected}"),
+                    timeout_millis: 15_000,
+                    output_limit_bytes: 4_096,
+                })
+                .await
+                .expect("SSH execution");
+                assert_eq!(
+                    result.error_code, None,
+                    "RSA {bits} error: {:?}",
+                    result.error_message
+                );
+                assert_eq!(String::from_utf8(result.stdout).unwrap(), expected);
+                assert!(
+                    result.exit_status.is_none() || result.exit_status == Some(0),
+                    "RSA {bits} exit status: {:?}",
+                    result.exit_status
+                );
+            }
+        });
+    }
 }

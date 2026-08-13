@@ -256,6 +256,6 @@
   "settingsFtpSecurityMessage": "平文FTPは認証情報も暗号化されません。利用できる場合はSFTP、FTPES、FTPSを選んでください。",
   "settingsAboutSection": "Termethisについて",
   "settingsVersion": "バージョン",
-  "settingsVersionValue": "0.8.0-alpha4",
+  "settingsVersionValue": "0.8.0-alpha5",
   "settingsLicenses": "オープンソースライセンス"
 }

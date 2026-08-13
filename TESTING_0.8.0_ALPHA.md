@@ -1,4 +1,4 @@
-# Termethis 0.8.0-alpha4 検証記録
+# Termethis 0.8.0-alpha5 検証記録
 
 ## 自動検証
 
@@ -17,6 +17,15 @@
 - AVDからQEMU DebianへED25519公開鍵認証で接続し、xterm.js WebGL、Flutter Alacritty、termlib、Termuxの4方式でPTY表示とコマンド往復を確認
 - termlib選択時の`NoSuchFieldError`が再発しないことと、アプリプロセスの生存を確認
 - APK: `versionName=0.8.0-alpha4`、`versionCode=11`、arm64-v8a、署名v2検証済み
+
+## 0.8.0-alpha5
+
+- OpenSSH形式のRSA 2048-bit／4096-bit秘密鍵認証へ正式対応
+- RSA 2048-bit未満をインポート検証と接続時の共通デコーダーで拒否
+- RSA-SHA2-512とRSA-SHA2-256を使用し、SHA-1方式の`ssh-rsa`へ自動降格しない
+- QEMU DebianへTermethisのRust `ssh_execute`からRSA 2048-bit／4096-bitで実接続し、コマンド往復を確認
+- APK: `versionName=0.8.0-alpha5`、`versionCode=2012`（ABI分割後のarm64配布値）、署名v2検証済み
+- APK SHA-256: `E85BBF9520B4048F36B2A3F9E196DC6A89856CCDA93F4A755845FCE020371122`
 
 ## 実装済み範囲
 
