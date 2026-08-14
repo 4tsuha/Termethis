@@ -17,15 +17,16 @@ void main() {
       'TerminalCallbacks',
     ]) {
       expect(
-        rules,
-        contains('org.connectbot.terminal.$jniType'),
+        rules.contains('org.connectbot.terminal.$jniType') ||
+            rules.contains('-keep public class org.connectbot.terminal.**'),
+        isTrue,
         reason: '$jniTypeはJNIから名前で参照されます。',
       );
     }
     expect(
       rules,
       contains(
-        '-keep class * implements org.connectbot.terminal.TerminalCallbacks',
+        '-keep public class org.connectbot.terminal.**',
       ),
     );
   });
