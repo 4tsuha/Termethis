@@ -5,3 +5,4 @@ analyzer:
     - build/**
     - third_party/dartssh2/**
     - third_party/xterm/**
+    - rust_builder/cargokit/**
