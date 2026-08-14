@@ -23,11 +23,6 @@ void main() {
         reason: '$jniTypeはJNIから名前で参照されます。',
       );
     }
-    expect(
-      rules,
-      contains(
-        '-keep public class org.connectbot.terminal.**',
-      ),
-    );
+    expect(rules, contains('-keep public class org.connectbot.terminal.**'));
   });
 }
