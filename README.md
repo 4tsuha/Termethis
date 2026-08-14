@@ -1,8 +1,12 @@
+<div align="center">
+
+<img src="assets/branding/termethis-icon-source.png" alt="Termethis アイコン" width="160">
+
 # Termethis
 
-<img src="assets/branding/termethis-icon-source.png" alt="Termethis アイコン" width="128" align="right">
+**スマホから、開発機のターミナルへ。**
 
-**スマホから、開発機のターミナルへ。** 完全日本語対応のAndroid向けSSH・RDP・VNC・SFTP・FTP・OpenCodeクライアントです。
+完全日本語対応のAndroid向けSSH・RDP・VNC・SFTP・FTP・OpenCodeクライアントです。
 
 [![Latest Release](https://img.shields.io/github/v/release/4tsuha/Termethis?label=Release&color=00d1b2)](https://github.com/4tsuha/Termethis/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
@@ -10,6 +14,8 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.44-02569b.svg?logo=flutter)](https://flutter.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.96-dea584.svg?logo=rust)](https://www.rust-lang.org/)
 [![CI](https://img.shields.io/github/actions/workflow/status/4tsuha/Termethis/android.yml?label=CI&logo=github)](.github/workflows/android.yml)
+
+</div>
 
 ---
 
@@ -106,7 +112,6 @@ flutter build apk --debug
 
 - [設計と安全性](ARCHITECTURE.md)
 - [評価環境と実測結果](TESTING.md)
-- [高リフレッシュレートの検証状況](#高リフレッシュレートの検証状況)
 
 ---
 
