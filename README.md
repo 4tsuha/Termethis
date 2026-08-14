@@ -1,66 +1,95 @@
 # Termethis
 
-<img src="assets/branding/termethis-icon-source.png" alt="Termethis app icon" width="128">
+<img src="assets/branding/termethis-icon-source.png" alt="Termethis アイコン" width="128" align="right">
 
-完全日本語対応のAndroid向けSSH・RDP・VNC・FTP・OpenCodeクライアントです。
+**スマホから、開発機のターミナルへ。** 完全日本語対応のAndroid向けSSH・RDP・VNC・SFTP・FTP・OpenCodeクライアントです。
 
-[Android CI](.github/workflows/android.yml)
+[![Latest Release](https://img.shields.io/github/v/release/4tsuha/Termethis?label=Release&color=00d1b2)](https://github.com/4tsuha/Termethis/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Platform: Android](https://img.shields.io/badge/Platform-Android-3ddc84.svg?logo=android)](https://www.android.com/)
+[![Flutter](https://img.shields.io/badge/Flutter-3.44-02569b.svg?logo=flutter)](https://flutter.dev/)
+[![Rust](https://img.shields.io/badge/Rust-1.96-dea584.svg?logo=rust)](https://www.rust-lang.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/4tsuha/Termethis/android.yml?label=CI&logo=github)](.github/workflows/android.yml)
 
-## 主な機能
+---
 
-- termlibとlibvtermの標準Android描画を使う、vim・neovim・tmux・htop・ncurses向けSSHターミナル
-- xterm.js WebGL、xterm.dart、Termuxへ切り替え可能
-- releaseビルドのネイティブ描画で接続中150MiB以下を目標とするメモリ設計
-- 日本語IME、UTF-8、CJK文字幅に対応した入出力
-- 非表示タブの描画ビューを解放し、ANSIスナップショットと受信差分から画面を復元
-- Cascadia Mono／JetBrains Mono、CJK、絵文字、Nerd Fonts Symbolsによる等幅表示
-- Noto Sans JP、Koruri、Mejiro、Roboto、Moralerspace、Source Code Pro、JetBrains Monoから選べる画面フォント
-- Cascadia MonoとJetBrains Monoから選べるターミナルフォント
-- DriftとSQLiteによるSSH接続先とknown_hostsの永続保存
-- 同じ接続先も並行利用できるSSH複数タブ・複数セッション
-- SSH・Mosh・RDP・VNC・Shizuku Shell・OpenCodeを同じ接続タブで管理
-- アプリ再起動後に切断状態で復元する接続タブ
-- シェル／tmux／zellij／screen向け検索ボタンとOSC 133対応の出力コピー
-- TUIマウス、長押し右クリック、対応プロンプト内のタップ移動
-- タブバー、画面スリープ抑止、IME表示時リサイズの個別設定
-- Android KeystoreとAES-256-GCMによる秘密鍵保管、OpenSSH秘密鍵認証
-- 端末認証で保護できるCredential Vaultと、独立したSSHパスワード保存設定
-- 複数段ProxyJump、ローカルポート転送、SOCKS5動的転送
-- 変数・秘密変数・送信前確認に対応したコマンドパレット
-- RustによるSSHパケット処理、鍵交換、認証、PTY、複数セッション管理
-- RustによるSFTPファイル操作と上限付き受信バッファ・バックプレッシャー
-- ホームの接続先としてSSH・RDP・VNC・OpenCode Serveを一元管理
-- OpenCode Serveのセッション一覧、履歴、メッセージ送信、停止、権限確認に対応したMaterial 3チャット
-- IronRDPとネイティブVulkan SurfaceによるRDP、Rust RFBクライアントによるアプリ内VNC
-- 接続先ごとのWake on LAN設定とMagic Packet送信
-- ホーム、接続、ファイル、設定を切り替えるボトムナビゲーション
-- FTP、FTPES、FTPS、SFTP接続と複数タブ
-- SFTP転送の実進捗、キャンセル、再試行、失敗時の一時ファイル保護
-- 資格情報を含めないバックアップ／復元と、匿名化できる診断情報の書き出し
-- DNS、ポート、SSHホスト鍵、Vault状態を確認する接続診断と方式別の安全性表示
-- パンくずによる階層移動、フォルダー優先の一覧表示
-- フォルダー作成、名前変更、ファイルと空フォルダーの削除
-- 適応・バランス・最大から選べるAndroidネイティブのリフレッシュレート制御
-- 2,000〜100,000行から選べるスクロールバック
-- 600dp以上でNavigationRailへ切り替わるレスポンシブUI
-- 明示設定時だけ接続中に動くバックグラウンドSSH通知
+## これは何？
 
-平文FTPでは認証情報と通信内容が暗号化されません。可能な接続先ではSFTP、FTPES、FTPSのいずれかを使用してください。
+出先のスマホ・タブレットから、自宅や会社のPC・サーバーに接続して操作できるアプリです。
 
-SSHセッションの保存対象はタブID、接続先ID、表示名だけです。SSH通信、端末の表示内容、パスワード、秘密鍵は保存せず、アプリのプロセス再生成後は切断状態から利用者が再接続します。
+- 🇯🇵 **日本語完全対応** — IME(かな漢字変換)・日本語フォント・CJK表示にバッチリ対応
+- 🖥️ **本格的な SSH ターミナル** — vimやtmuxなどの定番ツールも快適に動きます
+- 📁 **ファイル転送** — スマホとPCの間でファイルを送受信
+- 🖱️ **リモートデスクトップ** — RDP・VNCでPCの画面をそのまま操作
 
-MoshはSSHで`mosh-server`を起動し、アプリ内SSP transportからUDP接続します。SSHリモートポートフォワーディングはserver-openedチャネルをRust側で処理します。秘密鍵デコードはCPU機能を実行時診断しますが、SVE/SVE2の採用基準を満たす実機測定がないため現在はportable経路を使用します。
+無料・オープンソース(GPL v3)です。インターネットを経由しないLAN内利用や、VPN・SSHトンネル経由で安全にお使いいただけます。
 
-RDPはIronRDPでアプリ内接続し、AndroidのネイティブVulkan Surfaceへ提示します。VNCはRustでRFBを処理し、選択中タブへ最新フレームを表示します。接続時に入力したパスワードは保存しません。
+---
 
-OpenCode接続は`opencode serve`のHTTP APIとSSEイベントを使用します。インターネットへ直接公開せず、信頼できるネットワーク、VPN、またはSSHトンネル経由で利用してください。Basic認証のパスワード保存はアプリ共通の設定に従い、保存する場合だけCredential Vaultで保護します。
+## ✨ 主な機能
 
-## 開発
+| | 機能 | 説明 |
+|---|---|---|
+| ⌨️ | **日本語完全対応** | 日本語IME・UTF-8・CJK文字幅対応。Noto Sans JPほか和文フォントも選べます |
+| 🖥️ | **高品質ターミナル** | vim・neovim・tmux・htopなど、マウス操作にも対応した本格派SSHターミナル |
+| 🔒 | **安心の認証** | Android Keystore + AES-256-GCMで秘密鍵を保管。パスワード・鍵認証どちらも対応 |
+| 📁 | **ファイル管理** | SFTP・FTP/FTPES/FTPSでファイル転送。進捗表示・キャンセル・再試行つき |
+| 🖱️ | **リモートデスクトップ** | RDP(IronRDP+Vulkan)とVNC(内蔵クライアント)をアプリ内で直接表示 |
+| 📑 | **マルチタブ** | 同じ接続先も並行利用できる複数タブ・複数セッション |
+| 🌐 | **ネットワーク** | ProxyJump・ローカルポート転送・SOCKS5動的転送・Wake on LAN |
+| 🤖 | **OpenCode連携** | OpenCode Serveをスマホから操作できるMaterial 3チャット |
+| 🔔 | **バックグラウンド通知** | 明示設定時のみ、接続中でも通知で状態を確認 |
+| 🎨 | **描画エンジン切替** | 標準Compose / Termux / xterm.js WebGL / xterm.dart から選択可能 |
 
-Flutter 3.44.9とDart 3.12.2を使用します。
-SSH・SFTPコアにはRust 1.96.0を使用し、`flutter_rust_bridge`でFlutterへ接続します。
-既定のAndroid端末はConnectBot termlib＋libvtermの標準Compose描画を使います。PTY解析は専用スレッドへ分離し、同一スタイルのASCII連続セルと背景色をまとめて描画します。Termux terminal-emulator＋terminal-view、xterm.js WebGL、Flutter製のxterm.dartも選択できます。ConnectBot側はsubmoduleで固定しているため、初回取得はsubmoduleを含めて行ってください。Termux側はJitPackの`0.118.0`、xterm.dartはローカルの`4.0.0`へ固定しています。
-AndroidビルドにはSDK版CMake 3.31.6とNDK 29.0.14206865が必要です。CIではSDK Managerから導入します。
+### 接続タイプ
+
+| 接続 | 説明 | 暗号化 |
+|---|---|---|
+| **SSH / Mosh** | ターミナル接続の定番 | ✅ 暗号化 |
+| **SFTP** | 暗号化されたファイル転送 | ✅ 暗号化 |
+| **RDP** | Windowsリモートデスクトップ | ✅ 暗号化 |
+| **VNC** | 汎用リモートデスクトップ | 🔶 接続先依存 |
+| **FTP / FTPES / FTPS** | 従来のファイル転送 | ⚠️ 平文FTPは非推奨 |
+| **Shizuku Shell** | ローカル端末シェル | ➖ ローカル |
+| **OpenCode Serve** | AIエージェント操作 | 🔶 SSHトンネル等で保護 |
+
+> ⚠️ 平文FTPでは認証情報と通信内容が暗号化されません。可能な限りSFTP・FTPES・FTPSをご利用ください。
+
+---
+
+## 📱 対応環境
+
+- **OS**: Android(推奨: 最新バージョン、600dp以上のタブレットではレスポンシブUIに自動切替)
+- **言語**: 日本語 完全対応
+- **フォント**: Noto Sans JP / Koruri / Mejiro / Roboto / Moralerspace ほか選択可
+
+### セキュリティとプライバシー
+
+- パスワード・秘密鍵・接続情報は**端末認証で保護できるCredential Vault**で保管
+- SSHセッションの内容や端末の表示は**保存されません**。アプリ再起動後は切断状態から再接続
+- バックアップには資格情報は含まれず、診断情報は匿名化して書き出せます
+- OpenCode接続はインターネットへ直接公開せず、**信頼できるネットワーク・VPN・SSHトンネル経由**でご利用ください
+
+---
+
+## 🚀 はじめに
+
+1. [Releases](https://github.com/4tsuha/Termethis/releases/latest) から最新版のAPKをダウンロード
+2. インストールして起動、ホーム画面で「新規接続」をタップ
+3. 接続先(ホスト・ポート・認証情報)を入力
+4. ターミナル・ファイル・デスクトップ、お好みのモードで接続開始
+
+---
+
+## 🔧 開発者向け
+
+### 必要環境
+
+- Flutter 3.44.9 / Dart 3.12.2
+- Rust 1.96.0(SSH・SFTPコア、`flutter_rust_bridge`経由で接続)
+- Android SDK(CMake 3.31.6 / NDK 29.0.14206865)
+
+### ビルド
 
 ```powershell
 git submodule update --init --recursive
@@ -71,35 +100,42 @@ flutter test
 flutter build apk --debug
 ```
 
-xterm.jsアセットを変更した場合は、APKビルド前に次を実行します。
+> xterm.jsアセットを変更した場合は、`Set-Location tool/web_terminal` で `npm install && npm run build` を実行してからAPKをビルドしてください。
 
-```powershell
-Set-Location tool/web_terminal
-npm install
-npm run build
-```
+### 詳細ドキュメント
 
-### WSLを使うAndroid SSH試験
+- [設計と安全性](ARCHITECTURE.md)
+- [評価環境と実測結果](TESTING.md)
+- [高リフレッシュレートの検証状況](#高リフレッシュレートの検証状況)
 
-ネイティブ暗号のローカルビルドにはCMake、C/C++コンパイラー、NASMが必要です。GitHub Actionsではこれらをワークフロー内で導入します。
+---
 
-通常のWSL環境と分離したテスト用sshdを起動し、エミュレータだけを接続します。パスワードはテストのたびに指定し、アプリには保存しません。
+## 📄 ライセンス
 
-```powershell
-.\tool\wsl\setup_test_ssh.ps1 -Distro Ubuntu -Password '<一時テスト用パスワード>'
-adb -s emulator-5554 reverse tcp:22222 tcp:22222
-```
+[GNU General Public License v3.0](LICENSE)
 
-Termethisの接続先は`termethis-test@127.0.0.1:22222`にします。終了時は`.\tool\wsl\stop_test_ssh.ps1`を実行します。
+---
 
-ヘッドレスAVDでWebGLを検証する場合は`-gpu host`を使用してください。環境別の既知事項は[TESTING.md](TESTING.md)にまとめています。
+## 🙏 クレジット
 
-WebGLの初期化やWebView通信に失敗した場合は、そのセッション画面だけネイティブ描画へ切り替わります。ネイティブ端末を初期化できない場合はWebGLへ切り替えます。設定値は変更しないため、次に端末画面を開いたときは選択した描画方式を再試行します。
+Termethisは以下の優れたオープンソースソフトウェアに支えられています。
 
-設計と安全性は[ARCHITECTURE.md](ARCHITECTURE.md)、評価環境と実測結果は[TESTING.md](TESTING.md)を参照してください。
+### ターミナルエミュレータ
 
-## 高リフレッシュレートの検証状況
+| エンジン | 用途 | ライセンス |
+|---|---|---|
+| [ConnectBot termlib](https://github.com/connectbot/connectbot) + libvterm | 既定のネイティブ端末描画(Compose) | Apache-2.0 / MIT |
+| [Termux terminal-emulator](https://github.com/termux/termux-app) | 代替端末エンジン | Apache-2.0 |
+| [xterm.js](https://github.com/xtermjs/xterm.js) | WebGL高速描画(ブラウザ由来) | MIT |
+| [xterm.dart](https://github.com/TerminalStudio/xterm.dart) | Flutter製端末エンジン | MIT |
 
-既定の「適応」は固定Hzを要求せずOSに評価を任せます。「バランス」は通常60Hz相当で、タッチ、スクロール、端末出力中だけ高Hzを要求し、停止から約750ms後に戻します。「最大」だけが最高Hzを継続要求します。
+### 通信ライブラリ
 
-省電力、熱制限、分割画面ではOSの判断を優先します。可変リフレッシュレート、高Hz、各種IME、デスクトップ表示、画面消灯中の接続維持は環境別に検証します。
+| ライブラリ | 用途 | ライセンス |
+|---|---|---|
+| [russh](https://github.com/warp-tech/russh) | Rust製SSH実装(パケット処理・鍵交換・認証・PTY) | Apache-2.0 / MIT |
+| [russh-sftp](https://github.com/warp-tech/russh-sftp) | SSH上でのSFTPファイル転送 | Apache-2.0 / MIT |
+| [IronRDP](https://github.com/Devolutions/IronRDP) | RDPクライアント実装 | Apache-2.0 / MIT |
+| [vnc-rs](https://github.com/White-Oak/vnc-rs) | Rust製RFB(VNC)プロトコル実装 | MIT |
+
+その他の依存ライブラリのライセンスは[assets/licenses](assets/licenses/)に掲載しています。
