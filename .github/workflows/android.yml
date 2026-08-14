@@ -50,7 +50,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake nasm ninja-build
 
       - name: Install Android native terminal toolchain
-        run: sdkmanager "cmake;3.31.6" "ndk;29.0.14206865"
+        run: |
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "cmake;3.31.6" "ndk;29.0.14206865"
 
       - name: Install dependencies
         run: flutter pub get
